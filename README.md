@@ -1,4 +1,4 @@
-# go2w_slam
+# Go2W_SLAM_AI
 
 本项目的目标是开发一个由 AI 调用机器狗 SLAM 服务的导航系统。
 
