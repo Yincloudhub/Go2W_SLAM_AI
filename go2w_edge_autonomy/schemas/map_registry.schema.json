@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/map_registry.schema.json",
+  "title": "Go2wMapRegistry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "default_map_id", "maps"],
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "default_map_id": {"type": "string"},
+    "robot": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "maps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/map_profile"}
+    }
+  },
+  "$defs": {
+    "map_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["map_id", "name", "pcd_path", "topology_path"],
+      "properties": {
+        "map_id": {"type": "string"},
+        "name": {"type": "string"},
+        "status": {"type": "string"},
+        "pcd_path": {"type": "string"},
+        "topology_path": {"type": "string"},
+        "frame_id": {"type": "string"},
+        "description": {"type": "string"},
+        "rviz_topics": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
+        "pcd_statistics": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "relocalization_anchors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/relocalization_anchor"}
+        },
+        "topology_nodes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/topology_node"}
+        },
+        "topology_edges": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/topology_edge"}
+        }
+      }
+    },
+    "relocalization_anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anchor_id", "name", "pose"],
+      "properties": {
+        "anchor_id": {"type": "string"},
+        "name": {"type": "string"},
+        "status": {"type": "string"},
+        "allowed_radius_m": {"type": "number", "minimum": 0},
+        "allowed_yaw_error_deg": {"type": "number", "minimum": 0},
+        "pose": {"$ref": "#/$defs/unitree_pose"},
+        "description": {"type": "string"}
+      }
+    },
+    "topology_node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "name", "pose"],
+      "properties": {
+        "node_id": {"type": "string"},
+        "name": {"type": "string"},
+        "node_type": {"type": "string"},
+        "anchor_id": {"type": "string"},
+        "aliases": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "pose": {"$ref": "#/$defs/unitree_pose"},
+        "description": {"type": "string"}
+      }
+    },
+    "topology_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": {"type": "string"},
+        "to": {"type": "string"},
+        "bidirectional": {"type": "boolean"},
+        "expected_distance_m": {"type": "number", "minimum": 0},
+        "description": {"type": "string"}
+      }
+    },
+    "unitree_pose": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "name": {"type": "string"},
+        "x": {"type": "number"},
+        "y": {"type": "number"},
+        "z": {"type": "number"},
+        "yaw": {"type": "number"},
+        "q_x": {"type": "number"},
+        "q_y": {"type": "number"},
+        "q_z": {"type": "number"},
+        "q_w": {"type": "number"},
+        "speed": {"type": "number", "minimum": 0},
+        "mode": {"type": "integer"}
+      }
+    }
+  }
+}

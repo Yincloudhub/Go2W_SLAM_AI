@@ -1,0 +1,50 @@
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Local environment and secrets
+.env
+.env.*
+
+# Logs and runtime state
+logs/
+*.log
+*.pid
+
+# CMake and C/C++ build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+install_manifest.txt
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Runtime binaries copied into the edge package
+go2w_edge_autonomy/bin/*
+!go2w_edge_autonomy/bin/.gitkeep
+
+# Robot/local sensor data
+*.pcd
+*.bag
+*.db
+*.sqlite
+*.duckdb
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+

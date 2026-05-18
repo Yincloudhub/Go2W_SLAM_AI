@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "default_map_id": "test_current_main",
+  "robot": {
+    "host": "192.168.123.18",
+    "ssh_user": "unitree",
+    "network_interface": "eth0",
+    "slam_gateway_client": "/home/unitree/go2w_edge_autonomy/bin/slam_llm_command_client",
+    "unitree_slam_dir": "/unitree/module/unitree_slam"
+  },
+  "maps": [
+    {
+      "map_id": "test_current_main",
+      "name": "当前主测试地图 test.pcd",
+      "status": "active_candidate",
+      "pcd_path": "/home/unitree/test.pcd",
+      "topology_path": "/home/unitree/topology_points.json",
+      "frame_id": "map",
+      "description": "2026-05-17 从机器狗只读检查得到的当前主 PCD。已知在建图起点附近可以重定位，远离起点时不稳定。",
+      "rviz_topics": {
+        "live_lidar": "/unitree/slam_lidar/points",
+        "mapping_points": "/unitree/slam_mapping/points",
+        "relocation_points": "/unitree/slam_relocation/points",
+        "relocation_global_map": "/unitree/slam_relocation/global_map",
+        "odom": "/unitree/slam_relocation/odom",
+        "gridmap": "/gridmap",
+        "planner_map": "/planner_map"
+      },
+      "pcd_statistics": {
+        "points": 49289,
+        "fields": ["x", "y", "z"],
+        "min_xyz": [-13.145251274108887, -16.89394187927246, -3.913796901702881],
+        "max_xyz": [12.491848945617676, 18.838834762573242, 3.440903902053833],
+        "span_xyz": [25.637100219726562, 35.7327766418457, 7.354700803756714],
+        "centroid_xyz": [3.031130581489135, -1.318366823851727, 0.4699497287958981]
+      },
+      "relocalization_anchors": [
+        {
+          "anchor_id": "mapping_origin",
+          "name": "建图起点默认锚点",
+          "status": "verified_near_start_only",
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "当前已知最可靠的启动锚点。机器狗上电和加载 PCD 时应尽量放在建图起点附近，朝向接近建图方向。"
+        },
+        {
+          "anchor_id": "701_entrance_hallway_mid_anchor",
+          "name": "701入口过道中间重定位锚点",
+          "status": "candidate",
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "pose": {
+            "x": 1.1544053554534912,
+            "y": -0.1470528244972229,
+            "z": -0.04239395260810852,
+            "q_x": 0.02094786986708641,
+            "q_y": 0.011112436652183533,
+            "q_z": -0.015046637505292892,
+            "q_w": 0.9996055960655212,
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "来自 /home/unitree/topology_points.json 的 wp_0，现场语义标注为 701入口过道中间。需要继续验证它是否可以作为独立重定位锚点。"
+        },
+        {
+          "anchor_id": "nie_guoli_office_front_anchor",
+          "name": "聂国篱办公室前方重定位锚点",
+          "status": "candidate_unverified_for_relocalization",
+          "allowed_radius_m": 1.0,
+          "allowed_yaw_error_deg": 20.0,
+          "pose": {
+            "x": 3.258938789367676,
+            "y": -2.2877299785614014,
+            "z": -0.08693132549524307,
+            "q_x": 0.011335774324834347,
+            "q_y": 0.013992785476148129,
+            "q_z": -0.722239077091217,
+            "q_w": 0.6914089918136597,
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "来自 /home/unitree/topology_points.json 的 wp_1，现场语义标注为聂国篱办公室前方。当前不能假设远处可重定位，必须实测后再改成 verified。"
+        }
+      ],
+      "topology_nodes": [
+        {
+          "node_id": "701_entrance_hallway_mid",
+          "name": "701入口过道中间",
+          "node_type": "hallway_midpoint",
+          "anchor_id": "701_entrance_hallway_mid_anchor",
+          "aliases": ["wp_0", "701入口", "701入口过道", "701过道中间", "起点附近"],
+          "tags": ["701", "hallway", "entrance", "startup", "debug"],
+          "pose": {
+            "x": 1.1544053554534912,
+            "y": -0.1470528244972229,
+            "z": -0.04239395260810852,
+            "q_x": 0.02094786986708641,
+            "q_y": 0.011112436652183533,
+            "q_z": -0.015046637505292892,
+            "q_w": 0.9996055960655212,
+            "speed": 0.45,
+            "mode": 0
+          },
+          "description": "当前拓扑点仓库中的第一个点，现场标注为 701入口过道中间。"
+        },
+        {
+          "node_id": "nie_guoli_office_front",
+          "name": "聂国篱办公室前方",
+          "node_type": "office_front",
+          "anchor_id": "nie_guoli_office_front_anchor",
+          "aliases": ["wp_1", "国篱师兄门口", "聂国篱办公室", "国篱办公室", "办公室前方"],
+          "tags": ["office", "nie_guoli", "inspection", "debug"],
+          "pose": {
+            "x": 3.258938789367676,
+            "y": -2.2877299785614014,
+            "z": -0.08693132549524307,
+            "q_x": 0.011335774324834347,
+            "q_y": 0.013992785476148129,
+            "q_z": -0.722239077091217,
+            "q_w": 0.6914089918136597,
+            "speed": 0.45,
+            "mode": 0
+          },
+          "description": "当前拓扑点仓库中的第二个点，现场标注为聂国篱办公室前方。"
+        }
+      ],
+      "topology_edges": [
+        {
+          "from": "701_entrance_hallway_mid",
+          "to": "nie_guoli_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 3.0,
+          "description": "根据两点坐标估算的短边，只能作为调试拓扑边。"
+        }
+      ]
+    },
+    {
+      "map_id": "test513_candidate",
+      "name": "候选旧地图 test513.pcd",
+      "status": "candidate",
+      "pcd_path": "/home/unitree/test513.pcd",
+      "topology_path": "/home/unitree/maps/test513.topology.json",
+      "frame_id": "map",
+      "description": "2026-05-17 只读检查得到的另一个 PCD。还没有绑定可靠拓扑点和重定位锚点。",
+      "rviz_topics": {
+        "live_lidar": "/unitree/slam_lidar/points",
+        "relocation_global_map": "/unitree/slam_relocation/global_map",
+        "odom": "/unitree/slam_relocation/odom"
+      },
+      "pcd_statistics": {
+        "points": 29984,
+        "fields": ["x", "y", "z"],
+        "min_xyz": [-5.274966239929199, -16.572675704956055, -3.9166007041931152],
+        "max_xyz": [12.946188926696777, 18.94080924987793, 2.8377439975738525],
+        "span_xyz": [18.221155166625977, 35.513484954833984, 6.754344701766968],
+        "centroid_xyz": [3.352212169268805, -2.209578007644886, 0.5070923964550598]
+      },
+      "relocalization_anchors": [
+        {
+          "anchor_id": "mapping_origin",
+          "name": "默认原点锚点",
+          "status": "unverified",
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "该地图还没有完成现场重定位验证。"
+        }
+      ],
+      "topology_nodes": [],
+      "topology_edges": []
+    }
+  ]
+}
