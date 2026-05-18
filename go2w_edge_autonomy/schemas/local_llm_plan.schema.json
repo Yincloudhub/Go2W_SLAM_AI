@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/local_llm_plan.schema.json",
+  "title": "LocalLlmPlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "plan_id",
+    "mode",
+    "confidence",
+    "reason",
+    "steps",
+    "communication_policy",
+    "requires_human_ack"
+  ],
+  "properties": {
+    "plan_id": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "mapped_navigation",
+        "mapless_scout",
+        "safe_hold",
+        "human_confirm"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "reason": {
+      "type": "string"
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "communication_policy": {
+      "$ref": "#/$defs/communication_policy"
+    },
+    "requires_human_ack": {
+      "type": "boolean"
+    }
+  },
+  "$defs": {
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "step_id",
+        "tool",
+        "arguments"
+      ],
+      "properties": {
+        "step_id": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string",
+          "enum": [
+            "set_communication_policy",
+            "create_navigation_subgoal",
+            "wait_until",
+            "capture_keyframe",
+            "start_mapless_scout",
+            "request_human_confirm",
+            "hold_position"
+          ]
+        },
+        "arguments": {
+          "type": "object"
+        }
+      }
+    },
+    "communication_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "send",
+        "drop"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "semantic_only",
+            "keyframe_low_rate",
+            "hold_remote"
+          ]
+        },
+        "send": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "task_state",
+              "risk_events",
+              "keyframe",
+              "semantic_topology",
+              "navigation_feedback",
+              "world_state_summary"
+            ]
+          }
+        },
+        "drop": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "raw_video",
+              "dense_pointcloud",
+              "full_log",
+              "high_rate_images"
+            ]
+          }
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
+
