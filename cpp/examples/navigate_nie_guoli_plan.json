@@ -1,0 +1,31 @@
+{
+  "plan_id": "nav_to_nie_guoli_office",
+  "mode": "mapped_navigation",
+  "confidence": 0.99,
+  "reason": "Robot is localized, SLAM is healthy, and target node exists in topology.",
+  "steps": [
+    {
+      "step_id": "step_1",
+      "tool": "create_navigation_subgoal",
+      "arguments": {
+        "map_id": "test_current_main",
+        "target_node": "nie_guoli_office_front"
+      }
+    },
+    {
+      "step_id": "step_2",
+      "tool": "wait_until",
+      "arguments": {
+        "condition": "navigation_finished",
+        "timeout_s": 60
+      }
+    }
+  ],
+  "communication_policy": {
+    "mode": "semantic_only",
+    "send": ["task_state", "navigation_feedback", "world_state_summary"],
+    "drop": ["raw_video", "dense_pointcloud"],
+    "reason": "Semantic-only communication is enough for this dry run."
+  },
+  "requires_human_ack": false
+}

@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="520" viewBox="0 0 1400 520">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .room { fill: #ffffff; stroke: #111827; stroke-width: 2.4; }
+      .furniture { fill: #f1f5f9; stroke: #475569; stroke-width: 1.6; }
+      .wall { stroke: #111827; stroke-width: 2.4; fill: none; stroke-linecap: square; }
+      .corridor { fill: #fff7ed; stroke: #f97316; stroke-width: 1.6; stroke-dasharray: 8 6; }
+      .route { stroke: #2563eb; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.88; }
+      .risk-route { stroke: #dc2626; stroke-width: 3; fill: none; stroke-linecap: round; stroke-dasharray: 8 7; opacity: 0.9; }
+      .node { stroke: #111827; stroke-width: 2; }
+      .start { fill: #dbeafe; }
+      .charge { fill: #dcfce7; }
+      .photo { fill: #fef3c7; }
+      .door { fill: #fee2e2; }
+      .work { fill: #ffffff; }
+      .unknown { fill: #e5e7eb; }
+      .label { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 16px; fill: #111827; }
+      .small { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 12px; fill: #475569; }
+      .note { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 13px; fill: #991b1b; }
+      .title { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 24px; font-weight: 700; fill: #0f172a; }
+      .tag { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 12px; font-weight: 700; }
+      .dim { stroke: #64748b; stroke-width: 1.3; stroke-dasharray: 4 4; fill: none; }
+      .dimtext { font-family: Arial, sans-serif; font-size: 13px; fill: #475569; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1400" height="520"/>
+  <text class="title" x="42" y="38">GO2W 语义拓扑模拟地图 v3</text>
+  <text class="small" x="42" y="62">基于 Visio 原图重绘：所有过道都可能有人；701/702 门可能关闭；赵博办公室与 701 门口走廊需要拍照。</text>
+
+  <!-- corridor risk bands -->
+  <rect class="corridor" x="80" y="310" width="560" height="58" rx="4"/>
+  <rect class="corridor" x="640" y="310" width="690" height="58" rx="4"/>
+  <rect class="corridor" x="618" y="120" width="54" height="248" rx="4"/>
+  <rect class="corridor" x="650" y="78" width="310" height="48" rx="4"/>
+  <text class="note" x="98" y="392">左侧主过道：可能有人</text>
+  <text class="note" x="698" y="392">右侧主过道：可能有人</text>
+  <text class="note" x="690" y="72">上方过道：可能有人</text>
+
+  <!-- main outer geometry -->
+  <path class="room" d="M80 100 L640 100 L640 360 L80 360 Z"/>
+  <path class="room" d="M640 130 L930 130 L930 100 L1010 100 L1010 124 L1330 124 L1330 360 L640 360 Z"/>
+
+  <!-- top office door area -->
+  <path class="wall" d="M668 100 L780 100"/>
+  <path class="wall" d="M800 100 L910 100"/>
+  <path class="wall" d="M930 100 L1010 100"/>
+  <text class="small" x="740" y="92">聂国篱办公室门口</text>
+  <text class="small" x="1015" y="116">赵博办公室门口</text>
+
+  <!-- left area desks -->
+  <g>
+    <path class="furniture" d="M115 145 L175 145 M115 190 L175 190 M115 235 L175 235 M115 280 L175 280"/>
+    <path class="furniture" d="M225 145 L335 145 M225 190 L335 190 M225 235 L335 235 M225 280 L335 280"/>
+    <path class="furniture" d="M280 145 L280 360"/>
+    <path class="furniture" d="M385 145 L495 145 M385 190 L495 190 M385 235 L495 235 M385 280 L495 280"/>
+    <path class="furniture" d="M440 145 L440 360"/>
+    <path class="furniture" d="M545 145 L630 145 M545 190 L630 190 M545 235 L630 235 M545 280 L630 280"/>
+    <path class="furniture" d="M595 145 L595 360"/>
+  </g>
+
+  <!-- right area desks/furniture -->
+  <g>
+    <path class="furniture" d="M720 145 L835 145 M720 190 L835 190 M720 235 L835 235 M720 280 L835 280"/>
+    <path class="furniture" d="M780 145 L780 360"/>
+    <rect class="furniture" x="920" y="164" width="36" height="90"/>
+    <rect class="furniture" x="880" y="300" width="78" height="60"/>
+    <rect class="furniture" x="1012" y="172" width="210" height="122"/>
+    <line class="furniture" x1="1012" y1="200" x2="1222" y2="200"/>
+    <rect class="furniture" x="1272" y="170" width="58" height="124"/>
+    <rect class="furniture" x="1132" y="314" width="198" height="46"/>
+  </g>
+
+  <!-- semantic routes -->
+  <path class="route" d="M640 250 L640 340"/>
+  <path class="risk-route" d="M640 250 L600 325"/>
+  <path class="risk-route" d="M640 250 L552 168"/>
+  <path class="risk-route" d="M640 250 L742 112"/>
+  <path class="risk-route" d="M742 112 L1008 112"/>
+  <path class="risk-route" d="M640 250 L772 224"/>
+  <path class="risk-route" d="M640 250 L1110 340"/>
+  <path class="risk-route" d="M640 250 L360 340 L205 218"/>
+  <path class="risk-route" d="M640 250 L910 340 L1245 216"/>
+
+  <!-- dimensions -->
+  <line class="dim" x1="92" y1="382" x2="640" y2="382"/>
+  <text class="dimtext" x="352" y="398">16m</text>
+  <line class="dim" x1="650" y1="404" x2="1135" y2="404"/>
+  <text class="dimtext" x="880" y="420">12m</text>
+  <line class="dim" x1="640" y1="145" x2="640" y2="250"/>
+  <text class="dimtext" x="650" y="202">4m</text>
+  <line class="dim" x1="1285" y1="154" x2="1285" y2="360"/>
+  <text class="dimtext" x="1294" y="258">8m</text>
+
+  <!-- nodes -->
+  <g>
+    <circle class="node start" cx="640" cy="250" r="12"/>
+    <text class="label" x="657" y="255">起始点</text>
+    <text class="small" x="657" y="273">start_point</text>
+
+    <circle class="node charge" cx="600" cy="325" r="11"/>
+    <text class="label" x="552" y="352">充电点</text>
+    <text class="small" x="552" y="370">charging_point</text>
+
+    <circle class="node photo door" cx="640" cy="340" r="12"/>
+    <text class="label" x="657" y="346">701门口走廊拍照点</text>
+    <text class="small" x="657" y="364">door_may_close + photo_required</text>
+
+    <circle class="node photo" cx="1008" cy="112" r="12"/>
+    <text class="label" x="1024" y="103">赵博办公室门口</text>
+    <text class="small" x="1024" y="121">photo_required</text>
+
+    <circle class="node work" cx="742" cy="112" r="10"/>
+    <text class="label" x="742" y="88">聂国篱办公室门口</text>
+    <text class="small" x="742" y="106">nie_guoli_office_front</text>
+
+    <circle class="node work" cx="552" cy="168" r="10"/>
+    <text class="label" x="566" y="172">尹思园工位</text>
+
+    <circle class="node work" cx="772" cy="224" r="10"/>
+    <text class="label" x="786" y="228">杨书洋工位</text>
+
+    <circle class="node work" cx="205" cy="218" r="10"/>
+    <text class="label" x="220" y="222">赵国森工位</text>
+
+    <circle class="node work" cx="1245" cy="216" r="10"/>
+    <text class="label" x="1190" y="201">杨鑫茹工位</text>
+
+    <circle class="node door" cx="1110" cy="340" r="12"/>
+    <text class="label" x="1126" y="346">702门口</text>
+    <text class="small" x="1126" y="364">door_may_close</text>
+
+    <circle class="node work" cx="640" cy="112" r="9"/>
+    <text class="label" x="654" y="116">过道中心</text>
+  </g>
+
+  <!-- legend -->
+  <g transform="translate(42 430)">
+    <rect x="0" y="0" width="710" height="70" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <circle class="node start" cx="22" cy="24" r="8"/><text class="small" x="38" y="28">起始点</text>
+    <circle class="node charge" cx="108" cy="24" r="8"/><text class="small" x="124" y="28">充电点</text>
+    <circle class="node photo" cx="202" cy="24" r="8"/><text class="small" x="218" y="28">需要拍照</text>
+    <circle class="node door" cx="305" cy="24" r="8"/><text class="small" x="321" y="28">门可能关闭</text>
+    <line class="risk-route" x1="410" y1="24" x2="475" y2="24"/><text class="small" x="490" y="28">经过过道，可能有人</text>
+    <text class="note" x="20" y="55">训练规则：检测到人员/拥堵时禁止快速穿越；701/702门关闭时 hold + request_human_confirm；拍照点到达后 capture_keyframe。</text>
+  </g>
+</svg>

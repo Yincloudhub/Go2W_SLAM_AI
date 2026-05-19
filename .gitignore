@@ -1,0 +1,49 @@
+# Python / local runtime
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# C/C++ build outputs
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+
+# Generated and bulky runtime artifacts
+artifacts/
+logs/
+tmp/
+*.log
+
+# Models and large binary assets
+models/
+*.gguf
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Robot/local machine state
+topology_points.json
+*.pcd
+*.bag
+*.db3
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

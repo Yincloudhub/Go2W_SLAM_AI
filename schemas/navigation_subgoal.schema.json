@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/navigation_subgoal.schema.json",
+  "title": "NavigationSubgoal",
+  "type": "object",
+  "required": ["goal_id", "target_pose", "constraints"],
+  "properties": {
+    "goal_id": {
+      "type": "string"
+    },
+    "target_pose": {
+      "type": "object",
+      "required": ["x", "y", "yaw"],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "yaw": {
+          "type": "number"
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "required": ["max_linear_speed_mps", "max_angular_speed_rps"],
+      "properties": {
+        "max_linear_speed_mps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_angular_speed_rps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "avoid_regions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "safety_mode": {
+          "type": "string",
+          "enum": ["normal", "conservative", "halt_on_risk"]
+        }
+      }
+    }
+  }
+}

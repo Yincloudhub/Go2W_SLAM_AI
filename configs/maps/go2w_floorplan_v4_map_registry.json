@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "default_map_id": "floorplan_demo_v4",
+  "robot": {
+    "host": "192.168.123.18",
+    "ssh_user": "unitree",
+    "network_interface": "eth0",
+    "slam_gateway_client": "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client",
+    "unitree_slam_dir": "/unitree/module/unitree_slam"
+  },
+  "maps": [
+    {
+      "map_id": "floorplan_demo_v4",
+      "name": "办公室平面图模拟拓扑v4",
+      "status": "simulation",
+      "pcd_path": "/home/unitree/maps/floorplan_demo_v4.pcd",
+      "topology_path": "/home/unitree/maps/floorplan_demo_v4.topology.json",
+      "frame_id": "map",
+      "description": "基于Gemini平面图生成的模拟拓扑。起始点为坐标原点；过道中心在y=4m；701门在y=-2m；右侧702区域按12m走廊展开。所有过道都可能有人；701/702门可能关闭；赵博办公室门口与701门口走廊需要拍照。",
+      "topology_nodes": [
+        {
+          "node_id": "start_point",
+          "name": "起始点",
+          "node_type": "startup",
+          "aliases": ["起点", "启动点", "701起点"],
+          "tags": ["startup", "hallway", "people_possible"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "speed": 0.35, "mode": 0},
+          "description": "平面图中心附近起始点。"
+        },
+        {
+          "node_id": "corridor_center",
+          "name": "过道中心",
+          "node_type": "hallway_midpoint",
+          "aliases": ["过道中心", "上方过道中心"],
+          "tags": ["hallway", "transit", "people_possible"],
+          "pose": {"x": 0.0, "y": 4.0, "z": 0.0, "yaw": 0.0, "speed": 0.35, "mode": 0},
+          "description": "起始点上方4m处的过道中心。"
+        },
+        {
+          "node_id": "charging_point",
+          "name": "充电点",
+          "node_type": "charging_station",
+          "aliases": ["充电点", "充电区", "回充点", "充电桩"],
+          "tags": ["charging", "safe_stop"],
+          "pose": {"x": -0.8, "y": -1.6, "z": 0.0, "yaw": 3.14, "speed": 0.3, "mode": 0},
+          "description": "起始点左下方充电点。"
+        },
+        {
+          "node_id": "room_701_door_photo",
+          "name": "701门口走廊拍照点",
+          "node_type": "doorway_photo_point",
+          "aliases": ["701门", "701门口", "701入口", "701拍照点", "701门口走廊"],
+          "tags": ["701", "doorway", "door_may_close", "photo_required", "people_possible"],
+          "pose": {"x": 0.0, "y": -2.0, "z": 0.0, "yaw": -1.57, "speed": 0.3, "mode": 0},
+          "description": "701门口附近走廊，需要到达后拍照；701门可能关闭。"
+        },
+        {
+          "node_id": "room_702_door",
+          "name": "702门口",
+          "node_type": "doorway",
+          "aliases": ["702门", "702门口", "702入口"],
+          "tags": ["702", "doorway", "door_may_close", "people_possible"],
+          "pose": {"x": 12.0, "y": -2.0, "z": 0.0, "yaw": -1.57, "speed": 0.3, "mode": 0},
+          "description": "右侧702门口，门可能关闭。"
+        },
+        {
+          "node_id": "nie_guofan_office_front",
+          "name": "聂国藩办公室门口",
+          "node_type": "office_front",
+          "aliases": ["聂国藩办公室", "聂国藩门口", "聂国藩办公室门口"],
+          "tags": ["office", "people_possible"],
+          "pose": {"x": 4.0, "y": 5.0, "z": 0.0, "yaw": 1.57, "speed": 0.3, "mode": 0},
+          "description": "平面图上方办公室门口。"
+        },
+        {
+          "node_id": "zhao_bo_office_front",
+          "name": "赵博办公室门口",
+          "node_type": "office_front_photo_point",
+          "aliases": ["赵博办公室", "赵博门口", "赵博办公室门口"],
+          "tags": ["office", "photo_required", "people_possible"],
+          "pose": {"x": 8.0, "y": 5.0, "z": 0.0, "yaw": 1.57, "speed": 0.3, "mode": 0},
+          "description": "赵博办公室门口，需要到达后拍照。"
+        },
+        {
+          "node_id": "yin_siyuan_station",
+          "name": "尹思园工位",
+          "node_type": "workstation",
+          "aliases": ["尹思园", "尹思园工位", "尹思园位置"],
+          "tags": ["workstation", "people_possible"],
+          "pose": {"x": -2.0, "y": 2.0, "z": 0.0, "yaw": 3.14, "speed": 0.3, "mode": 0},
+          "description": "起始点左上方工位。"
+        },
+        {
+          "node_id": "yang_shuyang_station",
+          "name": "杨书洋工位",
+          "node_type": "workstation",
+          "aliases": ["杨书洋", "杨书洋工位", "杨书洋位置"],
+          "tags": ["workstation", "people_possible"],
+          "pose": {"x": 4.8, "y": 0.8, "z": 0.0, "yaw": 0.0, "speed": 0.3, "mode": 0},
+          "description": "起始点右侧工位。"
+        },
+        {
+          "node_id": "yang_xinru_station",
+          "name": "杨鑫茹工位",
+          "node_type": "workstation",
+          "aliases": ["杨鑫茹", "杨鑫茹工位", "杨鑫茹位置"],
+          "tags": ["workstation", "people_possible"],
+          "pose": {"x": 17.0, "y": 2.2, "z": 0.0, "yaw": 0.0, "speed": 0.3, "mode": 0},
+          "description": "右侧区域工位。"
+        },
+        {
+          "node_id": "zhao_guosen_station",
+          "name": "赵国森工位",
+          "node_type": "workstation",
+          "aliases": ["赵国森", "赵国森工位", "赵国森位置"],
+          "tags": ["workstation", "left_area", "people_possible"],
+          "pose": {"x": -16.0, "y": 0.8, "z": 0.0, "yaw": 3.14, "speed": 0.3, "mode": 0},
+          "description": "左侧办公区工位。"
+        }
+      ],
+      "topology_edges": [
+        {"from": "start_point", "to": "corridor_center", "bidirectional": true, "expected_distance_m": 4.0, "description": "起始点到过道中心，可能有人"},
+        {"from": "start_point", "to": "room_701_door_photo", "bidirectional": true, "expected_distance_m": 2.0, "description": "到701门口走廊拍照点，701门可能关闭"},
+        {"from": "start_point", "to": "charging_point", "bidirectional": true, "expected_distance_m": 2.0, "description": "起始点到充电点"},
+        {"from": "corridor_center", "to": "nie_guofan_office_front", "bidirectional": true, "expected_distance_m": 4.0, "description": "过道中心到聂国藩办公室门口"},
+        {"from": "corridor_center", "to": "zhao_bo_office_front", "bidirectional": true, "expected_distance_m": 4.0, "description": "过道中心到赵博办公室门口，到达后拍照"},
+        {"from": "start_point", "to": "yin_siyuan_station", "bidirectional": true, "expected_distance_m": 3.0, "description": "到尹思园工位，过道可能有人"},
+        {"from": "start_point", "to": "yang_shuyang_station", "bidirectional": true, "expected_distance_m": 5.0, "description": "到杨书洋工位，过道可能有人"},
+        {"from": "start_point", "to": "room_702_door", "bidirectional": true, "expected_distance_m": 12.0, "description": "到702门口，门可能关闭，过道可能有人"},
+        {"from": "room_702_door", "to": "yang_xinru_station", "bidirectional": true, "expected_distance_m": 5.0, "description": "702门口到杨鑫茹工位，过道可能有人"},
+        {"from": "start_point", "to": "zhao_guosen_station", "bidirectional": true, "expected_distance_m": 16.0, "description": "到左侧赵国森工位，长过道可能有人"}
+      ]
+    }
+  ]
+}

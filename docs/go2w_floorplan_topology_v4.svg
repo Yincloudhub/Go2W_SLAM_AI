@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1365" height="768" viewBox="0 0 2730 1536">
+  <defs>
+    <style>
+      .node { stroke: #0f172a; stroke-width: 5; }
+      .route { stroke: #2563eb; stroke-width: 7; fill: none; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
+      .risk { stroke: #dc2626; stroke-width: 6; fill: none; stroke-dasharray: 18 14; stroke-linecap: round; opacity: 0.78; }
+      .label-bg { fill: white; opacity: 0.88; stroke: #cbd5e1; stroke-width: 2; }
+      .label { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 32px; font-weight: 700; fill: #0f172a; }
+      .small { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 24px; fill: #334155; }
+      .note { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 24px; fill: #991b1b; }
+    </style>
+  </defs>
+
+  <image href="assets/go2w_floorplan_v4.png" x="0" y="0" width="2730" height="1536"/>
+
+  <!-- Semantic topology routes. Dashed red means every corridor route has possible human traffic. -->
+  <path class="risk" d="M1308 918 L1308 376 L1644 376"/>
+  <path class="risk" d="M1308 376 L1922 184"/>
+  <path class="risk" d="M1308 918 L1308 1298"/>
+  <path class="risk" d="M1308 918 L1212 1170"/>
+  <path class="risk" d="M1308 918 L1108 486"/>
+  <path class="risk" d="M1308 918 L1682 686"/>
+  <path class="risk" d="M1308 918 L2162 1296"/>
+  <path class="risk" d="M2162 1296 L2534 512"/>
+  <path class="risk" d="M1308 918 L184 676"/>
+  <path class="route" d="M1308 918 L1308 376"/>
+
+  <!-- Nodes -->
+  <g>
+    <circle class="node" cx="1308" cy="918" r="22" fill="#dbeafe"/>
+    <rect class="label-bg" x="1338" y="892" width="260" height="78" rx="12"/>
+    <text class="label" x="1354" y="926">起始点</text>
+    <text class="small" x="1354" y="958">start_point</text>
+
+    <circle class="node" cx="1308" cy="376" r="20" fill="#e0f2fe"/>
+    <rect class="label-bg" x="1168" y="290" width="290" height="76" rx="12"/>
+    <text class="label" x="1184" y="324">过道中心</text>
+    <text class="small" x="1184" y="356">corridor_center</text>
+
+    <circle class="node" cx="1212" cy="1170" r="19" fill="#dcfce7"/>
+    <rect class="label-bg" x="1050" y="1188" width="260" height="76" rx="12"/>
+    <text class="label" x="1066" y="1222">充电点</text>
+    <text class="small" x="1066" y="1254">charging_point</text>
+
+    <circle class="node" cx="1308" cy="1298" r="21" fill="#fef3c7"/>
+    <rect class="label-bg" x="1170" y="1320" width="410" height="78" rx="12"/>
+    <text class="label" x="1186" y="1354">701门口走廊拍照点</text>
+    <text class="small" x="1186" y="1386">door may close + photo</text>
+
+    <circle class="node" cx="2162" cy="1296" r="21" fill="#fee2e2"/>
+    <rect class="label-bg" x="2074" y="1320" width="250" height="76" rx="12"/>
+    <text class="label" x="2090" y="1354">702门口</text>
+    <text class="small" x="2090" y="1386">door may close</text>
+
+    <circle class="node" cx="1644" cy="376" r="19" fill="#fff"/>
+    <rect class="label-bg" x="1520" y="402" width="330" height="74" rx="12"/>
+    <text class="label" x="1536" y="436">尹思园工位</text>
+    <text class="small" x="1536" y="468">yin_siyuan_station</text>
+
+    <circle class="node" cx="1682" cy="686" r="19" fill="#fff"/>
+    <rect class="label-bg" x="1698" y="704" width="340" height="74" rx="12"/>
+    <text class="label" x="1714" y="738">杨书洋工位</text>
+    <text class="small" x="1714" y="770">yang_shuyang_station</text>
+
+    <circle class="node" cx="2534" cy="512" r="19" fill="#fff"/>
+    <rect class="label-bg" x="2414" y="332" width="340" height="74" rx="12"/>
+    <text class="label" x="2430" y="366">杨鑫茹工位</text>
+    <text class="small" x="2430" y="398">yang_xinru_station</text>
+
+    <circle class="node" cx="184" cy="676" r="19" fill="#fff"/>
+    <rect class="label-bg" x="154" y="710" width="340" height="74" rx="12"/>
+    <text class="label" x="170" y="744">赵国森工位</text>
+    <text class="small" x="170" y="776">zhao_guosen_station</text>
+
+    <circle class="node" cx="1642" cy="140" r="20" fill="#fff"/>
+    <rect class="label-bg" x="1475" y="58" width="390" height="76" rx="12"/>
+    <text class="label" x="1490" y="92">聂国藩办公室门口</text>
+    <text class="small" x="1490" y="124">nie_guofan_office_front</text>
+
+    <circle class="node" cx="1922" cy="184" r="22" fill="#fef3c7"/>
+    <rect class="label-bg" x="1888" y="76" width="350" height="76" rx="12"/>
+    <text class="label" x="1904" y="110">赵博办公室门口</text>
+    <text class="small" x="1904" y="142">photo_required</text>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(42 42)">
+    <rect class="label-bg" x="0" y="0" width="720" height="142" rx="18"/>
+    <text class="label" x="24" y="44">语义拓扑标注 v4</text>
+    <text class="note" x="24" y="82">所有过道均可能有人：有人员/拥堵时 hold 或 wait，不快速穿越。</text>
+    <text class="note" x="24" y="116">701/702 门可能关闭；赵博办公室与 701 门口走廊到达后拍照。</text>
+  </g>
+</svg>

@@ -1,0 +1,36 @@
+# GO2W C++ plan executor
+
+This folder contains a SDK-free C++ dry-run executor for `LocalLlmPlan`.
+
+It is intentionally separate from `artifacts/slam_gateway_refactor_source`:
+
+- `cpp/` can be compiled on a normal Linux/NX machine without Unitree SDK.
+- `artifacts/slam_gateway_refactor_source` is the Unitree SDK-facing client.
+
+Build on Linux/NX:
+
+```bash
+cd /path/to/GO2W_0/cpp
+cmake -S . -B build
+cmake --build build -j
+```
+
+Run dry-run:
+
+```bash
+./build/go2w_plan_executor_dry_run \
+  --registry ../configs/maps/go2w_map_registry.example.json \
+  --plan /tmp/local_llm_plan.json
+```
+
+Or pipe a plan through stdin:
+
+```bash
+cat /tmp/local_llm_plan.json | ./build/go2w_plan_executor_dry_run \
+  --registry ../configs/maps/go2w_map_registry.example.json
+```
+
+This executable does not move the robot. It validates the plan and prints the
+`navigate_to_pose` command plus the planned `resume -> navigate -> wait -> pause`
+sequence. The same validation logic can later be moved into the Unitree SDK
+client before `slam_llm_command_client` sends real commands.

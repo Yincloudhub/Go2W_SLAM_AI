@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <style>
+      .wall { stroke: #202124; stroke-width: 3; fill: none; }
+      .desk { stroke: #4b5563; stroke-width: 2; fill: #f8fafc; }
+      .corridor { stroke: #ef4444; stroke-width: 2; stroke-dasharray: 8 8; fill: rgba(239,68,68,0.05); }
+      .edge { stroke: #2563eb; stroke-width: 3; fill: none; stroke-linecap: round; }
+      .edge-risk { stroke: #dc2626; stroke-width: 3; stroke-dasharray: 8 6; fill: none; stroke-linecap: round; }
+      .node { stroke: #111827; stroke-width: 2; fill: #ffffff; }
+      .node-start { fill: #dbeafe; }
+      .node-photo { fill: #fef3c7; }
+      .node-charge { fill: #dcfce7; }
+      .node-door { fill: #fee2e2; }
+      .label { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 16px; fill: #111827; }
+      .small { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 13px; fill: #374151; }
+      .title { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 24px; font-weight: 700; fill: #111827; }
+      .note { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 14px; fill: #7f1d1d; }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1280" height="720" fill="#ffffff"/>
+  <text x="40" y="38" class="title">GO2W Visio 模拟拓扑地图 v2</text>
+  <text x="40" y="62" class="small">说明：坐标为模拟相对坐标；所有过道都可能有人；701/702 门可能关闭；赵博办公室与 701 门口走廊需要拍照。</text>
+
+  <!-- Floor outline and rooms -->
+  <path class="wall" d="M55 115 L610 115 L610 355 L55 355 Z"/>
+  <path class="wall" d="M610 145 L855 145 L855 115 L910 115 L910 140 L1230 140 L1230 355 L610 355 Z"/>
+  <path class="wall" d="M930 170 L1120 170 L1120 260 L930 260 Z"/>
+  <path class="wall" d="M1165 170 L1230 170 L1230 260 L1165 260 Z"/>
+  <path class="wall" d="M1030 315 L1230 315"/>
+
+  <!-- Desks / furniture approximation -->
+  <g>
+    <rect class="desk" x="95" y="150" width="85" height="115"/>
+    <rect class="desk" x="210" y="150" width="85" height="185"/>
+    <rect class="desk" x="330" y="150" width="85" height="185"/>
+    <rect class="desk" x="455" y="150" width="105" height="185"/>
+    <rect class="desk" x="650" y="150" width="95" height="185"/>
+    <rect class="desk" x="790" y="305" width="70" height="50"/>
+    <rect class="desk" x="925" y="265" width="55" height="90"/>
+    <rect class="desk" x="1030" y="315" width="200" height="40"/>
+  </g>
+
+  <!-- Risk corridors -->
+  <rect class="corridor" x="55" y="330" width="555" height="55"/>
+  <rect class="corridor" x="610" y="330" width="620" height="55"/>
+  <rect class="corridor" x="585" y="145" width="50" height="210"/>
+  <rect class="corridor" x="610" y="105" width="300" height="45"/>
+  <text x="88" y="407" class="note">左侧过道：可能有人</text>
+  <text x="675" y="407" class="note">右侧过道：可能有人</text>
+  <text x="640" y="100" class="note">上方过道：可能有人</text>
+
+  <!-- Topology edges -->
+  <path class="edge-risk" d="M610 270 L610 350 L545 350"/>
+  <path class="edge-risk" d="M610 270 L610 350 L610 370 L880 370 L1010 350"/>
+  <path class="edge-risk" d="M610 270 L610 350 L250 350 L150 250"/>
+  <path class="edge-risk" d="M610 270 L610 145 L730 130"/>
+  <path class="edge-risk" d="M610 270 L720 250"/>
+  <path class="edge-risk" d="M610 270 L500 230"/>
+  <path class="edge-risk" d="M610 270 L1120 245"/>
+  <path class="edge-risk" d="M1010 350 L1010 330"/>
+
+  <!-- Nodes -->
+  <g>
+    <circle class="node node-start" cx="610" cy="270" r="11"/>
+    <text x="625" y="274" class="label">起始点 start_point</text>
+
+    <circle class="node node-charge" cx="545" cy="350" r="11"/>
+    <text x="490" y="382" class="label">充电点 charging_point</text>
+
+    <circle class="node node-photo node-door" cx="610" cy="350" r="11"/>
+    <text x="625" y="354" class="label">701门口/走廊拍照点</text>
+    <text x="625" y="373" class="small">door may close, capture_keyframe</text>
+
+    <circle class="node node-photo" cx="730" cy="130" r="11"/>
+    <text x="745" y="134" class="label">赵博办公室门口</text>
+    <text x="745" y="153" class="small">capture_keyframe</text>
+
+    <circle class="node node-door" cx="1010" cy="350" r="11"/>
+    <text x="1025" y="354" class="label">702门口</text>
+    <text x="1025" y="373" class="small">door may close</text>
+
+    <circle class="node" cx="500" cy="230" r="10"/>
+    <text x="515" y="234" class="label">尹思响工位</text>
+
+    <circle class="node" cx="720" cy="250" r="10"/>
+    <text x="735" y="254" class="label">杨书洋工位</text>
+
+    <circle class="node" cx="150" cy="250" r="10"/>
+    <text x="165" y="254" class="label">赵国霖工位</text>
+
+    <circle class="node" cx="250" cy="350" r="10"/>
+    <text x="265" y="354" class="label">左侧办公区走廊中点</text>
+
+    <circle class="node" cx="880" cy="370" r="10"/>
+    <text x="895" y="374" class="label">右侧办公区走廊中点</text>
+
+    <circle class="node" cx="1120" cy="245" r="10"/>
+    <text x="1135" y="249" class="label">右侧工位A（待确认姓名）</text>
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(40 535)">
+    <rect x="0" y="0" width="560" height="140" fill="#f9fafb" stroke="#d1d5db"/>
+    <text x="18" y="28" class="label">图例</text>
+    <circle class="node node-start" cx="28" cy="55" r="9"/><text x="45" y="60" class="small">起始/重定位点</text>
+    <circle class="node node-photo" cx="170" cy="55" r="9"/><text x="187" y="60" class="small">需要拍照点</text>
+    <circle class="node node-door" cx="310" cy="55" r="9"/><text x="327" y="60" class="small">门可能关闭</text>
+    <circle class="node node-charge" cx="445" cy="55" r="9"/><text x="462" y="60" class="small">充电点</text>
+    <line class="edge-risk" x1="20" y1="90" x2="95" y2="90"/><text x="110" y="95" class="small">可通行拓扑边，但过道可能有人，需要运行时安全监督</text>
+    <rect class="corridor" x="20" y="110" width="75" height="18"/><text x="110" y="124" class="small">人员风险区域：不能快速穿越，检测到人需 hold / wait</text>
+  </g>
+</svg>

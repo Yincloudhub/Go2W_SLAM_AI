@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/world_state.schema.json",
+  "title": "WorldState",
+  "type": "object",
+  "required": [
+    "timestamp_ms",
+    "frame_id",
+    "robot",
+    "objects",
+    "risk_events",
+    "task_phase"
+  ],
+  "properties": {
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "frame_id": {
+      "type": "string"
+    },
+    "task_phase": {
+      "type": "string"
+    },
+    "robot": {
+      "type": "object",
+      "required": ["pose", "mode", "battery_percent"],
+      "properties": {
+        "pose": {
+          "$ref": "#/$defs/pose2d"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "battery_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "localized": {
+          "type": "boolean"
+        }
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "object_id",
+          "category",
+          "pose",
+          "distance_m",
+          "risk_level",
+          "traversable"
+        ],
+        "properties": {
+          "object_id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "pose": {
+            "$ref": "#/$defs/pose2d"
+          },
+          "distance_m": {
+            "type": "number",
+            "minimum": 0
+          },
+          "risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "traversable": {
+            "type": "boolean"
+          },
+          "is_dynamic": {
+            "type": "boolean"
+          },
+          "velocity_mps": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "risk_events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event_type", "severity", "description"],
+        "properties": {
+          "event_type": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"]
+          },
+          "description": {
+            "type": "string"
+          },
+          "distance_m": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "pose2d": {
+      "type": "object",
+      "required": ["x", "y", "yaw"],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "yaw": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}
