@@ -1,19 +1,19 @@
-# Git Agent Workflow
+# Git Agent 分支协作规范
 
-This repository uses short-lived agent branches for robot/LLM integration work.
+本文说明这个仓库后续如何用 agent 分支管理机器狗和 LLM 集成工作。
 
-## Branches
+## 分支约定
 
-- `main`: stable project baseline.
-- `agent/llm-on-robot`: current Codex agent branch for local LLM planner, robot-side deployment notes, eval data, and guardrail work.
+- `main`：稳定主线，只放已经确认可复现、可说明的版本。
+- `agent/llm-on-robot`：当前 Codex agent 工作分支，用于本地 LLM 规划器、机器狗部署说明、评测数据、guardrail 规则和机器人侧运行脚本。
 
-Future agent branches should use:
+后续如果有新的并行任务，建议使用：
 
 ```text
-agent/<scope>
+agent/<任务范围>
 ```
 
-Examples:
+示例：
 
 ```text
 agent/cpp-plan-executor
@@ -21,11 +21,36 @@ agent/robot-llm-runtime
 agent/map-topology-data
 ```
 
-## Commit Rules
+## 提交内容约定
 
-- Keep model weights, recovered backups, logs, eval run artifacts, build directories, and cache files out of git.
-- Commit source, schemas, prompts, configs, docs, small eval/SFT datasets, and tests.
-- Use clear commit messages:
+可以提交：
+
+- 源码。
+- schema。
+- prompt。
+- 配置文件。
+- 文档。
+- 小规模评测集和 SFT 样本。
+- 测试代码。
+- 机器人侧安装脚本。
+
+不要提交：
+
+- 模型权重。
+- 机器狗恢复包。
+- 构建目录。
+- 日志。
+- 大型评测产物。
+- 缓存文件。
+- 点云、bag、db3 等运行时数据。
+
+当前 `.gitignore` 已经排除了这些常见运行产物。
+
+## 提交信息
+
+提交信息尽量说明“改了什么”和“为什么改”。
+
+示例：
 
 ```text
 Add robot-side LLM runtime checklist
@@ -33,27 +58,37 @@ Harden local planner guardrails
 Add floorplan v4 auto weak-network eval cases
 ```
 
-## Push
+后续也可以直接用中文提交信息。
 
-Remote:
+## 推送方式
+
+当前远端：
 
 ```text
-origin https://github.com/Yincloudhub/Go2W_SLAM_AI.git
+origin git@github-go2w:Yincloudhub/Go2W_SLAM_AI.git
 ```
 
-Push current branch:
+推送当前 agent 分支：
 
 ```bash
 git push -u origin agent/llm-on-robot
 ```
 
-If HTTPS authentication is not configured on the machine, log in with Git Credential Manager or switch the remote to SSH after adding an SSH key to GitHub.
+机器狗侧使用自己的 SSH key 和 remote alias：
 
-## Merge
+```text
+git@github-go2w-robot:Yincloudhub/Go2W_SLAM_AI.git
+```
 
-Open a pull request from `agent/llm-on-robot` into `main` after:
+这样可以把 PC 端凭据和机器狗端凭据隔离。
 
-- tests pass locally;
-- robot-side dry-run is documented;
-- large generated artifacts are not included;
-- deployment notes are up to date.
+## 合并方式
+
+当 `agent/llm-on-robot` 准备合入 `main` 前，至少需要确认：
+
+- 本地测试通过。
+- 机器狗侧 dry-run 已记录。
+- 没有提交模型、日志、构建产物和恢复包。
+- 部署说明和实际目录状态一致。
+- 真实导航前有明确的人工确认和回退方案。
+
