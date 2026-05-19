@@ -11,13 +11,17 @@ install -m 0755 \
   "${REPO_ROOT}/robot/llm_runtime/ask_qwen.sh" \
   "${RUNTIME_ROOT}/scripts/ask_qwen.sh"
 
+install -m 0755 \
+  "${REPO_ROOT}/robot/llm_runtime/smoke_test_llm.sh" \
+  "${RUNTIME_ROOT}/scripts/smoke_test_llm.sh"
+
 cat <<EOF
 Installed robot LLM runtime files:
   ${RUNTIME_ROOT}/scripts/ask_qwen.sh
+  ${RUNTIME_ROOT}/scripts/smoke_test_llm.sh
 
 External model directory:
   ${MODEL_ROOT}
 
 Model weights are intentionally not managed by git.
 EOF
-

@@ -22,6 +22,7 @@ exec "$LLAMA_CLI" \
   -c "$CTX_SIZE" \
   -n "$MAX_TOKENS" \
   --temp "$TEMP" \
+  --no-display-prompt \
   -p "${SYSTEM_PROMPT}
 
 ${PROMPT}"
