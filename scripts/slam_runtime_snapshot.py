@@ -45,7 +45,7 @@ def parse_sections(output: str) -> dict[str, str]:
     current: str | None = None
     for line in output.splitlines():
         if line.startswith(SECTION_BEGIN):
-            current = line.removeprefix(SECTION_BEGIN).strip()
+            current = line[len(SECTION_BEGIN) :].strip()
             sections[current] = []
             continue
         if line.startswith(SECTION_END):
