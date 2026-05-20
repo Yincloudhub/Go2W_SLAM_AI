@@ -93,6 +93,64 @@ Planner context:
 Final JSON:"""
 
 
+LIGHTWEIGHT_SYSTEM_PROMPT = (
+    "You are a fast local planner for a Unitree GO2W robot. "
+    "Output exactly one compact JSON object. No markdown. No explanation outside JSON. "
+    "Use only known target_node ids from candidates. Never output raw Unitree API ids or cmd_vel. "
+    "If unsafe or unclear, use human_confirm or safe_hold."
+)
+
+
+LIGHTWEIGHT_PROMPT_TEMPLATE = """Return one compact JSON object with exactly these top-level keys:
+plan_id, mode, confidence, reason, steps, communication_policy, requires_human_ack.
+
+Allowed modes: mapped_navigation, safe_hold, human_confirm, mapless_scout.
+Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, request_human_confirm, hold_position.
+Each step must have exactly: step_id, tool, arguments.
+Use short strings. Top-level reason must be under 12 words.
+Do not put reason, distance, pose, speed, or photo_required inside step arguments.
+create_navigation_subgoal arguments must be exactly {{"map_id": "...", "target_node": "..."}}.
+wait_until arguments should be exactly {{"condition":"arrived"}}.
+capture_keyframe arguments should be exactly {{"target_node":"..."}}.
+communication_policy must include exactly mode, send, drop, reason.
+Normal communication_policy is {{"mode":"normal","send":["task_state","navigation_feedback","world_state_summary"],"drop":[],"reason":"normal link"}}.
+
+Priority rules:
+1. If slam_ok is false or localized is false: safe_hold with hold_position.
+2. If target_node is unknown or not in candidates: human_confirm with request_human_confirm. Do not navigate.
+3. If distance_to_requested_target_m <= arrival_distance_m: safe_hold with hold_position. Do not navigate.
+4. If low_battery is true and target is not charging_point: human_confirm with request_human_confirm. Do not navigate.
+5. If weak_bandwidth is true: first step set_communication_policy; communication_policy.mode semantic_only; drop raw_video, dense_pointcloud, high_rate_images.
+6. For valid navigation: create_navigation_subgoal then wait_until. If photo_required is true, include capture_keyframe after wait_until.
+
+Case:
+{planner_context}
+
+JSON:"""
+
+
+INTENT_SYSTEM_PROMPT = (
+    "You map a user command to one robot intent JSON. "
+    "Output only JSON. Use only candidate node ids. If unclear or unsafe, do not navigate."
+)
+
+
+INTENT_PROMPT_TEMPLATE = """Return exactly one compact JSON object:
+{{"mode":"mapped_navigation","target_node":"node_id_or_empty","confidence":0.0,"reason":"short","requires_human_ack":false}}
+
+Rules:
+- mode must be exactly one of: mapped_navigation, safe_hold, human_confirm.
+- If slam_ok=false or localized=false: mode safe_hold, target_node empty, requires_human_ack true.
+- If command target is not in candidates: mode human_confirm, target_node empty, requires_human_ack true.
+- If low_battery=true and target_node is not charging_point: mode human_confirm.
+- Otherwise choose one candidate target_node and mode mapped_navigation.
+
+Case:
+{planner_context}
+
+JSON:"""
+
+
 class LlmBackend(Protocol):
     def generate(self, prompt: str, *, system_prompt: str, max_tokens: int, timeout_s: int) -> str:
         ...
@@ -165,6 +223,171 @@ class SshAskQwenBackend:
 
 def build_planner_prompt(planner_context: dict[str, Any]) -> str:
     return PROMPT_TEMPLATE.format(planner_context=json.dumps(planner_context, ensure_ascii=False, indent=2))
+
+
+def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[str, Any]:
+    summary = planner_context.get("world_state_summary", {})
+    robot = summary.get("robot", {}) if isinstance(summary, dict) else {}
+    slam = summary.get("slam", {}) if isinstance(summary, dict) else {}
+    topology = summary.get("topology", {}) if isinstance(summary, dict) else {}
+    nodes = topology.get("available_nodes", []) if isinstance(topology, dict) else []
+    user_command = str(planner_context.get("user_command", ""))
+
+    candidates = []
+    requested_node = None
+    command_lower = user_command.lower()
+    if isinstance(nodes, list):
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            node_id = str(node.get("node_id", ""))
+            aliases = [str(v) for v in node.get("aliases", []) if v]
+            name = str(node.get("name", node_id))
+            tags = [str(v) for v in node.get("tags", []) if v]
+            candidates.append(
+                {
+                    "node_id": node_id,
+                    "name": name,
+                    "aliases": aliases[:5],
+                    "tags": tags,
+                    "distance_m": node.get("distance_from_robot_m"),
+                    "photo_required": "photo_required" in tags,
+                    "door_may_close": "door_may_close" in tags,
+                }
+            )
+            match_terms = [node_id, name, *aliases]
+            if requested_node is None and any(term and term.lower() in command_lower for term in match_terms):
+                requested_node = node_id
+
+    link_quality = _dig_value(planner_context, "link_quality") or {}
+    bandwidth = _dig_value(planner_context, "bandwidth_kbps")
+    weak_bandwidth = _dig_value(planner_context, "weak_bandwidth_kbps")
+    battery = _dig_value(planner_context, "battery_percent")
+    low_battery_limit = _dig_value(planner_context, "low_battery_percent")
+    distance_to_target = _dig_value(planner_context, "distance_to_requested_target_m")
+    arrival_distance = _dig_value(planner_context, "arrival_distance_m")
+    if requested_node and distance_to_target is None:
+        for candidate in candidates:
+            if candidate["node_id"] == requested_node:
+                distance_to_target = candidate.get("distance_m")
+                break
+
+    return {
+        "user_command": user_command,
+        "map_id": (summary.get("map", {}) if isinstance(summary, dict) else {}).get("map_id"),
+        "slam_ok": slam.get("health_status") == "ok",
+        "localized": bool(robot.get("localized")),
+        "nearest_node": (robot.get("nearest_node") or {}).get("node_id") if isinstance(robot.get("nearest_node"), dict) else None,
+        "requested_target_guess": requested_node,
+        "distance_to_requested_target_m": distance_to_target,
+        "arrival_distance_m": arrival_distance if arrival_distance is not None else 0.3,
+        "battery_percent": battery,
+        "low_battery_percent": low_battery_limit,
+        "low_battery": isinstance(battery, (int, float)) and isinstance(low_battery_limit, (int, float)) and float(battery) < float(low_battery_limit),
+        "bandwidth_kbps": bandwidth if bandwidth is not None else (link_quality.get("bandwidth_kbps") if isinstance(link_quality, dict) else None),
+        "weak_bandwidth_kbps": weak_bandwidth,
+        "weak_bandwidth": isinstance(bandwidth, (int, float)) and isinstance(weak_bandwidth, (int, float)) and float(bandwidth) < float(weak_bandwidth),
+        "candidates": candidates,
+    }
+
+
+def build_lightweight_planner_prompt(planner_context: dict[str, Any]) -> str:
+    light_context = build_lightweight_planner_context(planner_context)
+    return LIGHTWEIGHT_PROMPT_TEMPLATE.format(planner_context=json.dumps(light_context, ensure_ascii=False, separators=(",", ":")))
+
+
+def build_intent_planner_prompt(planner_context: dict[str, Any]) -> str:
+    light_context = build_lightweight_planner_context(planner_context)
+    return INTENT_PROMPT_TEMPLATE.format(planner_context=json.dumps(light_context, ensure_ascii=False, separators=(",", ":")))
+
+
+def intent_to_local_plan(intent: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
+    mode = str(intent.get("mode", "human_confirm"))
+    if "|" in mode:
+        if "mapped_navigation" in mode:
+            mode = "mapped_navigation"
+        elif "safe_hold" in mode:
+            mode = "safe_hold"
+        else:
+            mode = "human_confirm"
+    target_node = str(intent.get("target_node") or "")
+    requires_ack = bool(intent.get("requires_human_ack", mode == "human_confirm"))
+    try:
+        confidence = float(intent.get("confidence", 0.5))
+    except (TypeError, ValueError):
+        confidence = 0.5
+    confidence = max(0.0, min(1.0, confidence))
+    reason = str(intent.get("reason") or "intent planner result")[:160]
+    map_id = _dig_value(planner_context, "map_id") or "unknown"
+    communication_policy = _normal_communication_policy()
+
+    if mode == "mapped_navigation" and target_node:
+        steps = [
+            {"step_id": "nav_1", "tool": "create_navigation_subgoal", "arguments": {"map_id": map_id, "target_node": target_node}},
+            {"step_id": "wait_1", "tool": "wait_until", "arguments": {"condition": "arrived"}},
+        ]
+    elif mode == "safe_hold":
+        steps = [{"step_id": "hold_1", "tool": "hold_position", "arguments": {"reason": reason}}]
+        target_node = ""
+    else:
+        mode = "human_confirm"
+        steps = [{"step_id": "ask_1", "tool": "request_human_confirm", "arguments": {"reason": reason, "target_node": target_node}}]
+        requires_ack = True
+
+    return {
+        "plan_id": f"intent_plan_{int(time.time() * 1000)}",
+        "mode": mode,
+        "confidence": confidence,
+        "reason": reason,
+        "steps": steps,
+        "communication_policy": communication_policy,
+        "requires_human_ack": requires_ack,
+    }
+
+
+def deterministic_intent_from_context(planner_context: dict[str, Any]) -> dict[str, Any] | None:
+    light_context = build_lightweight_planner_context(planner_context)
+    if not light_context.get("slam_ok") or not light_context.get("localized"):
+        return {
+            "mode": "safe_hold",
+            "target_node": "",
+            "confidence": 1.0,
+            "reason": "slam or localization not ready",
+            "requires_human_ack": True,
+        }
+
+    target_node = str(light_context.get("requested_target_guess") or "")
+    known_nodes = {str(candidate.get("node_id")) for candidate in light_context.get("candidates", []) if isinstance(candidate, dict)}
+    if not target_node or target_node not in known_nodes:
+        return None
+
+    arrival_distance = light_context.get("arrival_distance_m")
+    distance_to_target = light_context.get("distance_to_requested_target_m")
+    if isinstance(arrival_distance, (int, float)) and isinstance(distance_to_target, (int, float)) and float(distance_to_target) <= float(arrival_distance):
+        return {
+            "mode": "safe_hold",
+            "target_node": target_node,
+            "confidence": 1.0,
+            "reason": "already near target",
+            "requires_human_ack": False,
+        }
+
+    if light_context.get("low_battery") and target_node != "charging_point":
+        return {
+            "mode": "human_confirm",
+            "target_node": target_node,
+            "confidence": 1.0,
+            "reason": "low battery requires confirmation",
+            "requires_human_ack": True,
+        }
+
+    return {
+        "mode": "mapped_navigation",
+        "target_node": target_node,
+        "confidence": 1.0,
+        "reason": "deterministic target match",
+        "requires_human_ack": False,
+    }
 
 
 def parse_ask_qwen_answer(output: str) -> str:
@@ -320,12 +543,44 @@ def _weak_communication_policy() -> dict[str, Any]:
     }
 
 
+def _normal_communication_policy() -> dict[str, Any]:
+    return {
+        "mode": "normal",
+        "send": ["task_state", "navigation_feedback", "world_state_summary"],
+        "drop": [],
+        "reason": "normal link",
+    }
+
+
 def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
     """Apply deterministic local safety/communication rules to a schema-valid plan."""
     fixed = deepcopy(plan)
     steps = fixed.get("steps", [])
     if not isinstance(steps, list):
         return fixed
+
+    confidence = fixed.get("confidence")
+    if not isinstance(confidence, (int, float)):
+        try:
+            fixed["confidence"] = float(str(confidence).strip().rstrip("%")) / (100.0 if "%" in str(confidence) else 1.0)
+        except (TypeError, ValueError):
+            fixed["confidence"] = 0.5
+    if isinstance(fixed.get("confidence"), (int, float)):
+        fixed["confidence"] = max(0.0, min(1.0, float(fixed["confidence"])))
+
+    comm = fixed.get("communication_policy")
+    if not isinstance(comm, dict):
+        fixed["communication_policy"] = _normal_communication_policy()
+    else:
+        normalized_comm = _normal_communication_policy()
+        normalized_comm.update({k: v for k, v in comm.items() if k in {"mode", "send", "drop", "reason"}})
+        if not isinstance(normalized_comm.get("send"), list):
+            normalized_comm["send"] = ["task_state", "navigation_feedback", "world_state_summary"]
+        if not isinstance(normalized_comm.get("drop"), list):
+            normalized_comm["drop"] = []
+        if not normalized_comm.get("reason"):
+            normalized_comm["reason"] = "normal link"
+        fixed["communication_policy"] = normalized_comm
 
     bandwidth = _dig_value(planner_context, "bandwidth_kbps")
     weak_bandwidth = _dig_value(planner_context, "weak_bandwidth_kbps")
@@ -339,6 +594,13 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
 
     if fixed.get("mode") == "mapped_navigation":
         nav_index = next((i for i, step in enumerate(steps) if isinstance(step, dict) and step.get("tool") == "create_navigation_subgoal"), None)
+        if nav_index is not None:
+            nav_args = steps[nav_index].setdefault("arguments", {})
+            if isinstance(nav_args, dict):
+                if not nav_args.get("map_id"):
+                    map_id = _dig_value(planner_context, "map_id")
+                    if map_id:
+                        nav_args["map_id"] = map_id
         has_wait = any(isinstance(step, dict) and step.get("tool") == "wait_until" for step in steps)
         if nav_index is not None and not has_wait:
             steps.insert(
@@ -416,13 +678,37 @@ def run_local_llm_planner(
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
     max_tokens: int = 768,
     timeout_s: int = 240,
+    prompt_mode: str = "full",
 ) -> PlannerRunResult:
-    prompt = build_planner_prompt(planner_context)
+    if prompt_mode == "hybrid":
+        intent = deterministic_intent_from_context(planner_context)
+        if intent is not None:
+            plan = intent_to_local_plan(intent, planner_context)
+            plan = apply_context_policy_overrides(plan, planner_context)
+            validate_local_llm_plan(plan)
+            validate_execution_contract(plan)
+            validate_context_policy(plan, planner_context)
+            return PlannerRunResult(plan=plan, raw_answer=json.dumps(intent, ensure_ascii=False), elapsed_s=0.0)
+        prompt = build_intent_planner_prompt(planner_context)
+        if system_prompt == DEFAULT_SYSTEM_PROMPT:
+            system_prompt = INTENT_SYSTEM_PROMPT
+    elif prompt_mode == "intent":
+        prompt = build_intent_planner_prompt(planner_context)
+        if system_prompt == DEFAULT_SYSTEM_PROMPT:
+            system_prompt = INTENT_SYSTEM_PROMPT
+    elif prompt_mode == "light":
+        prompt = build_lightweight_planner_prompt(planner_context)
+        if system_prompt == DEFAULT_SYSTEM_PROMPT:
+            system_prompt = LIGHTWEIGHT_SYSTEM_PROMPT
+    else:
+        prompt = build_planner_prompt(planner_context)
     start = time.time()
     raw_answer = backend.generate(prompt, system_prompt=system_prompt, max_tokens=max_tokens, timeout_s=timeout_s)
     elapsed_s = time.time() - start
-    plan = extract_json_object(raw_answer)
-    validate_local_llm_plan(plan)
+    if prompt_mode in {"intent", "hybrid"}:
+        plan = intent_to_local_plan(extract_json_object(raw_answer), planner_context)
+    else:
+        plan = extract_json_object(raw_answer)
     plan = apply_context_policy_overrides(plan, planner_context)
     validate_local_llm_plan(plan)
     validate_execution_contract(plan)

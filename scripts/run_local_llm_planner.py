@@ -104,6 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--system", default=DEFAULT_SYSTEM_PROMPT)
     parser.add_argument("--max-tokens", type=int, default=768)
     parser.add_argument("--timeout-s", type=int, default=240)
+    parser.add_argument("--prompt-mode", choices=["full", "light", "intent", "hybrid"], default="full", help="Use full context, compact plan prompt, intent-only prompt, or deterministic-first hybrid prompt.")
     parser.add_argument("--pretty", action="store_true")
     return parser
 
@@ -126,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             system_prompt=args.system,
             max_tokens=args.max_tokens,
             timeout_s=args.timeout_s,
+            prompt_mode=args.prompt_mode,
         )
         plan = result.plan
         raw_answer = result.raw_answer
