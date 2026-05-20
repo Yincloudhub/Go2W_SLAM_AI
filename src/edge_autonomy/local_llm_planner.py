@@ -302,6 +302,7 @@ def build_intent_planner_prompt(planner_context: dict[str, Any]) -> str:
 
 
 def intent_to_local_plan(intent: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
+    light_context = build_lightweight_planner_context(planner_context)
     mode = str(intent.get("mode", "human_confirm"))
     if "|" in mode:
         if "mapped_navigation" in mode:
@@ -320,6 +321,18 @@ def intent_to_local_plan(intent: dict[str, Any], planner_context: dict[str, Any]
     reason = str(intent.get("reason") or "intent planner result")[:160]
     map_id = _dig_value(planner_context, "map_id") or "unknown"
     communication_policy = _normal_communication_policy()
+    known_nodes = {str(candidate.get("node_id")) for candidate in light_context.get("candidates", []) if isinstance(candidate, dict)}
+    requested_target_guess = str(light_context.get("requested_target_guess") or "")
+
+    if mode == "mapped_navigation":
+        if target_node not in known_nodes:
+            mode = "human_confirm"
+            requires_ack = True
+            reason = "target node is not registered"
+        elif not requested_target_guess:
+            mode = "human_confirm"
+            requires_ack = True
+            reason = "target is unclear; require human confirmation"
 
     if mode == "mapped_navigation" and target_node:
         steps = [
