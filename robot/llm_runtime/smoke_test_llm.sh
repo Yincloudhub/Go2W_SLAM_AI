@@ -11,7 +11,9 @@ start_s="$(date +%s)"
 set +e
 timeout "$TIMEOUT_S" \
   /home/unitree/llm_runtime/scripts/ask_qwen.sh \
-  '只输出一个JSON对象：{"ok":true}' \
+  --max-tokens 32 \
+  --system 'Output only one JSON object. Do not explain.' \
+  '{"ok":true}' \
   > "$OUT_FILE" 2> "$ERR_FILE"
 rc=$?
 set -e

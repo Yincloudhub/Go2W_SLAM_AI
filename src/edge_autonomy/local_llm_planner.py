@@ -277,13 +277,38 @@ def _dig_value(value: Any, key: str) -> Any:
 
 def _semantic_nodes(planner_context: dict[str, Any]) -> set[str]:
     topology = planner_context.get("semantic_topology") or planner_context.get("topology") or planner_context
-    nodes = topology.get("nodes", []) if isinstance(topology, dict) else []
+    nodes = []
+    if isinstance(topology, dict):
+        nodes = topology.get("nodes") or topology.get("available_nodes") or []
+    if not nodes:
+        found_nodes = _dig_value(planner_context, "available_nodes")
+        nodes = found_nodes if isinstance(found_nodes, list) else []
     out: set[str] = set()
     if isinstance(nodes, list):
         for node in nodes:
             if isinstance(node, dict) and isinstance(node.get("node_id"), str):
                 out.add(node["node_id"])
     return out
+
+
+def _semantic_node_by_id(planner_context: dict[str, Any], node_id: str) -> dict[str, Any] | None:
+    found_nodes = _dig_value(planner_context, "available_nodes")
+    nodes = found_nodes if isinstance(found_nodes, list) else []
+    if not nodes:
+        topology = planner_context.get("semantic_topology") or planner_context.get("topology") or {}
+        nodes = topology.get("nodes", []) if isinstance(topology, dict) else []
+    for node in nodes:
+        if isinstance(node, dict) and node.get("node_id") == node_id:
+            return node
+    return None
+
+
+def _node_requires_photo(planner_context: dict[str, Any], node_id: str) -> bool:
+    node = _semantic_node_by_id(planner_context, node_id)
+    if not node:
+        return False
+    tags = node.get("tags", [])
+    return isinstance(tags, list) and "photo_required" in tags
 
 
 def _weak_communication_policy() -> dict[str, Any]:
@@ -324,6 +349,20 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
                     "arguments": {"source": "/slam_info", "condition": "ctrl_info_arrived_or_finished"},
                 },
             )
+        nav_targets = _nav_target_nodes(fixed)
+        if nav_targets and _node_requires_photo(planner_context, nav_targets[0]):
+            has_capture = any(isinstance(step, dict) and step.get("tool") == "capture_keyframe" for step in steps)
+            if not has_capture:
+                wait_index = next((i for i, step in enumerate(steps) if isinstance(step, dict) and step.get("tool") == "wait_until"), nav_index)
+                insert_at = (wait_index + 1) if wait_index is not None else len(steps)
+                steps.insert(
+                    insert_at,
+                    {
+                        "step_id": "capture_1",
+                        "tool": "capture_keyframe",
+                        "arguments": {"target_node": nav_targets[0], "reason": "photo_required target"},
+                    },
+                )
 
     fixed["steps"] = steps[:6]
     return fixed
@@ -364,6 +403,10 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
         drops = set(comm.get("drop", [])) if isinstance(comm.get("drop"), list) else set()
         for item in ("raw_video", "dense_pointcloud", "high_rate_images"):
             require(item in drops, f"weak bandwidth: missing drop item {item}")
+
+    for target in nav_targets:
+        if _node_requires_photo(planner_context, target):
+            require("capture_keyframe" in tools, f"photo_required target {target!r} must capture_keyframe after arrival")
 
 
 def run_local_llm_planner(
