@@ -1,0 +1,5 @@
+{"action":"get_world_state"}
+{"action":"relocate","map_path":"/home/unitree/test.pcd"}
+{"action":"navigate_to_pose","target_pose":{"name":"llm_goal_001","x":2.0,"y":0.0,"z":0.0,"q_x":0.0,"q_y":0.0,"q_z":0.0,"q_w":1.0,"speed":0.5,"mode":1}}
+{"action":"pause_navigation"}
+{"action":"resume_navigation"}

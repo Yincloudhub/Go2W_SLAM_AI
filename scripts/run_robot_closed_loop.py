@@ -33,33 +33,43 @@ DEFAULT_LOCAL_COMMAND = (
 )
 
 
-def run_gateway_command(command: dict[str, Any], *, client_path: str, network_interface: str, timeout_s: int) -> dict[str, Any]:
+def run_gateway_command(
+    command: dict[str, Any],
+    *,
+    client_path: str,
+    network_interface: str,
+    timeout_s: int,
+    startup_wait_s: float = 0.0,
+) -> dict[str, Any]:
     import subprocess
 
     payload = json.dumps(command, ensure_ascii=False, separators=(",", ":")) + "\n"
-    completed = subprocess.run(
+    process = subprocess.Popen(
         [client_path, network_interface],
-        input=payload,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        capture_output=True,
-        timeout=timeout_s,
     )
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or f"gateway command failed with exit {completed.returncode}")
+    if startup_wait_s > 0:
+        time.sleep(startup_wait_s)
+    stdout, stderr = process.communicate(payload, timeout=timeout_s)
+    if process.returncode != 0:
+        raise RuntimeError(stderr.strip() or f"gateway command failed with exit {process.returncode}")
 
     decoder = json.JSONDecoder()
     objects: list[dict[str, Any]] = []
-    for index, char in enumerate(completed.stdout):
+    for index, char in enumerate(stdout):
         if char != "{":
             continue
         try:
-            value, _ = decoder.raw_decode(completed.stdout[index:])
+            value, _ = decoder.raw_decode(stdout[index:])
         except json.JSONDecodeError:
             continue
         if isinstance(value, dict):
             objects.append(value)
     if not objects:
-        raise RuntimeError(f"gateway did not return JSON: {completed.stdout[-1000:]}")
+        raise RuntimeError(f"gateway did not return JSON: {stdout[-1000:]}")
     for value in objects:
         if {"accepted", "action", "world_state"}.issubset(value.keys()):
             return value
@@ -131,6 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mock-yaw", type=float, default=-0.03)
     parser.add_argument("--gateway-client", default="/home/unitree/slam_gateway_refactor/build/slam_llm_command_client")
     parser.add_argument("--network-interface", default="eth0")
+    parser.add_argument("--gateway-startup-wait-s", type=float, default=4.0)
     parser.add_argument("--skip-gateway-check", action="store_true")
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")
@@ -162,6 +173,7 @@ def main(argv: list[str] | None = None) -> int:
             client_path=args.gateway_client,
             network_interface=args.network_interface,
             timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
         )
         gateway_allowed, gateway_reason = gateway_allows_navigation(gateway_state)
 
@@ -180,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
             client_path=args.gateway_client,
             network_interface=args.network_interface,
             timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
         )
         executed = bool(execution_result.get("accepted", False))
 
