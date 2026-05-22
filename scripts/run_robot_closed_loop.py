@@ -25,6 +25,7 @@ from scripts.slam_runtime_snapshot import parse_sections, run_remote_snapshot  #
 
 
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_floorplan_v4_map_registry.json"
+SIMULATION_MAP_STATUSES = {"simulation", "simulated", "demo", "synthetic"}
 DEFAULT_MODEL = "/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 DEFAULT_ASK_SCRIPT = "/home/unitree/llm_runtime/scripts/ask_qwen.sh"
 DEFAULT_LOCAL_COMMAND = (
@@ -96,6 +97,15 @@ def gateway_allows_navigation(world_state_result: dict[str, Any]) -> tuple[bool,
     return True, "gateway allows navigation"
 
 
+def registry_allows_execution(registry: MapRegistry, map_id: str) -> tuple[bool, str]:
+    profile = registry.get_map(map_id)
+    if profile.status.lower() in SIMULATION_MAP_STATUSES:
+        return False, f"map '{profile.map_id}' is marked as {profile.status}; real execution is blocked"
+    if not profile.topology_nodes:
+        return False, f"map '{profile.map_id}' has no topology nodes"
+    return True, "registry allows execution"
+
+
 def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
     if args.no_live_snapshot:
         return {
@@ -151,6 +161,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     registry = MapRegistry.from_file(args.registry)
+    registry_allowed, registry_reason = registry_allows_execution(registry, args.map_id)
+    if args.execute and not registry_allowed:
+        output = {
+            "command": args.command,
+            "dry_run": False,
+            "planner": None,
+            "gateway": {"checked": False, "allowed": False, "reason": "not checked; registry blocked execution"},
+            "execution": {"executed": False, "blocked_reason": registry_reason, "result": None},
+        }
+        if args.pretty:
+            print(json.dumps(output, ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
+        return 2
     snapshot = build_snapshot(args)
     planner_context = build_planner_context(snapshot, registry, user_command=args.command, map_id=args.map_id)
 
@@ -209,6 +233,12 @@ def main(argv: list[str] | None = None) -> int:
             "allowed": gateway_allowed,
             "reason": gateway_reason,
             "world_state": gateway_state,
+        },
+        "registry_gate": {
+            "allowed": registry_allowed,
+            "reason": registry_reason,
+            "registry": args.registry,
+            "map_id": args.map_id,
         },
         "execution": {
             "executed": executed,
