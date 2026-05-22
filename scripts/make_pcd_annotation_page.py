@@ -181,13 +181,35 @@ function mapToPixel(x, y) {{
   }};
 }}
 
-function eventToImagePixel(event) {{
+function imageScale() {{
   const rect = img.getBoundingClientRect();
-  const scaleX = img.naturalWidth / rect.width;
-  const scaleY = img.naturalHeight / rect.height;
   return {{
-    px: (event.clientX - rect.left) * scaleX,
-    py: (event.clientY - rect.top) * scaleY
+    x: img.naturalWidth / rect.width,
+    y: img.naturalHeight / rect.height
+  }};
+}}
+
+function eventToLocalPixel(event) {{
+  const rect = img.getBoundingClientRect();
+  return {{
+    css_px: event.clientX - rect.left,
+    css_py: event.clientY - rect.top
+  }};
+}}
+
+function cssToImagePixel(css_px, css_py) {{
+  const scale = imageScale();
+  return {{
+    px: css_px * scale.x,
+    py: css_py * scale.y
+  }};
+}}
+
+function imageToCssPixel(px, py) {{
+  const scale = imageScale();
+  return {{
+    css_px: px / scale.x,
+    css_py: py / scale.y
   }};
 }}
 
@@ -206,11 +228,11 @@ function show(value) {{
   output.textContent = JSON.stringify(value, null, 2);
 }}
 
-function addMarker(px, py) {{
+function addMarker(css_px, css_py) {{
   const el = document.createElement('div');
   el.className = 'marker';
-  el.style.left = px + 'px';
-  el.style.top = py + 'px';
+  el.style.left = css_px + 'px';
+  el.style.top = css_py + 'px';
   wrap.appendChild(el);
 }}
 
@@ -219,11 +241,12 @@ function addKnownNode(node) {{
   if (typeof pose.x !== 'number' || typeof pose.y !== 'number') return;
   const p = mapToPixel(pose.x, pose.y);
   if (p.px < 0 || p.py < 0 || p.px > meta.width_px || p.py > meta.height_px) return;
+  const css = imageToCssPixel(p.px, p.py);
   const el = document.createElement('div');
   el.className = 'known';
   el.dataset.nodeId = node.node_id;
-  el.style.left = p.px + 'px';
-  el.style.top = p.py + 'px';
+  el.style.left = css.css_px + 'px';
+  el.style.top = css.css_py + 'px';
   el.innerHTML = '<span class="known-dot"></span>' + node.node_id + ' / ' + (node.name || '');
   wrap.appendChild(el);
   el.addEventListener('pointerdown', (event) => {{
@@ -235,10 +258,11 @@ function addKnownNode(node) {{
   }});
   el.addEventListener('pointermove', (event) => {{
     if (!dragging || dragging.el !== el) return;
-    const p = eventToImagePixel(event);
-    el.style.left = p.px + 'px';
-    el.style.top = p.py + 'px';
-    const m = pixelToMap(p.px, p.py);
+    const local = eventToLocalPixel(event);
+    const image = cssToImagePixel(local.css_px, local.css_py);
+    el.style.left = local.css_px + 'px';
+    el.style.top = local.css_py + 'px';
+    const m = pixelToMap(image.px, image.py);
     const adjustedNode = cloneNodeWithPose(node, m.x, m.y);
     adjusted.set(node.node_id, adjustedNode);
     el.classList.add('adjusted');
@@ -256,10 +280,23 @@ for (const node of knownNodes) addKnownNode(node);
 
 img.addEventListener('click', (event) => {{
   if (dragging) return;
-  const p = eventToImagePixel(event);
-  const m = pixelToMap(p.px, p.py);
-  last = {{pixel_x: p.px, pixel_y: p.py, x: m.x, y: m.y}};
-  addMarker(p.px, p.py);
+  const local = eventToLocalPixel(event);
+  const image = cssToImagePixel(local.css_px, local.css_py);
+  const m = pixelToMap(image.px, image.py);
+  const projected = mapToPixel(m.x, m.y);
+  const projectedCss = imageToCssPixel(projected.px, projected.py);
+  last = {{
+    css_x: local.css_px,
+    css_y: local.css_py,
+    pixel_x: image.px,
+    pixel_y: image.py,
+    projected_css_x: projectedCss.css_px,
+    projected_css_y: projectedCss.css_py,
+    roundtrip_css_error_px: Math.hypot(projectedCss.css_px - local.css_px, projectedCss.css_py - local.css_py),
+    x: m.x,
+    y: m.y
+  }};
+  addMarker(projectedCss.css_px, projectedCss.css_py);
   show(last);
 }});
 
