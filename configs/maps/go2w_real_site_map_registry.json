@@ -11,12 +11,12 @@
   "maps": [
     {
       "map_id": "go2w_real_site",
-      "name": "GO2W现场真实拓扑",
+      "name": "GO2W 真实现场拓扑",
       "status": "real",
       "pcd_path": "/home/unitree/test.pcd",
       "topology_path": "/home/unitree/topology_points.json",
       "frame_id": "map",
-      "description": "????????????????????????????????????????2D????????????",
+      "description": "真实现场 PCD 与人工标注拓扑点，供机器狗本地 LLM 闭环使用。",
       "topology_nodes": [
         {
           "node_id": "initial_point",
@@ -48,7 +48,7 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "从早期 /home/unitree/topology_points.json 的 wp_0 保留为真实初始/返回点。"
+          "description": "来自早期 /home/unitree/topology_points.json 的 wp_0，保留为真实初始返回点。"
         },
         {
           "node_id": "zhao_bo_office_front",
@@ -107,7 +107,7 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "?????????????????? SLAM ???PCD ???? x=1.7896903991699222,y=0.3549842834472656?????? 0.192m?"
+          "description": "现场导航后用 SLAM 当前位姿校准的尹思园工位。原 PCD 点击点与校准点约相差 0.192m。"
         },
         {
           "node_id": "room_701_corridor",
@@ -138,7 +138,7 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "PCD俯视图点击标注点：701门外走廊。"
+          "description": "PCD 俯视图点击标注点：701门外走廊。"
         },
         {
           "node_id": "nie_guoli_office_front",
@@ -208,35 +208,35 @@
           "to": "yin_siyuan_station",
           "bidirectional": true,
           "expected_distance_m": 0.7,
-          "description": "?"
+          "description": "初始点到尹思园工位的候选路径。"
         },
         {
           "from": "initial_point",
           "to": "zhao_bo_office_front",
           "bidirectional": true,
           "expected_distance_m": 4.6,
-          "description": "??"
+          "description": "初始点到赵博办公室门口的候选路径。"
         },
         {
           "from": "initial_point",
           "to": "room_701_corridor",
           "bidirectional": true,
           "expected_distance_m": 4.7,
-          "description": "701???"
+          "description": "初始点到 701门外走廊 的候选路径。"
         },
         {
           "from": "yin_siyuan_station",
           "to": "zhao_bo_office_front",
           "bidirectional": true,
           "expected_distance_m": 5.0,
-          "description": "PCDUnitree SLAM?"
+          "description": "尹思园工位到赵博办公室门口的候选路径。"
         },
         {
           "from": "yin_siyuan_station",
           "to": "room_701_corridor",
           "bidirectional": true,
           "expected_distance_m": 5.1,
-          "description": "PCDUnitree SLAM?"
+          "description": "尹思园工位到 701门外走廊 的候选路径。"
         },
         {
           "from": "initial_point",
@@ -277,7 +277,7 @@
       "relocalization_anchors": [
         {
           "anchor_id": "initial_point",
-          "name": "???",
+          "name": "初始点",
           "pose": {
             "x": 1.1544053554534912,
             "y": -0.1470528244972229,
@@ -292,7 +292,7 @@
           "allowed_radius_m": 1.2,
           "allowed_yaw_error_deg": 45.0,
           "status": "candidate",
-          "description": "?????????????????????????????"
+          "description": "候选重定位锚点：初始点。"
         },
         {
           "anchor_id": "zhao_bo_office_front",
@@ -330,7 +330,7 @@
           "allowed_radius_m": 1.2,
           "allowed_yaw_error_deg": 45.0,
           "status": "candidate",
-          "description": "?????????????????????????????"
+          "description": "候选重定位锚点：尹思园工位。"
         },
         {
           "anchor_id": "room_701_corridor",
@@ -349,7 +349,7 @@
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 45.0,
           "status": "candidate",
-          "description": "?????????????????????????????"
+          "description": "候选重定位锚点：701门外走廊。"
         },
         {
           "anchor_id": "nie_guoli_office_front",
