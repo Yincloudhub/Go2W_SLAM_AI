@@ -103,6 +103,20 @@ def pose_distance_to_target(world_state_result: dict[str, Any], target_pose: dic
         return None
 
 
+def yaw_error_to_target(world_state_result: dict[str, Any], target_pose: dict[str, Any]) -> float | None:
+    world = world_state_result.get("world_state", {})
+    pose = world.get("current_pose", {}).get("pose", {}) if isinstance(world, dict) else {}
+    if not isinstance(pose, dict):
+        return None
+    try:
+        current_yaw = float(pose["yaw"])
+        target_yaw = float(target_pose.get("yaw", 0.0))
+    except (KeyError, TypeError, ValueError):
+        return None
+    diff = (current_yaw - target_yaw + math.pi) % (2.0 * math.pi) - math.pi
+    return abs(diff)
+
+
 def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any] | None) -> dict[str, Any]:
     if not slam_command or slam_command.get("action") != "navigate_to_pose":
         return {"skipped": True, "reason": "no navigation command"}
@@ -116,13 +130,17 @@ def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any]
     while time.time() < deadline:
         state = get_world_state(args)
         distance_m = pose_distance_to_target(state, target_pose)
+        yaw_error_rad = yaw_error_to_target(state, target_pose)
         sample = {
             "timestamp_ms": state.get("world_state", {}).get("timestamp_ms"),
             "distance_to_target_m": distance_m,
+            "yaw_error_rad": yaw_error_rad,
             "pose": state.get("world_state", {}).get("current_pose", {}).get("pose"),
         }
         samples.append(sample)
-        if distance_m is not None and distance_m <= args.arrival_distance_m:
+        distance_ok = distance_m is not None and distance_m <= args.arrival_distance_m
+        yaw_ok = yaw_error_rad is None or yaw_error_rad <= args.arrival_yaw_rad
+        if distance_ok and yaw_ok:
             entered_count += 1
             if entered_count >= args.arrival_confirm_samples:
                 pause_result = pause_navigation(args)
@@ -130,6 +148,7 @@ def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any]
                     "arrived": True,
                     "paused": bool(pause_result.get("accepted")),
                     "threshold_m": args.arrival_distance_m,
+                    "yaw_threshold_rad": args.arrival_yaw_rad,
                     "samples": samples,
                     "pause_result": pause_result,
                 }
@@ -141,6 +160,7 @@ def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any]
         "arrived": False,
         "paused": False,
         "threshold_m": args.arrival_distance_m,
+        "yaw_threshold_rad": args.arrival_yaw_rad,
         "samples": samples,
         "reason": "arrival threshold not reached before timeout",
     }
@@ -254,6 +274,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="Plan and safety-check only. This is the default when --execute is absent.")
     parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
+    parser.add_argument("--arrival-yaw-rad", type=float, default=0.18)
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
     parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
