@@ -16,14 +16,27 @@
       "pcd_path": "/home/unitree/test.pcd",
       "topology_path": "/home/unitree/topology_points.json",
       "frame_id": "map",
-      "description": "真实机器狗现场录点拓扑。当前仅包含现场已记录的两个点，禁止混用模拟2D地图点位。",
+      "description": "????????????????????????????????????????2D????????????",
       "topology_nodes": [
         {
-          "node_id": "wp_0",
-          "name": "现场点0",
+          "node_id": "initial_point",
+          "name": "初始点",
           "node_type": "recorded_waypoint",
-          "aliases": ["wp_0", "点0", "第一个点", "起始点", "回到起点", "回来", "返回"],
-          "tags": ["real_site", "recorded", "startup"],
+          "aliases": [
+            "初始点",
+            "起始点",
+            "回到初始点",
+            "回起点",
+            "回来",
+            "返回",
+            "initial_point"
+          ],
+          "tags": [
+            "real_site",
+            "recorded",
+            "startup",
+            "safe_return"
+          ],
           "pose": {
             "x": 1.1544053554534912,
             "y": -0.1470528244972229,
@@ -35,35 +48,210 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "从 /home/unitree/topology_points.json 导入的真实录点 wp_0。"
+          "description": "从早期 /home/unitree/topology_points.json 的 wp_0 保留为真实初始/返回点。"
         },
         {
-          "node_id": "wp_1",
-          "name": "现场点1",
-          "node_type": "recorded_waypoint",
-          "aliases": ["wp_1", "点1", "第二个点", "前面的点", "去前面", "到第二个点"],
-          "tags": ["real_site", "recorded"],
+          "node_id": "zhao_bo_office_front",
+          "name": "赵博办公室门口",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "赵博办公室门口",
+            "赵博办公室",
+            "赵博门口",
+            "zhao_bo_office_front"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "office",
+            "photo_required"
+          ],
           "pose": {
-            "x": 3.258938789367676,
-            "y": -2.2877299785614014,
-            "z": -0.08693132549524307,
-            "q_x": 0.011335774324834347,
-            "q_y": 0.013992785476148129,
-            "q_z": -0.722239077091217,
-            "q_w": 0.6914089918136597,
+            "x": 3.3021903991699215,
+            "y": -4.420015716552735,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
             "speed": 0.3,
             "mode": 0
           },
-          "description": "从 /home/unitree/topology_points.json 导入的真实录点 wp_1。"
+          "description": "PCD俯视图点击标注点：赵博办公室门口。"
+        },
+        {
+          "node_id": "yin_siyuan_station",
+          "name": "尹思园工位",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "尹思园工位",
+            "尹思园",
+            "尹思园位置",
+            "yin_siyuan_station"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "workstation"
+          ],
+          "pose": {
+            "x": 1.5974299907684326,
+            "y": 0.3592859208583832,
+            "z": -0.010628879070281982,
+            "q_x": 0.014545116573572159,
+            "q_y": 0.01697041466832161,
+            "q_z": -0.003139750799164176,
+            "q_w": 0.99974524974823,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "?????????????????? SLAM ???PCD ???? x=1.7896903991699222,y=0.3549842834472656?????? 0.192m?"
+        },
+        {
+          "node_id": "room_701_corridor",
+          "name": "701门外走廊",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "701门外走廊",
+            "701门口",
+            "701走廊",
+            "701拍照点",
+            "room_701_corridor"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "701",
+            "corridor",
+            "photo_required"
+          ],
+          "pose": {
+            "x": -3.472809600830078,
+            "y": 0.15498428344726634,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "PCD俯视图点击标注点：701门外走廊。"
         }
       ],
       "topology_edges": [
         {
-          "from": "wp_0",
-          "to": "wp_1",
+          "from": "initial_point",
+          "to": "yin_siyuan_station",
           "bidirectional": true,
-          "expected_distance_m": 3.0,
-          "description": "现场已录两个点之间的真实连通边。"
+          "expected_distance_m": 0.7,
+          "description": "?"
+        },
+        {
+          "from": "initial_point",
+          "to": "zhao_bo_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 4.6,
+          "description": "??"
+        },
+        {
+          "from": "initial_point",
+          "to": "room_701_corridor",
+          "bidirectional": true,
+          "expected_distance_m": 4.7,
+          "description": "701???"
+        },
+        {
+          "from": "yin_siyuan_station",
+          "to": "zhao_bo_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 5.0,
+          "description": "PCDUnitree SLAM?"
+        },
+        {
+          "from": "yin_siyuan_station",
+          "to": "room_701_corridor",
+          "bidirectional": true,
+          "expected_distance_m": 5.1,
+          "description": "PCDUnitree SLAM?"
+        }
+      ],
+      "relocalization_anchors": [
+        {
+          "anchor_id": "initial_point",
+          "name": "???",
+          "pose": {
+            "x": 1.1544053554534912,
+            "y": -0.1470528244972229,
+            "z": -0.04239395260810852,
+            "q_x": 0.02094786986708641,
+            "q_y": 0.011112436652183533,
+            "q_z": -0.015046637505292892,
+            "q_w": 0.9996055960655212,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.2,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "?????????????????????????????"
+        },
+        {
+          "anchor_id": "zhao_bo_office_front",
+          "name": "赵博办公室门口",
+          "pose": {
+            "x": 3.3021903991699215,
+            "y": -4.420015716552735,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "?????????????????????????????"
+        },
+        {
+          "anchor_id": "yin_siyuan_station",
+          "name": "尹思园工位",
+          "pose": {
+            "x": 1.5974299907684326,
+            "y": 0.3592859208583832,
+            "z": -0.010628879070281982,
+            "q_x": 0.014545116573572159,
+            "q_y": 0.01697041466832161,
+            "q_z": -0.003139750799164176,
+            "q_w": 0.99974524974823,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.2,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "?????????????????????????????"
+        },
+        {
+          "anchor_id": "room_701_corridor",
+          "name": "701门外走廊",
+          "pose": {
+            "x": -3.472809600830078,
+            "y": 0.15498428344726634,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "?????????????????????????????"
         }
       ]
     }

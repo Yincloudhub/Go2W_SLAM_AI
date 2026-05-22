@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import subprocess
 import sys
 import time
@@ -28,6 +29,12 @@ def decode_command(args: argparse.Namespace) -> str:
     if args.command_b64:
         return base64.b64decode(args.command_b64).decode("utf-8")
     return args.command or ""
+
+
+def decode_say(args: argparse.Namespace) -> str:
+    if args.say_b64:
+        return base64.b64decode(args.say_b64).decode("utf-8")
+    return args.say or ""
 
 
 def print_json(value: Any, *, pretty: bool) -> None:
@@ -75,6 +82,70 @@ def relocate(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def pause_navigation(args: argparse.Namespace) -> dict[str, Any]:
+    return run_gateway_command(
+        {"action": "pause_navigation"},
+        client_path=args.gateway_client,
+        network_interface=args.network_interface,
+        timeout_s=args.timeout_s,
+        startup_wait_s=0.0,
+    )
+
+
+def pose_distance_to_target(world_state_result: dict[str, Any], target_pose: dict[str, Any]) -> float | None:
+    world = world_state_result.get("world_state", {})
+    pose = world.get("current_pose", {}).get("pose", {}) if isinstance(world, dict) else {}
+    if not isinstance(pose, dict):
+        return None
+    try:
+        return math.hypot(float(pose["x"]) - float(target_pose["x"]), float(pose["y"]) - float(target_pose["y"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any] | None) -> dict[str, Any]:
+    if not slam_command or slam_command.get("action") != "navigate_to_pose":
+        return {"skipped": True, "reason": "no navigation command"}
+    target_pose = slam_command.get("target_pose")
+    if not isinstance(target_pose, dict):
+        return {"skipped": True, "reason": "missing target_pose"}
+
+    samples = []
+    entered_count = 0
+    deadline = time.time() + args.arrival_monitor_s
+    while time.time() < deadline:
+        state = get_world_state(args)
+        distance_m = pose_distance_to_target(state, target_pose)
+        sample = {
+            "timestamp_ms": state.get("world_state", {}).get("timestamp_ms"),
+            "distance_to_target_m": distance_m,
+            "pose": state.get("world_state", {}).get("current_pose", {}).get("pose"),
+        }
+        samples.append(sample)
+        if distance_m is not None and distance_m <= args.arrival_distance_m:
+            entered_count += 1
+            if entered_count >= args.arrival_confirm_samples:
+                pause_result = pause_navigation(args)
+                return {
+                    "arrived": True,
+                    "paused": bool(pause_result.get("accepted")),
+                    "threshold_m": args.arrival_distance_m,
+                    "samples": samples,
+                    "pause_result": pause_result,
+                }
+        else:
+            entered_count = 0
+        time.sleep(args.arrival_monitor_interval_s)
+
+    return {
+        "arrived": False,
+        "paused": False,
+        "threshold_m": args.arrival_distance_m,
+        "samples": samples,
+        "reason": "arrival threshold not reached before timeout",
+    }
+
+
 def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
     argv = [
         sys.executable,
@@ -100,6 +171,12 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
     ]
     if args.no_live_snapshot:
         argv.append("--no-live-snapshot")
+        try:
+            state = get_world_state(args)
+            pose = state.get("world_state", {}).get("current_pose", {}).get("pose", {})
+            argv.extend(["--mock-x", str(float(pose["x"])), "--mock-y", str(float(pose["y"])), "--mock-yaw", str(float(pose.get("yaw", 0.0)))])
+        except Exception:
+            pass
     if args.execute:
         argv.append("--execute")
     completed = subprocess.run(argv, text=True, capture_output=True, timeout=args.closed_loop_timeout_s)
@@ -137,12 +214,49 @@ def monitor(args: argparse.Namespace) -> list[dict[str, Any]]:
     return samples
 
 
+def speak(args: argparse.Namespace, text: str) -> dict[str, Any]:
+    volume = max(0, min(100, int(args.voice_volume_percent)))
+    volume_cmd = subprocess.run(
+        ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume}%"],
+        text=True,
+        capture_output=True,
+        timeout=5,
+    )
+    say_cmd = subprocess.run(
+        ["spd-say", "-l", args.voice_language, "-r", str(args.voice_rate), "-p", str(args.voice_pitch), text],
+        text=True,
+        capture_output=True,
+        timeout=args.voice_timeout_s,
+    )
+    return {
+        "text": text,
+        "volume_percent": volume,
+        "volume_returncode": volume_cmd.returncode,
+        "volume_stderr": volume_cmd.stderr,
+        "say_returncode": say_cmd.returncode,
+        "say_stdout": say_cmd.stdout,
+        "say_stderr": say_cmd.stderr,
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Unified GO2W local LLM agent entrypoint.")
     parser.add_argument("--command", default="", help="Natural-language command. Prefer --command-b64 over SSH if encoding is unstable.")
     parser.add_argument("--command-b64", default="", help="UTF-8 base64 encoded natural-language command.")
+    parser.add_argument("--say", default="", help="Speak a short sentence through the robot speaker.")
+    parser.add_argument("--say-b64", default="", help="UTF-8 base64 encoded sentence to speak.")
+    parser.add_argument("--voice-volume-percent", type=int, default=15)
+    parser.add_argument("--voice-language", default="zh")
+    parser.add_argument("--voice-rate", type=int, default=-30)
+    parser.add_argument("--voice-pitch", type=int, default=-20)
+    parser.add_argument("--voice-timeout-s", type=int, default=8)
     parser.add_argument("--execute", action="store_true", help="Actually execute the generated navigation command.")
     parser.add_argument("--dry-run", action="store_true", help="Plan and safety-check only. This is the default when --execute is absent.")
+    parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
+    parser.add_argument("--arrival-distance-m", type=float, default=0.25)
+    parser.add_argument("--arrival-confirm-samples", type=int, default=2)
+    parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
+    parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
     parser.add_argument("--relocate", action="store_true", help="Start relocation before planning/execution.")
     parser.add_argument("--status", action="store_true", help="Print gateway world_state.")
@@ -168,8 +282,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     command = decode_command(args)
+    say_text = decode_say(args)
     output: dict[str, Any] = {
         "command": command,
+        "say": say_text,
         "execute": bool(args.execute),
         "steps": [],
     }
@@ -188,10 +304,20 @@ def main(argv: list[str] | None = None) -> int:
         output["steps"].append({"step": "status", "allowed": allowed, "reason": reason, "result": state})
 
     if command:
-        output["steps"].append({"step": "closed_loop", "result": run_closed_loop(args, command)})
+        closed_loop_result = run_closed_loop(args, command)
+        output["steps"].append({"step": "closed_loop", "result": closed_loop_result})
+        closed_loop_payload = closed_loop_result.get("result", {})
+        slam_command = None
+        if isinstance(closed_loop_payload, dict):
+            slam_command = closed_loop_payload.get("planner", {}).get("slam_command") if isinstance(closed_loop_payload.get("planner"), dict) else None
+        if args.execute and not args.no_auto_pause:
+            output["steps"].append({"step": "auto_pause_on_arrival", "result": auto_pause_on_arrival(args, slam_command)})
 
     if args.monitor_s > 0:
         output["steps"].append({"step": "monitor", "samples": monitor(args)})
+
+    if say_text:
+        output["steps"].append({"step": "speak", "result": speak(args, say_text)})
 
     print_json(output, pretty=args.pretty)
     return 0
