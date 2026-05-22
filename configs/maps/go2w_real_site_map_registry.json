@@ -137,6 +137,38 @@
             "mode": 0
           },
           "description": "PCD俯视图点击标注点：701门外走廊。"
+        },
+        {
+          "node_id": "nie_guoli_office_front",
+          "name": "聂国篱办公室门口",
+          "node_type": "recorded_waypoint",
+          "aliases": [
+            "聂国篱办公室门口",
+            "聂国篱办公室",
+            "聂国篱门口",
+            "聂国篱",
+            "nie_guoli_office_front",
+            "wp_1"
+          ],
+          "tags": [
+            "real_site",
+            "recorded",
+            "office",
+            "doorway",
+            "needs_calibration"
+          ],
+          "pose": {
+            "x": 3.258938789367676,
+            "y": -2.2877299785614014,
+            "z": -0.03357435762882233,
+            "q_x": 0.01912033185362816,
+            "q_y": 0.016667384654283524,
+            "q_z": -0.722239077091217,
+            "q_w": 0.6914089918136597,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "来自 /home/unitree/topology_points.json 的 wp_1。现场确认该点是聂国篱办公室门口，仍保留 needs_calibration 直到重新标点校准。"
         }
       ],
       "topology_edges": [
@@ -174,6 +206,20 @@
           "bidirectional": true,
           "expected_distance_m": 5.1,
           "description": "PCDUnitree SLAM?"
+        },
+        {
+          "from": "initial_point",
+          "to": "nie_guoli_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 2.9,
+          "description": "录制点 wp_1 候选路径，现场确认为聂国篱办公室门口。"
+        },
+        {
+          "from": "yin_siyuan_station",
+          "to": "nie_guoli_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 3.1,
+          "description": "录制点 wp_1 候选路径，现场确认为聂国篱办公室门口。"
         }
       ],
       "relocalization_anchors": [
@@ -252,6 +298,25 @@
           "allowed_yaw_error_deg": 45.0,
           "status": "candidate",
           "description": "?????????????????????????????"
+        },
+        {
+          "anchor_id": "nie_guoli_office_front",
+          "name": "聂国篱办公室门口",
+          "pose": {
+            "x": 3.258938789367676,
+            "y": -2.2877299785614014,
+            "z": -0.03357435762882233,
+            "q_x": 0.01912033185362816,
+            "q_y": 0.016667384654283524,
+            "q_z": -0.722239077091217,
+            "q_w": 0.6914089918136597,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "录制点 wp_1 候选重定位锚点，现场确认为聂国篱办公室门口，需重新标点后校准。"
         }
       ]
     }

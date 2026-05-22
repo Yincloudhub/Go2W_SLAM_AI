@@ -92,6 +92,53 @@ def pause_navigation(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def calibrate_node_from_current_pose(args: argparse.Namespace, node_id: str) -> dict[str, Any]:
+    state = get_world_state(args)
+    pose = state.get("world_state", {}).get("current_pose", {}).get("pose", {})
+    if not isinstance(pose, dict):
+        return {"updated": False, "reason": "missing current pose", "state": state}
+
+    registry_path = Path(args.registry)
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    target_node: dict[str, Any] | None = None
+    for item in registry.get("maps", []):
+        if item.get("map_id") != args.map_id:
+            continue
+        for node in item.get("topology_nodes", []):
+            if node.get("node_id") == node_id:
+                target_node = node
+                break
+        break
+    if target_node is None:
+        return {"updated": False, "reason": f"node_id {node_id!r} not found", "state": state}
+
+    calibrated_pose = {
+        "x": float(pose["x"]),
+        "y": float(pose["y"]),
+        "z": float(pose.get("z", 0.0)),
+        "q_x": float(pose.get("q_x", 0.0)),
+        "q_y": float(pose.get("q_y", 0.0)),
+        "q_z": float(pose.get("q_z", 0.0)),
+        "q_w": float(pose.get("q_w", 1.0)),
+        "speed": float(target_node.get("pose", {}).get("speed", 0.3)),
+        "mode": int(target_node.get("pose", {}).get("mode", 0)),
+    }
+    old_pose = target_node.get("pose")
+    target_node["pose"] = calibrated_pose
+    tags = target_node.get("tags", [])
+    if isinstance(tags, list):
+        target_node["tags"] = [tag for tag in tags if tag != "needs_calibration"]
+    target_node["description"] = f"{target_node.get('description', '')} 已使用现场当前位姿校准。".strip()
+    registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {
+        "updated": True,
+        "node_id": node_id,
+        "old_pose": old_pose,
+        "new_pose": calibrated_pose,
+        "registry": str(registry_path),
+    }
+
+
 def pose_distance_to_target(world_state_result: dict[str, Any], target_pose: dict[str, Any]) -> float | None:
     world = world_state_result.get("world_state", {})
     pose = world.get("current_pose", {}).get("pose", {}) if isinstance(world, dict) else {}
@@ -281,6 +328,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
     parser.add_argument("--relocate", action="store_true", help="Start relocation before planning/execution.")
     parser.add_argument("--status", action="store_true", help="Print gateway world_state.")
+    parser.add_argument("--pause", action="store_true", help="Pause current navigation task.")
+    parser.add_argument("--calibrate-node", default="", help="Update this registry node pose from the current live robot pose.")
     parser.add_argument("--monitor-s", type=float, default=0.0, help="Monitor world_state for N seconds after command.")
     parser.add_argument("--monitor-interval-s", type=float, default=2.0)
     parser.add_argument("--prompt-mode", choices=["hybrid", "intent", "light", "full"], default="hybrid")
@@ -323,6 +372,12 @@ def main(argv: list[str] | None = None) -> int:
         state = get_world_state(args)
         allowed, reason = gateway_allows_navigation(state)
         output["steps"].append({"step": "status", "allowed": allowed, "reason": reason, "result": state})
+
+    if args.pause:
+        output["steps"].append({"step": "pause", "result": pause_navigation(args)})
+
+    if args.calibrate_node:
+        output["steps"].append({"step": "calibrate_node", "result": calibrate_node_from_current_pose(args, args.calibrate_node)})
 
     if command:
         closed_loop_result = run_closed_loop(args, command)
