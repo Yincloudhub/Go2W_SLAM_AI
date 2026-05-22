@@ -58,17 +58,19 @@
             "赵博办公室门口",
             "赵博办公室",
             "赵博门口",
+            "赵博",
             "zhao_bo_office_front"
           ],
           "tags": [
             "real_site",
             "pcd_annotated",
             "office",
-            "photo_required"
+            "photo_required",
+            "needs_calibration"
           ],
           "pose": {
-            "x": 3.3021903991699215,
-            "y": -4.420015716552735,
+            "x": 2.9771903991699222,
+            "y": -5.670015716552735,
             "z": 0.0,
             "q_x": 0.0,
             "q_y": 0.0,
@@ -77,7 +79,7 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "PCD俯视图点击标注点：赵博办公室门口。"
+          "description": "PCD test513 俯视图重新点击标注点：赵博办公室门口。需要现场导航确认后删除 needs_calibration。"
         },
         {
           "node_id": "yin_siyuan_station",
@@ -169,6 +171,35 @@
             "mode": 0
           },
           "description": "来自 /home/unitree/topology_points.json 的 wp_1。现场确认该点是聂国篱办公室门口，仍保留 needs_calibration 直到重新标点校准。"
+        },
+        {
+          "node_id": "yang_shuyang_station",
+          "name": "杨书洋工位",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "杨书洋工位",
+            "杨书洋",
+            "杨书洋位置",
+            "yang_shuyang_station"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "workstation",
+            "needs_calibration"
+          ],
+          "pose": {
+            "x": 0.17719039916992152,
+            "y": -4.970015716552734,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "PCD test513 俯视图点击标注点：杨书洋工位。需要现场导航确认后删除 needs_calibration。"
         }
       ],
       "topology_edges": [
@@ -220,6 +251,27 @@
           "bidirectional": true,
           "expected_distance_m": 3.1,
           "description": "录制点 wp_1 候选路径，现场确认为聂国篱办公室门口。"
+        },
+        {
+          "from": "initial_point",
+          "to": "yang_shuyang_station",
+          "bidirectional": true,
+          "expected_distance_m": 5.2,
+          "description": "PCD test513 候选路径：初始点到杨书洋工位。"
+        },
+        {
+          "from": "yang_shuyang_station",
+          "to": "zhao_bo_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 2.9,
+          "description": "PCD test513 候选路径：杨书洋工位到赵博办公室门口。"
+        },
+        {
+          "from": "yang_shuyang_station",
+          "to": "nie_guoli_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 3.5,
+          "description": "PCD test513 候选路径：杨书洋工位到聂国篱办公室门口。"
         }
       ],
       "relocalization_anchors": [
@@ -246,8 +298,8 @@
           "anchor_id": "zhao_bo_office_front",
           "name": "赵博办公室门口",
           "pose": {
-            "x": 3.3021903991699215,
-            "y": -4.420015716552735,
+            "x": 2.9771903991699222,
+            "y": -5.670015716552735,
             "z": 0.0,
             "q_x": 0.0,
             "q_y": 0.0,
@@ -259,7 +311,7 @@
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 45.0,
           "status": "candidate",
-          "description": "?????????????????????????????"
+          "description": "PCD test513 重新标注后的赵博办公室门口候选重定位锚点。"
         },
         {
           "anchor_id": "yin_siyuan_station",
@@ -317,6 +369,25 @@
           "allowed_yaw_error_deg": 45.0,
           "status": "candidate",
           "description": "录制点 wp_1 候选重定位锚点，现场确认为聂国篱办公室门口，需重新标点后校准。"
+        },
+        {
+          "anchor_id": "yang_shuyang_station",
+          "name": "杨书洋工位",
+          "pose": {
+            "x": 0.17719039916992152,
+            "y": -4.970015716552734,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "PCD test513 标注的杨书洋工位候选重定位锚点。"
         }
       ]
     }
