@@ -480,6 +480,51 @@ def validate_execution_contract(plan: dict[str, Any]) -> None:
     require("target_node_id" not in nav_args, "use target_node instead of target_node_id")
 
 
+def repair_partial_navigation_plan(plan: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
+    """Turn common lightweight-model partial JSON into the strict plan schema."""
+    if PLAN_REQUIRED_KEYS.issubset(plan.keys()):
+        return plan
+
+    target = plan.get("target_node")
+    if not isinstance(target, str) or not target:
+        target = _dig_value(plan, "target_node")
+    if not isinstance(target, str) or not target:
+        return plan
+
+    map_id = plan.get("map_id") or _dig_value(plan, "map_id") or _dig_value(planner_context, "map_id")
+    if not isinstance(map_id, str) or not map_id:
+        map_id = "go2w_real_site"
+
+    confidence = plan.get("confidence", 0.5)
+    if not isinstance(confidence, (int, float)):
+        confidence = 0.5
+
+    comm = plan.get("communication_policy")
+    if not isinstance(comm, dict):
+        comm = _normal_communication_policy()
+
+    return {
+        "plan_id": str(plan.get("plan_id") or f"repaired_plan_{int(time.time() * 1000)}"),
+        "mode": "mapped_navigation",
+        "confidence": float(max(0.0, min(1.0, confidence))),
+        "reason": str(plan.get("reason") or f"repaired partial model output for target {target}"),
+        "steps": [
+            {
+                "step_id": "nav_1",
+                "tool": "create_navigation_subgoal",
+                "arguments": {"map_id": map_id, "target_node": target},
+            },
+            {
+                "step_id": "wait_1",
+                "tool": "wait_until",
+                "arguments": {"condition": "arrived"},
+            },
+        ],
+        "communication_policy": comm,
+        "requires_human_ack": bool(plan.get("requires_human_ack", False)),
+    }
+
+
 def _collect_tools(plan: dict[str, Any]) -> list[str]:
     return [str(step.get("tool")) for step in plan.get("steps", []) if isinstance(step, dict)]
 
@@ -722,6 +767,7 @@ def run_local_llm_planner(
         plan = intent_to_local_plan(extract_json_object(raw_answer), planner_context)
     else:
         plan = extract_json_object(raw_answer)
+        plan = repair_partial_navigation_plan(plan, planner_context)
     plan = apply_context_policy_overrides(plan, planner_context)
     validate_local_llm_plan(plan)
     validate_execution_contract(plan)

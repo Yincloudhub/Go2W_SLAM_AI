@@ -20,12 +20,16 @@ from scripts.run_robot_closed_loop import gateway_allows_navigation, run_gateway
 
 DEFAULT_GATEWAY_CLIENT = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"
 DEFAULT_START_SLAM = "/home/unitree/go2w_slam/go2w_edge_autonomy/scripts/start_go2w_slam_stack.sh"
-DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
+DEFAULT_MAP_PATH = "/home/unitree/test513.pcd"
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
 DEFAULT_MAP_ID = "go2w_real_site"
 
 
 def decode_command(args: argparse.Namespace) -> str:
+    if args.go_b64:
+        return base64.b64decode(args.go_b64).decode("utf-8")
+    if args.go:
+        return args.go
     if args.command_b64:
         return base64.b64decode(args.command_b64).decode("utf-8")
     return args.command or ""
@@ -82,6 +86,47 @@ def relocate(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def load_registry_map(args: argparse.Namespace) -> dict[str, Any] | None:
+    registry = json.loads(Path(args.registry).read_text(encoding="utf-8"))
+    for item in registry.get("maps", []):
+        if item.get("map_id") == args.map_id:
+            return item
+    return None
+
+
+def registry_map_path(args: argparse.Namespace) -> str:
+    profile = load_registry_map(args)
+    if isinstance(profile, dict) and profile.get("pcd_path"):
+        return str(profile["pcd_path"])
+    return args.map_path
+
+
+def registry_node(args: argparse.Namespace, node_id: str) -> dict[str, Any] | None:
+    profile = load_registry_map(args)
+    if not profile:
+        return None
+    for node in profile.get("topology_nodes", []):
+        if node.get("node_id") == node_id:
+            return node
+    return None
+
+
+def relocate_to_node(args: argparse.Namespace, node_id: str) -> dict[str, Any]:
+    node = registry_node(args, node_id)
+    if not node:
+        return {"accepted": False, "action": "relocate", "reason": f"node_id {node_id!r} not found"}
+    pose = node.get("pose")
+    if not isinstance(pose, dict):
+        return {"accepted": False, "action": "relocate", "reason": f"node_id {node_id!r} has no pose"}
+    return run_gateway_command(
+        {"action": "relocate", "map_path": registry_map_path(args), "init_pose": pose},
+        client_path=args.gateway_client,
+        network_interface=args.network_interface,
+        timeout_s=args.timeout_s,
+        startup_wait_s=args.gateway_startup_wait_s,
+    )
+
+
 def pause_navigation(args: argparse.Namespace) -> dict[str, Any]:
     return run_gateway_command(
         {"action": "pause_navigation"},
@@ -128,7 +173,7 @@ def calibrate_node_from_current_pose(args: argparse.Namespace, node_id: str) -> 
     tags = target_node.get("tags", [])
     if isinstance(tags, list):
         target_node["tags"] = [tag for tag in tags if tag != "needs_calibration"]
-    target_node["description"] = f"{target_node.get('description', '')} 已使用现场当前位姿校准。".strip()
+    target_node["description"] = f"{target_node.get('description', '')} calibrated from current live pose.".strip()
     registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {
         "updated": True,
@@ -186,7 +231,9 @@ def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any]
         }
         samples.append(sample)
         distance_ok = distance_m is not None and distance_m <= args.arrival_distance_m
-        yaw_ok = yaw_error_rad is None or yaw_error_rad <= args.arrival_yaw_rad
+        yaw_ok = True
+        if args.require_arrival_yaw:
+            yaw_ok = yaw_error_rad is None or yaw_error_rad <= args.arrival_yaw_rad
         if distance_ok and yaw_ok:
             entered_count += 1
             if entered_count >= args.arrival_confirm_samples:
@@ -196,6 +243,7 @@ def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any]
                     "paused": bool(pause_result.get("accepted")),
                     "threshold_m": args.arrival_distance_m,
                     "yaw_threshold_rad": args.arrival_yaw_rad,
+                    "require_yaw": bool(args.require_arrival_yaw),
                     "samples": samples,
                     "pause_result": pause_result,
                 }
@@ -208,6 +256,7 @@ def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any]
         "paused": False,
         "threshold_m": args.arrival_distance_m,
         "yaw_threshold_rad": args.arrival_yaw_rad,
+        "require_yaw": bool(args.require_arrival_yaw),
         "samples": samples,
         "reason": "arrival threshold not reached before timeout",
     }
@@ -224,7 +273,7 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
         "--map-id",
         args.map_id,
         "--map-path",
-        args.map_path,
+        registry_map_path(args),
         "--prompt-mode",
         args.prompt_mode,
         "--gateway-client",
@@ -308,6 +357,11 @@ def speak(args: argparse.Namespace, text: str) -> dict[str, Any]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Unified GO2W local LLM agent entrypoint.")
+    parser.add_argument("--go", default="", help="One-shot field command: preflight, optional relocation, LLM planning, execute, and auto-pause.")
+    parser.add_argument("--go-b64", default="", help="UTF-8 base64 encoded one-shot field command.")
+    parser.add_argument("--current-node", default="", help="Known current node used for auto-relocation when localization is not ready.")
+    parser.add_argument("--no-auto-start-slam", action="store_true", help="For --go, do not auto-start SLAM when health is not ready.")
+    parser.add_argument("--no-auto-relocate", action="store_true", help="For --go, do not auto-relocate from --current-node.")
     parser.add_argument("--command", default="", help="Natural-language command. Prefer --command-b64 over SSH if encoding is unstable.")
     parser.add_argument("--command-b64", default="", help="UTF-8 base64 encoded natural-language command.")
     parser.add_argument("--say", default="", help="Speak a short sentence through the robot speaker.")
@@ -322,6 +376,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-yaw-rad", type=float, default=0.18)
+    parser.add_argument("--require-arrival-yaw", action="store_true", help="Require yaw threshold before auto-pause; default pauses by distance only.")
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
     parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
@@ -351,6 +406,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.go or args.go_b64:
+        args.execute = True
+        args.no_live_snapshot = True
+        if args.prompt_mode == "hybrid":
+            args.prompt_mode = "light"
+
     command = decode_command(args)
     say_text = decode_say(args)
     output: dict[str, Any] = {
@@ -359,6 +420,27 @@ def main(argv: list[str] | None = None) -> int:
         "execute": bool(args.execute),
         "steps": [],
     }
+
+    if args.go or args.go_b64:
+        state = get_world_state(args)
+        allowed, reason = gateway_allows_navigation(state)
+        output["steps"].append({"step": "go_preflight", "allowed": allowed, "reason": reason, "result": state})
+        if not allowed and not args.no_auto_start_slam:
+            output["steps"].append({"step": "go_auto_start_slam", "result": run_start_slam(args.start_slam_script)})
+            time.sleep(3)
+            state = get_world_state(args)
+            allowed, reason = gateway_allows_navigation(state)
+            output["steps"].append({"step": "go_status_after_start_slam", "allowed": allowed, "reason": reason, "result": state})
+        if not allowed and args.current_node and not args.no_auto_relocate:
+            output["steps"].append({"step": "go_auto_relocate", "node_id": args.current_node, "result": relocate_to_node(args, args.current_node)})
+            time.sleep(args.gateway_startup_wait_s)
+            state = get_world_state(args)
+            allowed, reason = gateway_allows_navigation(state)
+            output["steps"].append({"step": "go_status_after_relocate", "allowed": allowed, "reason": reason, "result": state})
+        if not allowed:
+            output["steps"].append({"step": "go_blocked", "reason": reason})
+            print_json(output, pretty=args.pretty)
+            return 2
 
     if args.start_slam:
         output["steps"].append({"step": "start_slam", "result": run_start_slam(args.start_slam_script)})

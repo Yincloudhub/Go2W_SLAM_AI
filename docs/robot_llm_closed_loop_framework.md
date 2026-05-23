@@ -2,6 +2,37 @@
 
 本文档说明当前机器狗本地 LLM 闭环的代码结构、数据流和人工操作入口。目标是避免每次都依赖开发者手动下发命令，让现场人员可以自己验证、暂停、校准和继续扩展点位。
 
+## 0. 推荐简化入口
+
+现场优先使用 `--go`，不要再手动拼接 `--execute`、`--prompt-mode`、`--no-live-snapshot` 等参数：
+
+```bash
+cd /home/unitree/Go2W_SLAM_AI
+python3 scripts/go2w_agent_entry.py \
+  --go "去赵博老师的办公室门前，到了就站住" \
+  --current-node yin_siyuan_station \
+  --pretty
+```
+
+`--go` 会自动完成：
+
+- 读取 live world_state。
+- SLAM 未就绪时尝试启动 SLAM。
+- 如果提供 `--current-node`，未定位时用该节点做重定位。
+- 调用真实 LLM light 模式解析目标。
+- 修复轻量模型常见的半截 JSON 输出。
+- 通过 registry 和 gateway 安全门控。
+- 执行导航。
+- 到点距离达标后自动暂停。
+
+默认到点策略是“距离优先暂停”。yaw 只记录，不再默认卡住自动暂停。确实需要严格朝向时再加：
+
+```bash
+--require-arrival-yaw --arrival-yaw-rad 0.18
+```
+
+当前真实现场地图使用 `/home/unitree/test513.pcd`。不要再把 `/home/unitree/test.pcd` 作为默认重定位地图。
+
 ## 1. 当前闭环链路
 
 当前链路是：
