@@ -21,6 +21,13 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "preflight_allowed": None,
         "auto_relocated": False,
         "llm_plan_repaired": False,
+        "resolve_matched": None,
+        "resolved_target": None,
+        "resolve_ambiguous": None,
+        "resolve_reason": "",
+        "node_count": None,
+        "nodes": None,
+        "preflight_reason": "",
         "blocked_reason": "",
         "steps": [step.get("step") for step in output.get("steps", []) if isinstance(step, dict)],
     }
@@ -29,8 +36,29 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
             continue
         name = step.get("step")
         result = step.get("result", {})
-        if name == "go_preflight":
+        if name == "list_nodes":
+            nodes = step.get("nodes", [])
+            if isinstance(nodes, list):
+                summary["node_count"] = len(nodes)
+                summary["nodes"] = [
+                    {
+                        "node_id": node.get("node_id"),
+                        "name": node.get("name"),
+                        "needs_calibration": node.get("needs_calibration"),
+                    }
+                    for node in nodes
+                    if isinstance(node, dict)
+                ]
+        elif name in {"go_preflight", "preflight_only"}:
             summary["preflight_allowed"] = step.get("allowed")
+            summary["preflight_reason"] = step.get("reason", "")
+        elif name == "resolve_target" and isinstance(result, dict):
+            summary["resolve_matched"] = result.get("matched")
+            selected = result.get("selected", {})
+            if isinstance(selected, dict):
+                summary["resolved_target"] = selected.get("node_id")
+            summary["resolve_ambiguous"] = result.get("ambiguous")
+            summary["resolve_reason"] = result.get("reason", "")
         elif name == "go_auto_relocate":
             summary["auto_relocated"] = True
         elif name == "closed_loop" and isinstance(result, dict):
@@ -86,6 +114,11 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "preflight_allowed",
         "auto_relocated",
         "llm_plan_repaired",
+        "resolve_matched",
+        "resolved_target",
+        "resolve_ambiguous",
+        "resolve_reason",
+        "preflight_reason",
         "blocked_reason",
     ]
     row = {"timestamp": ts, **{key: summary.get(key) for key in fieldnames if key != "timestamp"}}

@@ -117,6 +117,58 @@ class ChassisController:
                 return node
         return None
 
+    def nodes(self) -> list[dict[str, Any]]:
+        profile = self.registry_map()
+        if not profile:
+            return []
+        nodes = profile.get("topology_nodes", [])
+        return nodes if isinstance(nodes, list) else []
+
+    def node_summary(self) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for node in self.nodes():
+            pose = node.get("pose", {})
+            tags = node.get("tags", [])
+            out.append(
+                {
+                    "node_id": node.get("node_id"),
+                    "name": node.get("name"),
+                    "aliases": node.get("aliases", []),
+                    "tags": tags if isinstance(tags, list) else [],
+                    "needs_calibration": isinstance(tags, list) and "needs_calibration" in tags,
+                    "x": pose.get("x") if isinstance(pose, dict) else None,
+                    "y": pose.get("y") if isinstance(pose, dict) else None,
+                }
+            )
+        return out
+
+    def resolve_node(self, text: str) -> dict[str, Any]:
+        query = text.strip().lower()
+        if not query:
+            return {"matched": False, "reason": "empty query", "matches": []}
+        matches = []
+        for node in self.nodes():
+            node_id = str(node.get("node_id", ""))
+            terms = [node_id, str(node.get("name", ""))]
+            aliases = node.get("aliases", [])
+            if isinstance(aliases, list):
+                terms.extend(str(item) for item in aliases if item)
+            hit_terms = [term for term in terms if term and term.lower() in query]
+            if hit_terms:
+                matches.append(
+                    {
+                        "node_id": node_id,
+                        "name": node.get("name"),
+                        "matched_terms": hit_terms,
+                        "needs_calibration": "needs_calibration" in node.get("tags", []) if isinstance(node.get("tags"), list) else False,
+                    }
+                )
+        if not matches:
+            return {"matched": False, "reason": "no registry node alias matched", "matches": []}
+        exact = [item for item in matches if item["node_id"].lower() == query]
+        selected = exact[0] if exact else sorted(matches, key=lambda item: max(len(term) for term in item["matched_terms"]), reverse=True)[0]
+        return {"matched": True, "selected": selected, "ambiguous": len(matches) > 1, "matches": matches}
+
     def world_state(self) -> dict[str, Any]:
         return run_gateway_command({"action": "get_world_state"}, self.gateway)
 

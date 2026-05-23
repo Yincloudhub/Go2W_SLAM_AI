@@ -344,6 +344,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--go", default="", help="One-shot field command: preflight, optional relocation, LLM planning, execute, and auto-pause.")
     parser.add_argument("--go-b64", default="", help="UTF-8 base64 encoded one-shot field command.")
     parser.add_argument("--fast", action="store_true", help="For --go, use deterministic/hybrid target matching before LLM.")
+    parser.add_argument("--list-nodes", action="store_true", help="List registry nodes without touching the robot gateway.")
+    parser.add_argument("--resolve-target", default="", help="Resolve text to a registry node without touching the robot gateway.")
+    parser.add_argument("--resolve-target-b64", default="", help="UTF-8 base64 encoded text to resolve to a registry node.")
+    parser.add_argument("--preflight-only", action="store_true", help="Read gateway safety/localization state once and exit; no auto-start, no relocation, no navigation.")
     parser.add_argument("--current-node", default="", help="Known current node used for auto-relocation when localization is not ready.")
     parser.add_argument("--no-auto-start-slam", action="store_true", help="For --go, do not auto-start SLAM when health is not ready.")
     parser.add_argument("--no-auto-relocate", action="store_true", help="For --go, do not auto-relocate from --current-node.")
@@ -410,6 +414,17 @@ def main(argv: list[str] | None = None) -> int:
         "execute": bool(args.execute),
         "steps": [],
     }
+
+    if args.list_nodes:
+        output["steps"].append({"step": "list_nodes", "nodes": make_chassis(args, startup_wait_s=0.0).node_summary()})
+
+    resolve_text = base64.b64decode(args.resolve_target_b64).decode("utf-8") if args.resolve_target_b64 else args.resolve_target
+    if resolve_text:
+        output["steps"].append({"step": "resolve_target", "text": resolve_text, "result": make_chassis(args, startup_wait_s=0.0).resolve_node(resolve_text)})
+
+    if args.preflight_only:
+        preflight = make_chassis(args).preflight()
+        output["steps"].append({"step": "preflight_only", **preflight})
 
     if args.go or args.go_b64:
         state = get_world_state(args)
