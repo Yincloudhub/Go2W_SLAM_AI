@@ -60,7 +60,7 @@ def print_json(value: Any, *, pretty: bool) -> None:
 
 
 def run_start_slam(script: str) -> dict[str, Any]:
-    completed = subprocess.run(["bash", script], text=True, capture_output=True, timeout=30)
+    completed = subprocess.run(["bash", script], text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=30)
     return {
         "returncode": completed.returncode,
         "stdout": completed.stdout,
@@ -279,7 +279,9 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
             pass
     if args.execute:
         argv.append("--execute")
-    completed = subprocess.run(argv, text=True, capture_output=True, timeout=args.closed_loop_timeout_s)
+    if args.skip_gateway_check:
+        argv.append("--skip-gateway-check")
+    completed = subprocess.run(argv, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=args.closed_loop_timeout_s)
     try:
         payload = json.loads(completed.stdout)
     except json.JSONDecodeError:
@@ -319,12 +321,16 @@ def speak(args: argparse.Namespace, text: str) -> dict[str, Any]:
     volume_cmd = subprocess.run(
         ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume}%"],
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=5,
     )
     say_cmd = subprocess.run(
         ["spd-say", "-l", args.voice_language, "-r", str(args.voice_rate), "-p", str(args.voice_pitch), text],
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         timeout=args.voice_timeout_s,
     )
@@ -365,6 +371,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--voice-timeout-s", type=int, default=8)
     parser.add_argument("--execute", action="store_true", help="Actually execute the generated navigation command.")
     parser.add_argument("--dry-run", action="store_true", help="Plan and safety-check only. This is the default when --execute is absent.")
+    parser.add_argument("--skip-gateway-check", action="store_true", help="For planner dry-runs, skip the closed-loop gateway check after planning.")
     parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-yaw-rad", type=float, default=0.18)
@@ -399,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.go or args.go_b64:
-        args.execute = True
+        args.execute = not args.dry_run
         args.no_live_snapshot = True
         if args.fast:
             args.prompt_mode = "hybrid"
@@ -419,6 +426,8 @@ def main(argv: list[str] | None = None) -> int:
         output["steps"].append({"step": "list_nodes", "nodes": make_chassis(args, startup_wait_s=0.0).node_summary()})
 
     resolve_text = base64.b64decode(args.resolve_target_b64).decode("utf-8") if args.resolve_target_b64 else args.resolve_target
+    if not resolve_text and (args.go or args.go_b64) and command:
+        resolve_text = command
     if resolve_text:
         output["steps"].append({"step": "resolve_target", "text": resolve_text, "result": make_chassis(args, startup_wait_s=0.0).resolve_node(resolve_text)})
 
@@ -427,22 +436,28 @@ def main(argv: list[str] | None = None) -> int:
         output["steps"].append({"step": "preflight_only", **preflight})
 
     if args.go or args.go_b64:
-        state = get_world_state(args)
-        allowed, reason = gateway_allows_navigation(state)
+        try:
+            state = get_world_state(args)
+            allowed, reason = gateway_allows_navigation(state)
+        except Exception as exc:  # pragma: no cover - field robustness
+            state = None
+            allowed, reason = False, f"preflight failed: {exc}"
         output["steps"].append({"step": "go_preflight", "allowed": allowed, "reason": reason, "result": state})
-        if not allowed and not args.no_auto_start_slam:
+        if not args.execute and not allowed:
+            output["steps"].append({"step": "go_dry_run_preflight_not_enforced", "reason": reason})
+        if args.execute and not allowed and not args.no_auto_start_slam:
             output["steps"].append({"step": "go_auto_start_slam", "result": run_start_slam(args.start_slam_script)})
             time.sleep(3)
             state = get_world_state(args)
             allowed, reason = gateway_allows_navigation(state)
             output["steps"].append({"step": "go_status_after_start_slam", "allowed": allowed, "reason": reason, "result": state})
-        if not allowed and args.current_node and not args.no_auto_relocate:
+        if args.execute and not allowed and args.current_node and not args.no_auto_relocate:
             output["steps"].append({"step": "go_auto_relocate", "node_id": args.current_node, "result": relocate_to_node(args, args.current_node)})
             time.sleep(args.gateway_startup_wait_s)
             state = get_world_state(args)
             allowed, reason = gateway_allows_navigation(state)
             output["steps"].append({"step": "go_status_after_relocate", "allowed": allowed, "reason": reason, "result": state})
-        if not allowed:
+        if args.execute and not allowed:
             output["steps"].append({"step": "go_blocked", "reason": reason})
             print_json(output, pretty=args.pretty)
             return 2
