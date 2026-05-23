@@ -147,7 +147,7 @@ LLM 只负责把人话变成任务意图：
 目标：一条命令可用。
 
 - 完成并稳定 `--go`。
-- `--go` 默认使用真实 LLM light，但允许 `--fast` 只用 deterministic 匹配。
+- `--go` 默认使用真实 LLM light；当前已增加 `--fast`，已知点位可优先走 deterministic/hybrid 匹配，减少等待。
 - 输出人能看懂的摘要，不默认打印超长 JSON。当前 `--go` 已默认输出摘要。
 - 增加 `--log-dir`，保存完整 JSON 到文件。当前 `--go` 已默认写入 `artifacts/robot_runs`。
 - 每次执行生成一行 CSV：输入、目标、LLM 耗时、是否执行、终点误差、是否暂停。当前已落到 `go2w_agent_runs.csv`，后续再补“是否修复 LLM 输出”等字段。
@@ -165,6 +165,12 @@ LLM 只负责把人话变成任务意图：
 
 - `src/edge_autonomy/chassis_controller.py`：底盘网关、registry 节点、重定位、暂停等确定性能力的封装。
 - `src/edge_autonomy/execution_report.py`：把完整执行 trace 汇总成简洁摘要，并写 JSON/CSV 日志。
+
+下一步继续迁移：
+
+- `auto_pause_on_arrival`
+- `calibrate_node_from_current_pose`
+- `go_preflight / go_auto_relocate`
 
 ### 阶段 C：把重定位做稳
 

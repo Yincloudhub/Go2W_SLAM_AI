@@ -44,6 +44,18 @@ python3 scripts/go2w_agent_entry.py \
   --pretty
 ```
 
+如果目标是已知点位、只想快速验证底盘，不想等真实 LLM：
+
+```bash
+python3 scripts/go2w_agent_entry.py \
+  --go "去赵博老师的办公室门前，到了就站住" \
+  --current-node yin_siyuan_station \
+  --fast \
+  --pretty
+```
+
+`--fast` 会优先走 deterministic/hybrid 目标匹配，已知别名能直接匹配到 registry 节点；复杂命令再回退到 LLM。
+
 ## 1. 当前闭环链路
 
 当前链路是：

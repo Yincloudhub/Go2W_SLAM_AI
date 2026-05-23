@@ -18,6 +18,9 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "arrived": None,
         "paused": None,
         "final_distance_m": None,
+        "preflight_allowed": None,
+        "auto_relocated": False,
+        "llm_plan_repaired": False,
         "blocked_reason": "",
         "steps": [step.get("step") for step in output.get("steps", []) if isinstance(step, dict)],
     }
@@ -26,7 +29,11 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
             continue
         name = step.get("step")
         result = step.get("result", {})
-        if name == "closed_loop" and isinstance(result, dict):
+        if name == "go_preflight":
+            summary["preflight_allowed"] = step.get("allowed")
+        elif name == "go_auto_relocate":
+            summary["auto_relocated"] = True
+        elif name == "closed_loop" and isinstance(result, dict):
             payload = result.get("result", {})
             if isinstance(payload, dict):
                 planner = payload.get("planner", {})
@@ -35,6 +42,9 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
                     plan = planner.get("plan", {})
                     if isinstance(plan, dict):
                         summary["plan_mode"] = plan.get("mode")
+                        reason = str(plan.get("reason", ""))
+                        plan_id = str(plan.get("plan_id", ""))
+                        summary["llm_plan_repaired"] = "repaired partial model output" in reason or plan_id.startswith("repaired_plan_")
                     slam_command = planner.get("slam_command", {})
                     if isinstance(slam_command, dict):
                         summary["target_node"] = slam_command.get("target_node")
@@ -73,6 +83,9 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "arrived",
         "paused",
         "final_distance_m",
+        "preflight_allowed",
+        "auto_relocated",
+        "llm_plan_repaired",
         "blocked_reason",
     ]
     row = {"timestamp": ts, **{key: summary.get(key) for key in fieldnames if key != "timestamp"}}

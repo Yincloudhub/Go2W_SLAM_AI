@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import math
 import subprocess
 import sys
 import time
@@ -18,8 +17,15 @@ if str(SRC_ROOT) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from edge_autonomy.chassis_controller import (  # noqa: E402
+    ChassisController,
+    GatewayConfig,
+    gateway_allows_navigation,
+    pose_distance,
+    run_gateway_command,
+    yaw_error,
+)
 from edge_autonomy.execution_report import summarize_agent_output, write_execution_log  # noqa: E402
-from scripts.run_robot_closed_loop import gateway_allows_navigation, run_gateway_command  # noqa: E402
 
 
 DEFAULT_GATEWAY_CLIENT = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"
@@ -62,14 +68,22 @@ def run_start_slam(script: str) -> dict[str, Any]:
     }
 
 
-def get_world_state(args: argparse.Namespace) -> dict[str, Any]:
-    return run_gateway_command(
-        {"action": "get_world_state"},
-        client_path=args.gateway_client,
-        network_interface=args.network_interface,
-        timeout_s=args.timeout_s,
-        startup_wait_s=args.gateway_startup_wait_s,
+def make_chassis(args: argparse.Namespace, *, startup_wait_s: float | None = None) -> ChassisController:
+    wait_s = args.gateway_startup_wait_s if startup_wait_s is None else startup_wait_s
+    return ChassisController(
+        registry_path=args.registry,
+        map_id=args.map_id,
+        gateway=GatewayConfig(
+            client_path=args.gateway_client,
+            network_interface=args.network_interface,
+            timeout_s=args.timeout_s,
+            startup_wait_s=wait_s,
+        ),
     )
+
+
+def get_world_state(args: argparse.Namespace) -> dict[str, Any]:
+    return make_chassis(args).world_state()
 
 
 def relocate(args: argparse.Namespace) -> dict[str, Any]:
@@ -84,19 +98,17 @@ def relocate(args: argparse.Namespace) -> dict[str, Any]:
     }
     return run_gateway_command(
         {"action": "relocate", "map_path": args.map_path, "init_pose": init_pose},
-        client_path=args.gateway_client,
-        network_interface=args.network_interface,
-        timeout_s=args.timeout_s,
-        startup_wait_s=args.gateway_startup_wait_s,
+        GatewayConfig(
+            client_path=args.gateway_client,
+            network_interface=args.network_interface,
+            timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
+        ),
     )
 
 
 def load_registry_map(args: argparse.Namespace) -> dict[str, Any] | None:
-    registry = json.loads(Path(args.registry).read_text(encoding="utf-8"))
-    for item in registry.get("maps", []):
-        if item.get("map_id") == args.map_id:
-            return item
-    return None
+    return make_chassis(args, startup_wait_s=0.0).registry_map()
 
 
 def registry_map_path(args: argparse.Namespace) -> str:
@@ -107,39 +119,15 @@ def registry_map_path(args: argparse.Namespace) -> str:
 
 
 def registry_node(args: argparse.Namespace, node_id: str) -> dict[str, Any] | None:
-    profile = load_registry_map(args)
-    if not profile:
-        return None
-    for node in profile.get("topology_nodes", []):
-        if node.get("node_id") == node_id:
-            return node
-    return None
+    return make_chassis(args, startup_wait_s=0.0).node(node_id)
 
 
 def relocate_to_node(args: argparse.Namespace, node_id: str) -> dict[str, Any]:
-    node = registry_node(args, node_id)
-    if not node:
-        return {"accepted": False, "action": "relocate", "reason": f"node_id {node_id!r} not found"}
-    pose = node.get("pose")
-    if not isinstance(pose, dict):
-        return {"accepted": False, "action": "relocate", "reason": f"node_id {node_id!r} has no pose"}
-    return run_gateway_command(
-        {"action": "relocate", "map_path": registry_map_path(args), "init_pose": pose},
-        client_path=args.gateway_client,
-        network_interface=args.network_interface,
-        timeout_s=args.timeout_s,
-        startup_wait_s=args.gateway_startup_wait_s,
-    )
+    return make_chassis(args).relocate_to_node(node_id, map_path_fallback=args.map_path)
 
 
 def pause_navigation(args: argparse.Namespace) -> dict[str, Any]:
-    return run_gateway_command(
-        {"action": "pause_navigation"},
-        client_path=args.gateway_client,
-        network_interface=args.network_interface,
-        timeout_s=args.timeout_s,
-        startup_wait_s=0.0,
-    )
+    return make_chassis(args, startup_wait_s=0.0).pause()
 
 
 def calibrate_node_from_current_pose(args: argparse.Namespace, node_id: str) -> dict[str, Any]:
@@ -194,10 +182,7 @@ def pose_distance_to_target(world_state_result: dict[str, Any], target_pose: dic
     pose = world.get("current_pose", {}).get("pose", {}) if isinstance(world, dict) else {}
     if not isinstance(pose, dict):
         return None
-    try:
-        return math.hypot(float(pose["x"]) - float(target_pose["x"]), float(pose["y"]) - float(target_pose["y"]))
-    except (KeyError, TypeError, ValueError):
-        return None
+    return pose_distance(pose, target_pose)
 
 
 def yaw_error_to_target(world_state_result: dict[str, Any], target_pose: dict[str, Any]) -> float | None:
@@ -205,13 +190,7 @@ def yaw_error_to_target(world_state_result: dict[str, Any], target_pose: dict[st
     pose = world.get("current_pose", {}).get("pose", {}) if isinstance(world, dict) else {}
     if not isinstance(pose, dict):
         return None
-    try:
-        current_yaw = float(pose["yaw"])
-        target_yaw = float(target_pose.get("yaw", 0.0))
-    except (KeyError, TypeError, ValueError):
-        return None
-    diff = (current_yaw - target_yaw + math.pi) % (2.0 * math.pi) - math.pi
-    return abs(diff)
+    return yaw_error(pose, target_pose)
 
 
 def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any] | None) -> dict[str, Any]:
@@ -364,6 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Unified GO2W local LLM agent entrypoint.")
     parser.add_argument("--go", default="", help="One-shot field command: preflight, optional relocation, LLM planning, execute, and auto-pause.")
     parser.add_argument("--go-b64", default="", help="UTF-8 base64 encoded one-shot field command.")
+    parser.add_argument("--fast", action="store_true", help="For --go, use deterministic/hybrid target matching before LLM.")
     parser.add_argument("--current-node", default="", help="Known current node used for auto-relocation when localization is not ready.")
     parser.add_argument("--no-auto-start-slam", action="store_true", help="For --go, do not auto-start SLAM when health is not ready.")
     parser.add_argument("--no-auto-relocate", action="store_true", help="For --go, do not auto-relocate from --current-node.")
@@ -417,7 +397,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.go or args.go_b64:
         args.execute = True
         args.no_live_snapshot = True
-        if args.prompt_mode == "hybrid":
+        if args.fast:
+            args.prompt_mode = "hybrid"
+        elif args.prompt_mode == "hybrid":
             args.prompt_mode = "light"
 
     command = decode_command(args)
