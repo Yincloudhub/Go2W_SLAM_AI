@@ -12,9 +12,13 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from edge_autonomy.execution_report import summarize_agent_output, write_execution_log  # noqa: E402
 from scripts.run_robot_closed_loop import gateway_allows_navigation, run_gateway_command  # noqa: E402
 
 
@@ -23,6 +27,7 @@ DEFAULT_START_SLAM = "/home/unitree/go2w_slam/go2w_edge_autonomy/scripts/start_g
 DEFAULT_MAP_PATH = "/home/unitree/test513.pcd"
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
 DEFAULT_MAP_ID = "go2w_real_site"
+DEFAULT_LOG_DIR = REPO_ROOT / "artifacts" / "robot_runs"
 
 
 def decode_command(args: argparse.Namespace) -> str:
@@ -362,6 +367,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--current-node", default="", help="Known current node used for auto-relocation when localization is not ready.")
     parser.add_argument("--no-auto-start-slam", action="store_true", help="For --go, do not auto-start SLAM when health is not ready.")
     parser.add_argument("--no-auto-relocate", action="store_true", help="For --go, do not auto-relocate from --current-node.")
+    parser.add_argument("--brief", action="store_true", help="Print a compact execution summary instead of the full trace.")
+    parser.add_argument("--full-output", action="store_true", help="For --go, print the full trace instead of the default compact summary.")
+    parser.add_argument("--log-dir", default="", help="Write full JSON and CSV run logs to this directory. --go defaults to artifacts/robot_runs.")
     parser.add_argument("--command", default="", help="Natural-language command. Prefer --command-b64 over SSH if encoding is unstable.")
     parser.add_argument("--command-b64", default="", help="UTF-8 base64 encoded natural-language command.")
     parser.add_argument("--say", default="", help="Speak a short sentence through the robot speaker.")
@@ -477,7 +485,19 @@ def main(argv: list[str] | None = None) -> int:
     if say_text:
         output["steps"].append({"step": "speak", "result": speak(args, say_text)})
 
-    print_json(output, pretty=args.pretty)
+    log_dir = args.log_dir
+    if (args.go or args.go_b64) and not log_dir:
+        log_dir = str(DEFAULT_LOG_DIR)
+    logs = write_execution_log(output, log_dir) if log_dir else None
+    if args.brief or ((args.go or args.go_b64) and not args.full_output):
+        summary = summarize_agent_output(output)
+        if logs:
+            summary["logs"] = logs
+        print_json(summary, pretty=True)
+    else:
+        if logs:
+            output["logs"] = logs
+        print_json(output, pretty=args.pretty)
     return 0
 
 

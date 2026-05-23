@@ -24,6 +24,7 @@ python3 scripts/go2w_agent_entry.py \
 - 通过 registry 和 gateway 安全门控。
 - 执行导航。
 - 到点距离达标后自动暂停。
+- 默认打印简洁摘要，并把完整 JSON/CSV 日志写到 `artifacts/robot_runs`。
 
 默认到点策略是“距离优先暂停”。yaw 只记录，不再默认卡住自动暂停。确实需要严格朝向时再加：
 
@@ -32,6 +33,16 @@ python3 scripts/go2w_agent_entry.py \
 ```
 
 当前真实现场地图使用 `/home/unitree/test513.pcd`。不要再把 `/home/unitree/test.pcd` 作为默认重定位地图。
+
+如果需要完整调试输出：
+
+```bash
+python3 scripts/go2w_agent_entry.py \
+  --go "去赵博老师的办公室门前，到了就站住" \
+  --current-node yin_siyuan_station \
+  --full-output \
+  --pretty
+```
 
 ## 1. 当前闭环链路
 
