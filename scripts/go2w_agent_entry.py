@@ -349,7 +349,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Unified GO2W local LLM agent entrypoint.")
     parser.add_argument("--go", default="", help="One-shot field command: preflight, optional relocation, LLM planning, execute, and auto-pause.")
     parser.add_argument("--go-b64", default="", help="UTF-8 base64 encoded one-shot field command.")
-    parser.add_argument("--fast", action="store_true", help="For --go, use deterministic/hybrid target matching before LLM.")
+    parser.add_argument("--fast", action="store_true", help="For --go, force deterministic/hybrid target matching before LLM. This is now the default route.")
+    parser.add_argument("--force-llm", action="store_true", help="For --go, bypass deterministic target routing and force the real LLM light planner.")
     parser.add_argument("--list-nodes", action="store_true", help="List registry nodes without touching the robot gateway.")
     parser.add_argument("--resolve-target", default="", help="Resolve text to a registry node without touching the robot gateway.")
     parser.add_argument("--resolve-target-b64", default="", help="UTF-8 base64 encoded text to resolve to a registry node.")
@@ -408,10 +409,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.go or args.go_b64:
         args.execute = not args.dry_run
         args.no_live_snapshot = True
-        if args.fast:
+        if args.force_llm:
+            args.prompt_mode = "light"
+        elif args.fast:
             args.prompt_mode = "hybrid"
         elif args.prompt_mode == "hybrid":
-            args.prompt_mode = "light"
+            args.prompt_mode = "hybrid"
 
     command = decode_command(args)
     say_text = decode_say(args)
@@ -430,6 +433,16 @@ def main(argv: list[str] | None = None) -> int:
         resolve_text = command
     if resolve_text:
         output["steps"].append({"step": "resolve_target", "text": resolve_text, "result": make_chassis(args, startup_wait_s=0.0).resolve_node(resolve_text)})
+
+    if args.go or args.go_b64:
+        output["steps"].append(
+            {
+                "step": "go_route",
+                "prompt_mode": args.prompt_mode,
+                "force_llm": bool(args.force_llm),
+                "reason": "force real LLM" if args.force_llm else "auto route: deterministic target first, LLM fallback",
+            }
+        )
 
     if args.preflight_only:
         preflight = make_chassis(args).preflight()

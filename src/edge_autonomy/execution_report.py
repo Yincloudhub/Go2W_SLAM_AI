@@ -14,6 +14,8 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "target_node": None,
         "llm_elapsed_s": None,
         "plan_mode": None,
+        "planner_route": None,
+        "force_llm": None,
         "executed": False,
         "arrived": None,
         "paused": None,
@@ -36,7 +38,10 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
             continue
         name = step.get("step")
         result = step.get("result", {})
-        if name == "list_nodes":
+        if name == "go_route":
+            summary["planner_route"] = step.get("prompt_mode")
+            summary["force_llm"] = step.get("force_llm")
+        elif name == "list_nodes":
             nodes = step.get("nodes", [])
             if isinstance(nodes, list):
                 summary["node_count"] = len(nodes)
@@ -107,6 +112,8 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "target_node",
         "llm_elapsed_s",
         "plan_mode",
+        "planner_route",
+        "force_llm",
         "executed",
         "arrived",
         "paused",
