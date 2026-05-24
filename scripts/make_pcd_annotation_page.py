@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 
 HTML_TEMPLATE = """<!doctype html>
@@ -10,7 +11,7 @@ HTML_TEMPLATE = """<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PCD 拓扑点标注</title>
+  <title>PCD topology annotation</title>
   <style>
     body {{
       margin: 0;
@@ -18,7 +19,7 @@ HTML_TEMPLATE = """<!doctype html>
       background: #f4f6f8;
       color: #17202a;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-columns: minmax(0, 1fr) 390px;
       height: 100vh;
     }}
     main {{
@@ -52,6 +53,26 @@ HTML_TEMPLATE = """<!doctype html>
       background: #0b7cff;
       box-shadow: 0 0 0 2px #0b7cff;
       pointer-events: none;
+    }}
+    .known {{
+      position: absolute;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      white-space: nowrap;
+      font-size: 12px;
+      color: #151b23;
+      text-shadow: 0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff;
+    }}
+    .known-dot {{
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      background: #e5534b;
+      box-shadow: 0 0 0 2px #e5534b;
+      vertical-align: middle;
+      margin-right: 5px;
     }}
     label {{
       display: block;
@@ -90,6 +111,12 @@ HTML_TEMPLATE = """<!doctype html>
       padding: 8px;
       font-size: 12px;
     }}
+    .hint {{
+      margin: 8px 0 12px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #52616f;
+    }}
   </style>
 </head>
 <body>
@@ -99,7 +126,8 @@ HTML_TEMPLATE = """<!doctype html>
     </div>
   </main>
   <aside>
-    <h2>拓扑点标注</h2>
+    <h2>PCD 点位标注</h2>
+    <div class="hint">红点是当前 registry 已知点，蓝点是本次点击点。重新标点时请以红色 initial_point 为代码实际初始点参考。</div>
     <label>node_id</label>
     <input id="nodeId" value="wp_new" />
     <label>中文名称</label>
@@ -117,6 +145,7 @@ HTML_TEMPLATE = """<!doctype html>
   </aside>
 <script>
 const meta = {meta_json};
+const knownNodes = {known_nodes_json};
 const nodes = [];
 let last = null;
 const wrap = document.getElementById('wrap');
@@ -131,6 +160,14 @@ function pixelToMap(px, py) {{
   }};
 }}
 
+function mapToPixel(x, y) {{
+  const b = meta.bounds_m;
+  return {{
+    px: (x - b.min_x) * meta.px_per_m + meta.padding_px,
+    py: meta.height_px - ((y - b.min_y) * meta.px_per_m + meta.padding_px)
+  }};
+}}
+
 function addMarker(px, py) {{
   const el = document.createElement('div');
   el.className = 'marker';
@@ -138,6 +175,21 @@ function addMarker(px, py) {{
   el.style.top = py + 'px';
   wrap.appendChild(el);
 }}
+
+function addKnownNode(node) {{
+  const pose = node.pose || {{}};
+  if (typeof pose.x !== 'number' || typeof pose.y !== 'number') return;
+  const p = mapToPixel(pose.x, pose.y);
+  if (p.px < 0 || p.py < 0 || p.px > meta.width_px || p.py > meta.height_px) return;
+  const el = document.createElement('div');
+  el.className = 'known';
+  el.style.left = p.px + 'px';
+  el.style.top = p.py + 'px';
+  el.innerHTML = '<span class="known-dot"></span>' + node.node_id + ' / ' + (node.name || '');
+  wrap.appendChild(el);
+}}
+
+for (const node of knownNodes) addKnownNode(node);
 
 img.addEventListener('click', (event) => {{
   const rect = img.getBoundingClientRect();
@@ -167,7 +219,7 @@ document.getElementById('add').addEventListener('click', () => {{
     aliases,
     tags: ['real_site', 'pcd_annotated'],
     pose: {{x: last.x, y: last.y, z: 0, q_x: 0, q_y: 0, q_z: qz, q_w: qw, speed, mode: 0}},
-    description: 'PCD俯视图点击标注点'
+    description: 'PCD 俯视图点击标注点'
   }});
   output.textContent = JSON.stringify(nodes, null, 2);
 }});
@@ -181,22 +233,43 @@ document.getElementById('copy').addEventListener('click', async () => {{
 """
 
 
+def load_known_nodes(registry_path: Path | None, map_id: str | None) -> list[dict[str, Any]]:
+    if registry_path is None:
+        return []
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    maps = registry.get("maps", [])
+    selected = None
+    for item in maps:
+        if map_id is None or item.get("map_id") == map_id:
+            selected = item
+            break
+    if not selected:
+        return []
+    nodes = selected.get("topology_nodes", [])
+    return nodes if isinstance(nodes, list) else []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Create a local HTML page for PCD top-down point annotation.")
     parser.add_argument("--meta", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--registry")
+    parser.add_argument("--map-id")
     args = parser.parse_args()
 
     meta_path = Path(args.meta)
     image_path = Path(args.image)
     output_path = Path(args.output)
+    registry_path = Path(args.registry) if args.registry else None
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    known_nodes = load_known_nodes(registry_path, args.map_id)
     html = HTML_TEMPLATE.format(
         image_name=image_path.name,
         width=meta["width_px"],
         height=meta["height_px"],
         meta_json=json.dumps(meta, ensure_ascii=False),
+        known_nodes_json=json.dumps(known_nodes, ensure_ascii=False),
     )
     output_path.write_text(html, encoding="utf-8")
     print(output_path)
