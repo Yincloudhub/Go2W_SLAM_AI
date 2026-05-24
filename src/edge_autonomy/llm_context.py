@@ -280,7 +280,7 @@ def simulate_local_llm_plan(context: dict[str, Any], registry: MapRegistry) -> d
     }
 
 
-def plan_to_slam_command(plan: dict[str, Any], registry: MapRegistry) -> dict[str, Any] | None:
+def plan_to_slam_command(plan: dict[str, Any], registry: MapRegistry, *, speed: float | None = None, mode: int | None = None) -> dict[str, Any] | None:
     if plan.get("mode") != "mapped_navigation":
         return None
     for step in plan.get("steps", []):
@@ -292,7 +292,7 @@ def plan_to_slam_command(plan: dict[str, Any], registry: MapRegistry) -> dict[st
                 return None
             return registry.get_map(str(map_id)).navigate_to_node_command(
                 str(target_node),
-                speed=float(args["speed_mps"]) if args.get("speed_mps") is not None else None,
-                mode=int(args["mode"]) if args.get("mode") is not None else None,
+                speed=speed if speed is not None else (float(args["speed_mps"]) if args.get("speed_mps") is not None else None),
+                mode=mode if mode is not None else (int(args["mode"]) if args.get("mode") is not None else None),
             )
     return None

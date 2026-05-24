@@ -153,6 +153,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--network-interface", default="eth0")
     parser.add_argument("--gateway-startup-wait-s", type=float, default=4.0)
     parser.add_argument("--skip-gateway-check", action="store_true")
+    parser.add_argument("--nav-speed-mps", type=float, default=0.0, help="Override navigation speed for the generated slam command. 0 keeps registry/plan speed.")
+    parser.add_argument("--nav-mode", type=int, default=None, help="Override Unitree navigation mode for the generated slam command.")
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")
     return parser
@@ -186,7 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         timeout_s=args.timeout_s,
         prompt_mode=args.prompt_mode,
     )
-    slam_command = plan_to_slam_command(result.plan, registry)
+    nav_speed = args.nav_speed_mps if args.nav_speed_mps > 0 else None
+    slam_command = plan_to_slam_command(result.plan, registry, speed=nav_speed, mode=args.nav_mode)
 
     gateway_state = None
     gateway_allowed = False

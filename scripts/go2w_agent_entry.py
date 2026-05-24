@@ -30,7 +30,7 @@ from edge_autonomy.execution_report import summarize_agent_output, write_executi
 
 DEFAULT_GATEWAY_CLIENT = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"
 DEFAULT_START_SLAM = "/home/unitree/go2w_slam/go2w_edge_autonomy/scripts/start_go2w_slam_stack.sh"
-DEFAULT_MAP_PATH = "/home/unitree/test513.pcd"
+DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
 DEFAULT_MAP_ID = "go2w_real_site"
 DEFAULT_LOG_DIR = REPO_ROOT / "artifacts" / "robot_runs"
@@ -337,6 +337,10 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
         "--timeout-s",
         str(args.timeout_s),
     ]
+    if args.nav_speed_mps > 0:
+        argv.extend(["--nav-speed-mps", str(args.nav_speed_mps)])
+    if args.nav_mode is not None:
+        argv.extend(["--nav-mode", str(args.nav_mode)])
     if args.no_live_snapshot:
         argv.append("--no-live-snapshot")
         try:
@@ -443,6 +447,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="Plan and safety-check only. This is the default when --execute is absent.")
     parser.add_argument("--skip-gateway-check", action="store_true", help="For planner dry-runs, skip the closed-loop gateway check after planning.")
     parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
+    parser.add_argument("--nav-speed-mps", type=float, default=0.3, help="Global navigation speed override for field runs. Use 0 to keep per-node registry speed.")
+    parser.add_argument("--nav-mode", type=int, default=None, help="Global Unitree navigation mode override. Leave unset to keep registry mode.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-yaw-rad", type=float, default=0.18)
     parser.add_argument("--require-arrival-yaw", action="store_true", help="Require yaw threshold before auto-pause; default pauses by distance only.")
@@ -494,6 +500,8 @@ def main(argv: list[str] | None = None) -> int:
         "command": command,
         "say": say_text,
         "execute": bool(args.execute),
+        "nav_speed_mps": args.nav_speed_mps if args.nav_speed_mps > 0 else None,
+        "nav_mode": args.nav_mode,
         "steps": [],
     }
 

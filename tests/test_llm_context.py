@@ -62,6 +62,29 @@ class LlmContextTests(unittest.TestCase):
         self.assertEqual(plan["steps"][0]["tool"], "hold_position")
         self.assertEqual(plan["steps"][0]["arguments"]["target_node"], "701_entrance_hallway_mid")
 
+    def test_slam_command_allows_global_speed_and_mode_override(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        plan = {
+            "mode": "mapped_navigation",
+            "steps": [
+                {
+                    "tool": "create_navigation_subgoal",
+                    "arguments": {
+                        "map_id": "test_current_main",
+                        "target_node": "nie_guoli_office_front",
+                        "speed_mps": 0.45,
+                        "mode": 0,
+                    },
+                }
+            ],
+        }
+        command = plan_to_slam_command(plan, registry, speed=0.2, mode=1)
+
+        self.assertIsNotNone(command)
+        assert command is not None
+        self.assertEqual(command["target_pose"]["speed"], 0.2)
+        self.assertEqual(command["target_pose"]["mode"], 1)
+
     def test_simulate_stop_plan(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)
         context = build_planner_context(make_snapshot(), registry, user_command="停下别动")

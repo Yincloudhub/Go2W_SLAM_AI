@@ -11,6 +11,8 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "command": output.get("command"),
         "execute": output.get("execute"),
+        "nav_speed_mps": output.get("nav_speed_mps"),
+        "nav_mode": output.get("nav_mode"),
         "target_node": None,
         "llm_elapsed_s": None,
         "plan_mode": None,
@@ -118,6 +120,8 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "timestamp",
         "command",
         "execute",
+        "nav_speed_mps",
+        "nav_mode",
         "target_node",
         "llm_elapsed_s",
         "plan_mode",

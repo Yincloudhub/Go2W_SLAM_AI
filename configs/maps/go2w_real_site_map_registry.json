@@ -51,37 +51,6 @@
           "description": "来自早期 /home/unitree/topology_points.json 的 wp_0，保留为真实初始返回点。"
         },
         {
-          "node_id": "zhao_bo_office_front",
-          "name": "赵博办公室门口",
-          "node_type": "annotated_waypoint",
-          "aliases": [
-            "赵博办公室门口",
-            "赵博办公室",
-            "赵博门口",
-            "赵博",
-            "zhao_bo_office_front"
-          ],
-          "tags": [
-            "real_site",
-            "pcd_annotated",
-            "office",
-            "photo_required",
-            "needs_calibration"
-          ],
-          "pose": {
-            "x": 2.9771903991699222,
-            "y": -5.670015716552735,
-            "z": 0.0,
-            "q_x": 0.0,
-            "q_y": 0.0,
-            "q_z": 0.0,
-            "q_w": 1.0,
-            "speed": 0.3,
-            "mode": 0
-          },
-          "description": "PCD test513 俯视图重新点击标注点：赵博办公室门口。需要现场导航确认后删除 needs_calibration。"
-        },
-        {
           "node_id": "yin_siyuan_station",
           "name": "尹思园工位",
           "node_type": "annotated_waypoint",
@@ -94,20 +63,112 @@
           "tags": [
             "real_site",
             "pcd_annotated",
-            "workstation"
+            "workstation",
+            "needs_calibration"
           ],
           "pose": {
-            "x": 1.5974299907684326,
-            "y": 0.3592859208583832,
-            "z": -0.010628879070281982,
-            "q_x": 0.014545116573572159,
-            "q_y": 0.01697041466832161,
-            "q_z": -0.003139750799164176,
-            "q_w": 0.99974524974823,
+            "x": 1.9271903991699215,
+            "y": 0.45498428344726705,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
             "speed": 0.3,
             "mode": 0
           },
-          "description": "现场导航后用 SLAM 当前位姿校准的尹思园工位。原 PCD 点击点与校准点约相差 0.192m。"
+          "description": "annotated on test.pcd; needs live calibration"
+        },
+        {
+          "node_id": "chen_jiayu_station",
+          "name": "陈嘉瑜工位",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "陈嘉瑜工位",
+            "陈嘉瑜",
+            "陈嘉瑜位置",
+            "chen_jiayu_station"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "workstation",
+            "needs_calibration"
+          ],
+          "pose": {
+            "x": -1.1978096008300785,
+            "y": -0.5158500671386719,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "annotated on test.pcd; needs live calibration"
+        },
+        {
+          "node_id": "yang_shuyang_station",
+          "name": "杨书洋工位",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "杨书洋工位",
+            "杨书洋",
+            "杨书洋位置",
+            "yang_shuyang_station"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "workstation",
+            "needs_calibration"
+          ],
+          "pose": {
+            "x": 0.07719039916992188,
+            "y": -4.940850067138673,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "annotated on test.pcd; needs live calibration"
+        },
+        {
+          "node_id": "zhao_bo_office_front",
+          "name": "赵博办公室门口",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "赵博办公室门口",
+            "赵博老师办公室门口",
+            "赵博办公室",
+            "赵博门口",
+            "赵博",
+            "赵博老师",
+            "zhao_bo_office_front"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "office",
+            "photo_required",
+            "needs_calibration"
+          ],
+          "pose": {
+            "x": 3.077190399169922,
+            "y": -5.528350067138671,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "annotated on test.pcd; photo required; needs live calibration"
         },
         {
           "node_id": "room_701_corridor",
@@ -117,7 +178,6 @@
             "701门外走廊",
             "701门口",
             "701走廊",
-            "701拍照点",
             "room_701_corridor"
           ],
           "tags": [
@@ -125,11 +185,12 @@
             "pcd_annotated",
             "701",
             "corridor",
-            "photo_required"
+            "photo_required",
+            "needs_calibration"
           ],
           "pose": {
-            "x": -3.472809600830078,
-            "y": 0.15498428344726634,
+            "x": -4.210309600830078,
+            "y": -0.19085006713867259,
             "z": 0.0,
             "q_x": 0.0,
             "q_y": 0.0,
@@ -138,7 +199,7 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "PCD 俯视图点击标注点：701门外走廊。"
+          "description": "annotated on test.pcd; photo required; needs live calibration"
         },
         {
           "node_id": "nie_guoli_office_front",
@@ -171,35 +232,6 @@
             "mode": 0
           },
           "description": "来自 /home/unitree/topology_points.json 的 wp_1。现场确认该点是聂国篱办公室门口，仍保留 needs_calibration 直到重新标点校准。"
-        },
-        {
-          "node_id": "yang_shuyang_station",
-          "name": "杨书洋工位",
-          "node_type": "annotated_waypoint",
-          "aliases": [
-            "杨书洋工位",
-            "杨书洋",
-            "杨书洋位置",
-            "yang_shuyang_station"
-          ],
-          "tags": [
-            "real_site",
-            "pcd_annotated",
-            "workstation",
-            "needs_calibration"
-          ],
-          "pose": {
-            "x": 0.17719039916992152,
-            "y": -4.970015716552734,
-            "z": 0.0,
-            "q_x": 0.0,
-            "q_y": 0.0,
-            "q_z": 0.0,
-            "q_w": 1.0,
-            "speed": 0.3,
-            "mode": 0
-          },
-          "description": "PCD test513 俯视图点击标注点：杨书洋工位。需要现场导航确认后删除 needs_calibration。"
         }
       ],
       "topology_edges": [

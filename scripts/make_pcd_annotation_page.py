@@ -11,7 +11,7 @@ HTML_TEMPLATE = """<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PCD topology annotation</title>
+  <title>PCD 点位标注</title>
   <style>
     body {{
       margin: 0;
@@ -132,27 +132,26 @@ HTML_TEMPLATE = """<!doctype html>
     </div>
   </main>
   <aside>
-    <h2>PCD topology annotation</h2>
+    <h2>PCD 点位标注</h2>
     <div class="hint">
-      Red dots are registry nodes. Drag a red dot to correct it; adjusted dots turn green.
-      Blue dots are newly clicked points. Use the copied JSON to update the registry.
+      红点是 registry 已知点，可拖动红点修正；蓝点是本次点击点。复制 JSON 后写入 registry。
     </div>
-    <div class="row"><input id="dragKnown" type="checkbox" checked /><span>Drag existing registry points</span></div>
+    <div class="row"><input id="dragKnown" type="checkbox" checked /><span>拖动已有 registry 点</span></div>
     <label>node_id</label>
     <input id="nodeId" value="wp_new" />
-    <label>name</label>
-    <input id="name" value="new target" />
-    <label>aliases, comma separated</label>
-    <input id="aliases" value="new target" />
+    <label>中文名称</label>
+    <input id="name" value="新目标点" />
+    <label>别名，逗号分隔；留空时自动使用中文名称</label>
+    <input id="aliases" value="" />
     <label>yaw(rad)</label>
     <input id="yaw" value="0" />
     <label>speed(m/s)</label>
     <input id="speed" value="0.3" />
-    <button id="add">Add clicked point</button>
-    <button id="copy" class="secondary">Copy JSON</button>
-    <button id="copyAdjusted" class="secondary">Copy adjusted registry nodes only</button>
-    <label>output</label>
-    <pre id="output">Click the map, or drag an existing registry point.</pre>
+    <button id="add">加入当前点击点</button>
+    <button id="copy" class="secondary">复制 JSON</button>
+    <button id="copyAdjusted" class="secondary">只复制拖动修正点</button>
+    <label>输出</label>
+    <pre id="output">点击地图选择点，或拖动已有 registry 点。</pre>
   </aside>
 <script>
 const meta = {meta_json};
@@ -304,7 +303,9 @@ document.getElementById('add').addEventListener('click', () => {{
   if (!last) return;
   const nodeId = document.getElementById('nodeId').value.trim();
   const name = document.getElementById('name').value.trim() || nodeId;
-  const aliases = document.getElementById('aliases').value.split(',').map(v => v.trim()).filter(Boolean);
+  const aliasText = document.getElementById('aliases').value.trim();
+  const aliases = aliasText ? aliasText.split(',').map(v => v.trim()).filter(Boolean) : [name];
+  if (nodeId && nodeId !== 'wp_new' && !aliases.includes(nodeId)) aliases.push(nodeId);
   const yaw = Number(document.getElementById('yaw').value || 0);
   const speed = Number(document.getElementById('speed').value || 0.3);
   const qz = Math.sin(yaw / 2);
@@ -316,7 +317,7 @@ document.getElementById('add').addEventListener('click', () => {{
     aliases,
     tags: ['real_site', 'pcd_annotated', 'needs_calibration'],
     pose: {{x: last.x, y: last.y, z: 0, q_x: 0, q_y: 0, q_z: qz, q_w: qw, speed, mode: 0}},
-    description: 'PCD top-down annotation point'
+    description: 'PCD 俯视图点击标注点'
   }});
   show(nodes);
 }});
