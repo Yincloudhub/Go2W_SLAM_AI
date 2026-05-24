@@ -30,6 +30,9 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "node_count": None,
         "nodes": None,
         "preflight_reason": "",
+        "slam_started": None,
+        "pointcloud_alive": None,
+        "slam_info_alive": None,
         "blocked_reason": "",
         "steps": [step.get("step") for step in output.get("steps", []) if isinstance(step, dict)],
     }
@@ -57,6 +60,12 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         elif name in {"go_preflight", "preflight_only"}:
             summary["preflight_allowed"] = step.get("allowed")
             summary["preflight_reason"] = step.get("reason", "")
+        elif name in {"ensure_slam", "go_auto_ensure_slam"} and isinstance(result, dict):
+            summary["slam_started"] = result.get("started")
+            summary["pointcloud_alive"] = result.get("pointcloud_alive")
+            summary["slam_info_alive"] = result.get("slam_info_alive")
+            summary["preflight_allowed"] = result.get("preflight_allowed")
+            summary["preflight_reason"] = result.get("preflight_reason", "")
         elif name == "resolve_target" and isinstance(result, dict):
             summary["resolve_matched"] = result.get("matched")
             selected = result.get("selected", {})
@@ -126,6 +135,9 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "resolve_ambiguous",
         "resolve_reason",
         "preflight_reason",
+        "slam_started",
+        "pointcloud_alive",
+        "slam_info_alive",
         "blocked_reason",
     ]
     row = {"timestamp": ts, **{key: summary.get(key) for key in fieldnames if key != "timestamp"}}

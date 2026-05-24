@@ -68,6 +68,74 @@ def run_start_slam(script: str) -> dict[str, Any]:
     }
 
 
+def run_bash(command: str, *, timeout_s: int = 30) -> dict[str, Any]:
+    completed = subprocess.run(
+        ["bash", "-lc", command],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        timeout=timeout_s,
+    )
+    return {
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+
+
+def ros2_topic_sample(topic: str, *, timeout_s: int, lines: int = 80) -> dict[str, Any]:
+    quoted_topic = topic.replace("'", "'\"'\"'")
+    command = (
+        "source /opt/ros/foxy/setup.bash >/dev/null 2>&1 || true; "
+        f"timeout {int(timeout_s)} ros2 topic echo '{quoted_topic}' --qos-reliability reliable --full-length --no-arr 2>/tmp/go2w_topic_echo.err "
+        f"| sed -n '1,{int(lines)}p'; "
+        "cat /tmp/go2w_topic_echo.err"
+    )
+    result = run_bash(command, timeout_s=timeout_s + 5)
+    result["alive"] = bool(result["stdout"].strip())
+    return result
+
+
+def run_ensure_slam(args: argparse.Namespace) -> dict[str, Any]:
+    start = run_start_slam(args.start_slam_script)
+    deadline = time.time() + args.ensure_slam_wait_s
+    samples: list[dict[str, Any]] = []
+    pointcloud_alive = False
+    slam_info_alive = False
+    while time.time() < deadline:
+        pointcloud = ros2_topic_sample("/unitree/slam_lidar/points", timeout_s=args.ensure_slam_sample_timeout_s, lines=24)
+        slam_info = ros2_topic_sample("/slam_info", timeout_s=args.ensure_slam_sample_timeout_s, lines=40)
+        pointcloud_alive = bool(pointcloud.get("alive"))
+        slam_info_alive = bool(slam_info.get("alive"))
+        samples.append(
+            {
+                "pointcloud_alive": pointcloud_alive,
+                "slam_info_alive": slam_info_alive,
+                "pointcloud_excerpt": str(pointcloud.get("stdout", ""))[:600],
+                "slam_info_excerpt": str(slam_info.get("stdout", ""))[:900],
+            }
+        )
+        if pointcloud_alive and slam_info_alive:
+            break
+        time.sleep(args.ensure_slam_interval_s)
+
+    try:
+        preflight = make_chassis(args).preflight()
+    except Exception as exc:  # pragma: no cover - field robustness
+        preflight = {"allowed": False, "reason": f"preflight failed: {exc}", "result": None}
+    return {
+        "started": start.get("returncode") == 0,
+        "start_result": start,
+        "pointcloud_alive": pointcloud_alive,
+        "slam_info_alive": slam_info_alive,
+        "preflight_allowed": preflight.get("allowed"),
+        "preflight_reason": preflight.get("reason"),
+        "preflight": preflight,
+        "samples": samples,
+    }
+
+
 def make_chassis(args: argparse.Namespace, *, startup_wait_s: float | None = None) -> ChassisController:
     wait_s = args.gateway_startup_wait_s if startup_wait_s is None else startup_wait_s
     return ChassisController(
@@ -355,6 +423,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resolve-target", default="", help="Resolve text to a registry node without touching the robot gateway.")
     parser.add_argument("--resolve-target-b64", default="", help="UTF-8 base64 encoded text to resolve to a registry node.")
     parser.add_argument("--preflight-only", action="store_true", help="Read gateway safety/localization state once and exit; no auto-start, no relocation, no navigation.")
+    parser.add_argument("--ensure-slam", action="store_true", help="One-shot startup for LiDAR driver and unitree_slam, then wait for pointcloud/slam_info and run preflight.")
     parser.add_argument("--current-node", default="", help="Known current node used for auto-relocation when localization is not ready.")
     parser.add_argument("--no-auto-start-slam", action="store_true", help="For --go, do not auto-start SLAM when health is not ready.")
     parser.add_argument("--no-auto-relocate", action="store_true", help="For --go, do not auto-relocate from --current-node.")
@@ -397,6 +466,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout-s", type=int, default=30)
     parser.add_argument("--closed-loop-timeout-s", type=int, default=120)
     parser.add_argument("--start-slam-script", default=DEFAULT_START_SLAM)
+    parser.add_argument("--ensure-slam-wait-s", type=float, default=20.0)
+    parser.add_argument("--ensure-slam-interval-s", type=float, default=2.0)
+    parser.add_argument("--ensure-slam-sample-timeout-s", type=int, default=5)
     parser.add_argument("--map-path", default=DEFAULT_MAP_PATH)
     parser.add_argument("--init-x", type=float, default=0.0)
     parser.add_argument("--init-y", type=float, default=0.0)
@@ -448,6 +520,9 @@ def main(argv: list[str] | None = None) -> int:
         preflight = make_chassis(args).preflight()
         output["steps"].append({"step": "preflight_only", **preflight})
 
+    if args.ensure_slam:
+        output["steps"].append({"step": "ensure_slam", "result": run_ensure_slam(args)})
+
     if args.go or args.go_b64:
         try:
             state = get_world_state(args)
@@ -459,11 +534,12 @@ def main(argv: list[str] | None = None) -> int:
         if not args.execute and not allowed:
             output["steps"].append({"step": "go_dry_run_preflight_not_enforced", "reason": reason})
         if args.execute and not allowed and not args.no_auto_start_slam:
-            output["steps"].append({"step": "go_auto_start_slam", "result": run_start_slam(args.start_slam_script)})
-            time.sleep(3)
-            state = get_world_state(args)
-            allowed, reason = gateway_allows_navigation(state)
-            output["steps"].append({"step": "go_status_after_start_slam", "allowed": allowed, "reason": reason, "result": state})
+            ensure_result = run_ensure_slam(args)
+            output["steps"].append({"step": "go_auto_ensure_slam", "result": ensure_result})
+            allowed = bool(ensure_result.get("preflight_allowed"))
+            reason = str(ensure_result.get("preflight_reason") or reason)
+            state = ensure_result.get("preflight", {}).get("result") if isinstance(ensure_result.get("preflight"), dict) else None
+            output["steps"].append({"step": "go_status_after_ensure_slam", "allowed": allowed, "reason": reason, "result": state})
         if args.execute and not allowed and args.current_node and not args.no_auto_relocate:
             output["steps"].append({"step": "go_auto_relocate", "node_id": args.current_node, "result": relocate_to_node(args, args.current_node)})
             time.sleep(args.gateway_startup_wait_s)
