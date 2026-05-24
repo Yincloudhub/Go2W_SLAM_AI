@@ -72,5 +72,41 @@ python scripts/make_pcd_annotation_page.py --meta artifacts/real_site_pcd/test_t
 
 - `--execute` 不加时默认只做 dry-run，不会移动。
 - 网关安全门仍会实时检查 `slam_health`、`localization` 和 `safety.allow_navigation`。
-- 导航目标默认使用 Unitree `mode=0`，也就是绕障模式；`mode=1` 是遇障停止。
+- `--go` 现场入口默认使用 `--nav-speed-mps 0.3 --nav-mode 1`，保持低速、地形/保守运动模式，声音和步态更轻；如果要完全使用 registry 中每个点自己的速度和 mode，可传 `--nav-speed-mps 0 --nav-mode -1`。
 - 当前 C++ 网关状态仍主要是短进程内存态，所以执行后的进度监控不要只依赖新开的 `get_world_state` 里的 `navigation` 字段，后续需要把导航任务状态持久化或改成长驻 agent。
+
+## 语义链路摘要
+
+`--go` 的 brief 输出和 JSON 日志会包含 `semantic_trace`，用于解释这次闭环到底如何从自然语言走到底层命令：
+
+```text
+command
+-> requested_target_guess
+-> target.name / target.node_id / target.distance_from_robot_m
+-> planner.mode / planner.tools
+-> slam_command.action / slam_command.target_pose
+```
+
+这部分是答辩和现场排障的关键证据：它能证明 LLM 没有凭空编坐标，而是先匹配 registry 中的语义拓扑点，再由 `plan_to_slam_command()` 转成 `navigate_to_pose`。
+
+## 源码打包
+
+源码包使用：
+
+```bash
+python3 scripts/package_source_release.py --pretty
+```
+
+该脚本会打包 git 已跟踪和未忽略的新代码，并排除：
+
+```text
+artifacts/
+models/
+*.gguf
+*.pcd
+*.bag
+venv/
+build/
+```
+
+默认输出到当前用户桌面，包内会包含 `PACKAGE_MANIFEST.json`，记录分支、commit、dirty status 和排除规则。

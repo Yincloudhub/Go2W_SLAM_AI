@@ -18,7 +18,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from edge_autonomy.llm_context import build_planner_context, plan_to_slam_command  # noqa: E402
-from edge_autonomy.local_llm_planner import DEFAULT_SYSTEM_PROMPT, LocalCommandBackend, run_local_llm_planner  # noqa: E402
+from edge_autonomy.local_llm_planner import (  # noqa: E402
+    DEFAULT_SYSTEM_PROMPT,
+    LocalCommandBackend,
+    build_lightweight_planner_context,
+    run_local_llm_planner,
+)
 from edge_autonomy.map_registry import MapRegistry  # noqa: E402
 from edge_autonomy.runtime_state import build_runtime_snapshot  # noqa: E402
 from scripts.slam_runtime_snapshot import parse_sections, run_remote_snapshot  # noqa: E402
@@ -104,6 +109,101 @@ def registry_allows_execution(registry: MapRegistry, map_id: str) -> tuple[bool,
     if not profile.topology_nodes:
         return False, f"map '{profile.map_id}' has no topology nodes"
     return True, "registry allows execution"
+
+
+def _first_nav_target(plan: dict[str, Any]) -> str | None:
+    for step in plan.get("steps", []):
+        if not isinstance(step, dict) or step.get("tool") != "create_navigation_subgoal":
+            continue
+        args = step.get("arguments", {})
+        if isinstance(args, dict) and isinstance(args.get("target_node"), str):
+            return args["target_node"]
+    return None
+
+
+def _compact_pose(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    out: dict[str, Any] = {}
+    for key in ("x", "y", "z", "yaw", "q_x", "q_y", "q_z", "q_w", "speed", "mode"):
+        if key in value:
+            out[key] = value.get(key)
+    return out
+
+
+def build_semantic_trace(
+    *,
+    command: str,
+    planner_context: dict[str, Any],
+    plan: dict[str, Any],
+    slam_command: dict[str, Any] | None,
+    gateway_state: dict[str, Any] | None,
+    registry_allowed: bool,
+    registry_reason: str,
+) -> dict[str, Any]:
+    summary = planner_context.get("world_state_summary", {})
+    robot = summary.get("robot", {}) if isinstance(summary, dict) else {}
+    slam = summary.get("slam", {}) if isinstance(summary, dict) else {}
+    topology = summary.get("topology", {}) if isinstance(summary, dict) else {}
+    nodes = topology.get("available_nodes", []) if isinstance(topology, dict) else []
+    light_context = build_lightweight_planner_context(planner_context)
+    target_node = _first_nav_target(plan) or str(light_context.get("requested_target_guess") or "")
+    target_info: dict[str, Any] | None = None
+    if isinstance(nodes, list):
+        for node in nodes:
+            if isinstance(node, dict) and node.get("node_id") == target_node:
+                tags = node.get("tags", [])
+                tags_list = tags if isinstance(tags, list) else []
+                target_info = {
+                    "node_id": node.get("node_id"),
+                    "name": node.get("name"),
+                    "aliases": node.get("aliases", []),
+                    "tags": tags_list,
+                    "distance_from_robot_m": node.get("distance_from_robot_m"),
+                    "needs_calibration": "needs_calibration" in tags_list,
+                    "photo_required": "photo_required" in tags_list,
+                    "pose": _compact_pose(node.get("pose") if isinstance(node.get("pose"), dict) else None),
+                }
+                break
+
+    tools = [step.get("tool") for step in plan.get("steps", []) if isinstance(step, dict)]
+    world = gateway_state.get("world_state", {}) if isinstance(gateway_state, dict) else {}
+    return {
+        "command": command,
+        "semantic_source": "map_registry_topology",
+        "requested_target_guess": light_context.get("requested_target_guess"),
+        "candidate_count": len(light_context.get("candidates", [])) if isinstance(light_context.get("candidates"), list) else None,
+        "slam": {
+            "health_status": slam.get("health_status"),
+            "localization_status": slam.get("localization_status"),
+            "localized": robot.get("localized"),
+            "nearest_node": robot.get("nearest_node"),
+            "pose": _compact_pose(robot.get("pose") if isinstance(robot.get("pose"), dict) else None),
+        },
+        "target": target_info,
+        "planner": {
+            "mode": plan.get("mode"),
+            "plan_id": plan.get("plan_id"),
+            "reason": plan.get("reason"),
+            "tools": tools,
+        },
+        "policy_gates": {
+            "registry_allowed": registry_allowed,
+            "registry_reason": registry_reason,
+            "gateway_checked": gateway_state is not None,
+            "gateway_safety": (world.get("safety") if isinstance(world, dict) else None),
+            "gateway_localization": (world.get("localization") if isinstance(world, dict) else None),
+            "gateway_slam_health": (world.get("slam_health") if isinstance(world, dict) else None),
+        },
+        "slam_command": {
+            "action": slam_command.get("action"),
+            "map_id": slam_command.get("map_id"),
+            "target_node": slam_command.get("target_node"),
+            "target_pose": _compact_pose(slam_command.get("target_pose") if isinstance(slam_command.get("target_pose"), dict) else None),
+        }
+        if isinstance(slam_command, dict)
+        else None,
+    }
 
 
 def build_snapshot(args: argparse.Namespace) -> dict[str, Any]:
@@ -231,6 +331,15 @@ def main(argv: list[str] | None = None) -> int:
             "plan": result.plan,
             "slam_command": slam_command,
         },
+        "semantic_trace": build_semantic_trace(
+            command=args.command,
+            planner_context=planner_context,
+            plan=result.plan,
+            slam_command=slam_command,
+            gateway_state=gateway_state,
+            registry_allowed=registry_allowed,
+            registry_reason=registry_reason,
+        ),
         "gateway": {
             "checked": not args.skip_gateway_check,
             "allowed": gateway_allowed,

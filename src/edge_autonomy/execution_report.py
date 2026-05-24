@@ -14,6 +14,10 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "nav_speed_mps": output.get("nav_speed_mps"),
         "nav_mode": output.get("nav_mode"),
         "target_node": None,
+        "target_name": None,
+        "target_needs_calibration": None,
+        "target_distance_from_robot_m": None,
+        "target_photo_required": None,
         "llm_elapsed_s": None,
         "plan_mode": None,
         "planner_route": None,
@@ -36,6 +40,7 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "pointcloud_alive": None,
         "slam_info_alive": None,
         "blocked_reason": "",
+        "semantic_trace": None,
         "steps": [step.get("step") for step in output.get("steps", []) if isinstance(step, dict)],
     }
     for step in output.get("steps", []):
@@ -80,6 +85,15 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         elif name == "closed_loop" and isinstance(result, dict):
             payload = result.get("result", {})
             if isinstance(payload, dict):
+                semantic_trace = payload.get("semantic_trace")
+                if isinstance(semantic_trace, dict):
+                    summary["semantic_trace"] = semantic_trace
+                    target = semantic_trace.get("target")
+                    if isinstance(target, dict):
+                        summary["target_name"] = target.get("name")
+                        summary["target_needs_calibration"] = target.get("needs_calibration")
+                        summary["target_distance_from_robot_m"] = target.get("distance_from_robot_m")
+                        summary["target_photo_required"] = target.get("photo_required")
                 planner = payload.get("planner", {})
                 if isinstance(planner, dict):
                     summary["llm_elapsed_s"] = planner.get("llm_elapsed_s")
@@ -123,6 +137,10 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "nav_speed_mps",
         "nav_mode",
         "target_node",
+        "target_name",
+        "target_needs_calibration",
+        "target_distance_from_robot_m",
+        "target_photo_required",
         "llm_elapsed_s",
         "plan_mode",
         "planner_route",
@@ -146,6 +164,15 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
     ]
     row = {"timestamp": ts, **{key: summary.get(key) for key in fieldnames if key != "timestamp"}}
     exists = csv_path.exists()
+    if exists:
+        try:
+            first_line = csv_path.read_text(encoding="utf-8-sig").splitlines()[0]
+            if first_line.split(",") != fieldnames:
+                csv_path = root / f"go2w_agent_runs_{ts}.csv"
+                exists = False
+        except (IndexError, OSError, UnicodeDecodeError):
+            csv_path = root / f"go2w_agent_runs_{ts}.csv"
+            exists = False
     with csv_path.open("a", newline="", encoding="utf-8-sig") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         if not exists:
