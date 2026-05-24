@@ -59,7 +59,7 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
                     for node in nodes
                     if isinstance(node, dict)
                 ]
-        elif name in {"go_preflight", "preflight_only"}:
+        elif name in {"go_preflight", "preflight_only", "status"}:
             summary["preflight_allowed"] = step.get("allowed")
             summary["preflight_reason"] = step.get("reason", "")
         elif name in {"ensure_slam", "go_auto_ensure_slam"} and isinstance(result, dict):

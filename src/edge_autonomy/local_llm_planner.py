@@ -610,6 +610,12 @@ def _normal_communication_policy() -> dict[str, Any]:
     }
 
 
+def _with_communication_prefix(steps: list[dict[str, Any]], communication_policy: dict[str, Any], *, weak_link: bool) -> list[dict[str, Any]]:
+    if not weak_link:
+        return steps
+    return [{"step_id": "comm_1", "tool": "set_communication_policy", "arguments": communication_policy}, *steps]
+
+
 def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
     """Apply deterministic local safety/communication rules to a schema-valid plan."""
     fixed = deepcopy(plan)
@@ -640,15 +646,76 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
             normalized_comm["reason"] = "normal link"
         fixed["communication_policy"] = normalized_comm
 
+    light_context = build_lightweight_planner_context(planner_context)
     bandwidth = _dig_value(planner_context, "bandwidth_kbps")
     weak_bandwidth = _dig_value(planner_context, "weak_bandwidth_kbps")
-    if isinstance(bandwidth, (int, float)) and isinstance(weak_bandwidth, (int, float)) and float(bandwidth) < float(weak_bandwidth):
+    weak_link = isinstance(bandwidth, (int, float)) and isinstance(weak_bandwidth, (int, float)) and float(bandwidth) < float(weak_bandwidth)
+    if weak_link:
         weak_comm = _weak_communication_policy()
         fixed["communication_policy"] = weak_comm
         if not steps or steps[0].get("tool") != "set_communication_policy":
             steps.insert(0, {"step_id": "comm_1", "tool": "set_communication_policy", "arguments": weak_comm})
         else:
             steps[0]["arguments"] = weak_comm
+
+    known_nodes = _semantic_nodes(planner_context)
+    nav_targets = _nav_target_nodes(fixed)
+    if fixed.get("mode") == "mapped_navigation" and known_nodes and any(target not in known_nodes for target in nav_targets):
+        target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
+        reason = f"target node is not registered: {target}".strip()
+        fixed.update(
+            {
+                "mode": "human_confirm",
+                "reason": reason,
+                "steps": _with_communication_prefix(
+                    [{"step_id": "ask_1", "tool": "request_human_confirm", "arguments": {"reason": reason, "target_node": target}}],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": True,
+            }
+        )
+        return fixed
+
+    arrival_distance = light_context.get("arrival_distance_m")
+    distance_to_target = light_context.get("distance_to_requested_target_m")
+    if isinstance(arrival_distance, (int, float)) and isinstance(distance_to_target, (int, float)) and float(distance_to_target) <= float(arrival_distance):
+        target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
+        fixed.update(
+            {
+                "mode": "safe_hold",
+                "reason": "already near target; hold position",
+                "steps": _with_communication_prefix(
+                    [{"step_id": "hold_1", "tool": "hold_position", "arguments": {"target_node": target, "distance_to_target_m": float(distance_to_target)}}],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": False,
+            }
+        )
+        return fixed
+
+    battery_percent = light_context.get("battery_percent")
+    low_battery = light_context.get("low_battery_percent")
+    user_command = str(planner_context.get("user_command", ""))
+    emergency = any(word in user_command.lower() for word in ("emergency", "urgent")) or any(word in user_command for word in ("紧急", "急救", "危险"))
+    charging_task = any(target == "charging_point" for target in nav_targets) or "充电" in user_command or "回充" in user_command
+    if isinstance(battery_percent, (int, float)) and isinstance(low_battery, (int, float)) and float(battery_percent) < float(low_battery) and not emergency and not charging_task:
+        target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
+        reason = "low battery requires human confirmation"
+        fixed.update(
+            {
+                "mode": "human_confirm",
+                "reason": reason,
+                "steps": _with_communication_prefix(
+                    [{"step_id": "ask_1", "tool": "request_human_confirm", "arguments": {"reason": reason, "target_node": target}}],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": True,
+            }
+        )
+        return fixed
 
     if fixed.get("mode") == "mapped_navigation":
         nav_index = next((i for i, step in enumerate(steps) if isinstance(step, dict) and step.get("tool") == "create_navigation_subgoal"), None)
@@ -689,6 +756,7 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
 
 
 def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any]) -> None:
+    light_context = build_lightweight_planner_context(planner_context)
     tools = _collect_tools(plan)
     nav_targets = _nav_target_nodes(plan)
     known_nodes = _semantic_nodes(planner_context)
@@ -698,6 +766,10 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
 
     arrival_distance = _dig_value(planner_context, "arrival_distance_m")
     distance_to_target = _dig_value(planner_context, "distance_to_requested_target_m")
+    if arrival_distance is None:
+        arrival_distance = light_context.get("arrival_distance_m")
+    if distance_to_target is None:
+        distance_to_target = light_context.get("distance_to_requested_target_m")
     if isinstance(arrival_distance, (int, float)) and isinstance(distance_to_target, (int, float)):
         if float(distance_to_target) <= float(arrival_distance):
             require("create_navigation_subgoal" not in tools, "already near target: do not create navigation subgoal")
@@ -705,6 +777,10 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
 
     battery_percent = _dig_value(planner_context, "battery_percent")
     low_battery = _dig_value(planner_context, "low_battery_percent")
+    if battery_percent is None:
+        battery_percent = light_context.get("battery_percent")
+    if low_battery is None:
+        low_battery = light_context.get("low_battery_percent")
     user_command = str(planner_context.get("user_command", ""))
     emergency = any(word in user_command.lower() for word in ("emergency", "urgent")) or any(word in user_command for word in ("紧急", "急救", "危险"))
     charging_task = "charging_point" in nav_targets or "充电" in user_command or "回充" in user_command

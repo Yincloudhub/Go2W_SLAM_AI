@@ -1,6 +1,12 @@
 import unittest
 
-from edge_autonomy.local_llm_planner import extract_json_object, validate_execution_contract, validate_local_llm_plan
+from edge_autonomy.local_llm_planner import (
+    apply_context_policy_overrides,
+    extract_json_object,
+    validate_context_policy,
+    validate_execution_contract,
+    validate_local_llm_plan,
+)
 
 
 def make_plan() -> dict:
@@ -53,6 +59,35 @@ class LocalLlmPlannerTests(unittest.TestCase):
         validate_local_llm_plan(plan)
         with self.assertRaises(ValueError):
             validate_execution_contract(plan)
+
+    def test_context_policy_forces_hold_when_already_near_target(self) -> None:
+        plan = make_plan()
+        context = {
+            "user_command": "go to office",
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {
+                    "available_nodes": [
+                        {
+                            "node_id": "nie_guoli_office_front",
+                            "name": "office",
+                            "aliases": ["office"],
+                            "tags": [],
+                            "distance_from_robot_m": 0.1,
+                        }
+                    ]
+                },
+            },
+        }
+
+        fixed = apply_context_policy_overrides(plan, context)
+
+        self.assertEqual(fixed["mode"], "safe_hold")
+        self.assertEqual(fixed["steps"][0]["tool"], "hold_position")
+        validate_local_llm_plan(fixed)
+        validate_context_policy(fixed, context)
 
 
 if __name__ == "__main__":
