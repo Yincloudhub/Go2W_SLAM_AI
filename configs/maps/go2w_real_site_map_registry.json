@@ -13,7 +13,7 @@
       "map_id": "go2w_real_site",
       "name": "GO2W 真实现场拓扑",
       "status": "real",
-      "pcd_path": "/home/unitree/test513.pcd",
+      "pcd_path": "/home/unitree/test.pcd",
       "topology_path": "/home/unitree/topology_points.json",
       "frame_id": "map",
       "description": "真实现场 PCD 与人工标注拓扑点，供机器狗本地 LLM 闭环使用。",
