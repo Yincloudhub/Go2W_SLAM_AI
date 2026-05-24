@@ -339,7 +339,7 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
     ]
     if args.nav_speed_mps > 0:
         argv.extend(["--nav-speed-mps", str(args.nav_speed_mps)])
-    if args.nav_mode is not None:
+    if args.nav_mode is not None and args.nav_mode >= 0:
         argv.extend(["--nav-mode", str(args.nav_mode)])
     if args.no_live_snapshot:
         argv.append("--no-live-snapshot")
@@ -448,7 +448,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-gateway-check", action="store_true", help="For planner dry-runs, skip the closed-loop gateway check after planning.")
     parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
     parser.add_argument("--nav-speed-mps", type=float, default=0.3, help="Global navigation speed override for field runs. Use 0 to keep per-node registry speed.")
-    parser.add_argument("--nav-mode", type=int, default=None, help="Global Unitree navigation mode override. Leave unset to keep registry mode.")
+    parser.add_argument("--nav-mode", type=int, default=1, help="Global Unitree navigation mode override for field runs. Default 1 keeps terrain-style motion; use -1 to keep registry mode.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-yaw-rad", type=float, default=0.18)
     parser.add_argument("--require-arrival-yaw", action="store_true", help="Require yaw threshold before auto-pause; default pauses by distance only.")
@@ -501,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
         "say": say_text,
         "execute": bool(args.execute),
         "nav_speed_mps": args.nav_speed_mps if args.nav_speed_mps > 0 else None,
-        "nav_mode": args.nav_mode,
+        "nav_mode": args.nav_mode if args.nav_mode is not None and args.nav_mode >= 0 else None,
         "steps": [],
     }
 
