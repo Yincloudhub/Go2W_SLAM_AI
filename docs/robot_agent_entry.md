@@ -89,7 +89,15 @@ command
 
 这部分是答辩和现场排障的关键证据：它能证明 LLM 没有凭空编坐标，而是先匹配 registry 中的语义拓扑点，再由 `plan_to_slam_command()` 转成 `navigate_to_pose`。
 
-多目标中文命令会被识别出来，但当前不会作为单次导航直接执行。例如“去 701 门外走廊拍照，然后回尹思园工位”会在 `semantic_trace.matched_targets` 中列出两个目标，并返回 `human_confirm`。现场真实执行前应拆成两条命令，等后续任务队列模块接入后再支持自动串行执行。
+多目标中文命令现在会进入串行任务队列。例如“去 701 门外走廊拍照，然后回尹思园工位”会在 `semantic_trace.matched_targets` 中列出两个目标，并在 `planner.task_queue` / `queue_execution` 中展开为 `navigate -> wait_until -> capture_keyframe -> navigate -> wait_until -> report`。真实执行时每段导航前仍会重新做 gateway preflight；任一步失败会停止队列，不继续执行后续目标。
+
+如果 Windows/PowerShell 或 SSH 对中文命令不稳定，先生成 UTF-8 base64 命令：
+
+```bash
+python3 scripts/go2w_encode_command.py --mode go "去701门外走廊拍照，然后回尹思园工位" --pretty
+```
+
+然后使用输出中的 `--go-b64` 命令现场执行。
 
 ## 源码打包
 
