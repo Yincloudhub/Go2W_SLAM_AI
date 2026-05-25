@@ -89,6 +89,8 @@ command
 
 这部分是答辩和现场排障的关键证据：它能证明 LLM 没有凭空编坐标，而是先匹配 registry 中的语义拓扑点，再由 `plan_to_slam_command()` 转成 `navigate_to_pose`。
 
+多目标中文命令会被识别出来，但当前不会作为单次导航直接执行。例如“去 701 门外走廊拍照，然后回尹思园工位”会在 `semantic_trace.matched_targets` 中列出两个目标，并返回 `human_confirm`。现场真实执行前应拆成两条命令，等后续任务队列模块接入后再支持自动串行执行。
+
 ## 源码打包
 
 源码包使用：

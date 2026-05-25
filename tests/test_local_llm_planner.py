@@ -2,6 +2,8 @@ import unittest
 
 from edge_autonomy.local_llm_planner import (
     apply_context_policy_overrides,
+    build_lightweight_planner_context,
+    deterministic_intent_from_context,
     extract_json_object,
     validate_context_policy,
     validate_execution_contract,
@@ -86,6 +88,79 @@ class LocalLlmPlannerTests(unittest.TestCase):
 
         self.assertEqual(fixed["mode"], "safe_hold")
         self.assertEqual(fixed["steps"][0]["tool"], "hold_position")
+        validate_local_llm_plan(fixed)
+        validate_context_policy(fixed, context)
+
+    def test_target_matching_uses_command_order_not_registry_order(self) -> None:
+        context = {
+            "user_command": "go room701 then return station",
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {
+                    "available_nodes": [
+                        {
+                            "node_id": "station",
+                            "name": "station",
+                            "aliases": ["station"],
+                            "tags": [],
+                            "distance_from_robot_m": 0.05,
+                        },
+                        {
+                            "node_id": "room701",
+                            "name": "room701",
+                            "aliases": ["room701"],
+                            "tags": ["photo_required"],
+                            "distance_from_robot_m": 5.0,
+                        },
+                    ]
+                },
+            },
+        }
+
+        light = build_lightweight_planner_context(context)
+
+        self.assertEqual(light["requested_target_guess"], "room701")
+        self.assertTrue(light["multi_target"])
+        self.assertEqual([item["node_id"] for item in light["matched_targets"]], ["room701", "station"])
+
+    def test_multi_target_command_requires_confirmation_not_near_target_hold(self) -> None:
+        plan = make_plan()
+        plan["steps"][0]["arguments"]["target_node"] = "room701"
+        context = {
+            "user_command": "go room701 then return station",
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {
+                    "available_nodes": [
+                        {
+                            "node_id": "station",
+                            "name": "station",
+                            "aliases": ["station"],
+                            "tags": [],
+                            "distance_from_robot_m": 0.05,
+                        },
+                        {
+                            "node_id": "room701",
+                            "name": "room701",
+                            "aliases": ["room701"],
+                            "tags": ["photo_required"],
+                            "distance_from_robot_m": 5.0,
+                        },
+                    ]
+                },
+            },
+        }
+
+        fixed = apply_context_policy_overrides(plan, context)
+        intent = deterministic_intent_from_context(context)
+
+        self.assertEqual(fixed["mode"], "human_confirm")
+        self.assertEqual(fixed["steps"][0]["tool"], "request_human_confirm")
+        self.assertEqual(intent["mode"], "human_confirm")
         validate_local_llm_plan(fixed)
         validate_context_policy(fixed, context)
 

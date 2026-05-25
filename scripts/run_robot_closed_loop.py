@@ -172,6 +172,8 @@ def build_semantic_trace(
         "command": command,
         "semantic_source": "map_registry_topology",
         "requested_target_guess": light_context.get("requested_target_guess"),
+        "multi_target": light_context.get("multi_target"),
+        "matched_targets": light_context.get("matched_targets"),
         "candidate_count": len(light_context.get("candidates", [])) if isinstance(light_context.get("candidates"), list) else None,
         "slam": {
             "health_status": slam.get("health_status"),

@@ -234,7 +234,7 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
     user_command = str(planner_context.get("user_command", ""))
 
     candidates = []
-    requested_node = None
+    target_matches: list[dict[str, Any]] = []
     command_lower = user_command.lower()
     if isinstance(nodes, list):
         for node in nodes:
@@ -256,8 +256,27 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
                 }
             )
             match_terms = [node_id, name, *aliases]
-            if requested_node is None and any(term and term.lower() in command_lower for term in match_terms):
-                requested_node = node_id
+            hit_terms = []
+            first_index = None
+            for term in dict.fromkeys(term for term in match_terms if term):
+                index = command_lower.find(term.lower())
+                if index < 0:
+                    continue
+                hit_terms.append(term)
+                first_index = index if first_index is None else min(first_index, index)
+            if hit_terms:
+                target_matches.append(
+                    {
+                        "node_id": node_id,
+                        "name": name,
+                        "matched_terms": hit_terms[:5],
+                        "first_index": first_index,
+                        "distance_m": node.get("distance_from_robot_m"),
+                        "photo_required": "photo_required" in tags,
+                    }
+                )
+    target_matches.sort(key=lambda item: (item["first_index"] if item.get("first_index") is not None else 10**9, -max(len(term) for term in item.get("matched_terms", [""]))))
+    requested_node = target_matches[0]["node_id"] if target_matches else None
 
     link_quality = _dig_value(planner_context, "link_quality") or {}
     bandwidth = _dig_value(planner_context, "bandwidth_kbps")
@@ -279,6 +298,8 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
         "localized": bool(robot.get("localized")),
         "nearest_node": (robot.get("nearest_node") or {}).get("node_id") if isinstance(robot.get("nearest_node"), dict) else None,
         "requested_target_guess": requested_node,
+        "matched_targets": target_matches,
+        "multi_target": len(target_matches) > 1,
         "distance_to_requested_target_m": distance_to_target,
         "arrival_distance_m": arrival_distance if arrival_distance is not None else 0.3,
         "battery_percent": battery,
@@ -366,6 +387,16 @@ def deterministic_intent_from_context(planner_context: dict[str, Any]) -> dict[s
             "target_node": "",
             "confidence": 1.0,
             "reason": "slam or localization not ready",
+            "requires_human_ack": True,
+        }
+
+    matched_targets = light_context.get("matched_targets", [])
+    if isinstance(matched_targets, list) and len(matched_targets) > 1:
+        return {
+            "mode": "human_confirm",
+            "target_node": str(matched_targets[0].get("node_id", "")) if isinstance(matched_targets[0], dict) else "",
+            "confidence": 1.0,
+            "reason": "multi-target command requires explicit task queue or split commands",
             "requires_human_ack": True,
         }
 
@@ -658,6 +689,30 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
         else:
             steps[0]["arguments"] = weak_comm
 
+    matched_targets = light_context.get("matched_targets", [])
+    if isinstance(matched_targets, list) and len(matched_targets) > 1:
+        target_ids = [str(item.get("node_id")) for item in matched_targets if isinstance(item, dict) and item.get("node_id")]
+        reason = "multi-target command requires split commands or task queue"
+        fixed.update(
+            {
+                "mode": "human_confirm",
+                "reason": reason,
+                "steps": _with_communication_prefix(
+                    [
+                        {
+                            "step_id": "ask_1",
+                            "tool": "request_human_confirm",
+                            "arguments": {"reason": reason, "matched_targets": target_ids},
+                        }
+                    ],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": True,
+            }
+        )
+        return fixed
+
     known_nodes = _semantic_nodes(planner_context)
     nav_targets = _nav_target_nodes(fixed)
     if fixed.get("mode") == "mapped_navigation" and known_nodes and any(target not in known_nodes for target in nav_targets):
@@ -764,6 +819,12 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
         for target in nav_targets:
             require(target in known_nodes, f"target_node {target!r} is not in semantic topology")
 
+    matched_targets = light_context.get("matched_targets", [])
+    if isinstance(matched_targets, list) and len(matched_targets) > 1:
+        require(plan.get("mode") == "human_confirm", "multi-target command must request confirmation or task queue")
+        require("create_navigation_subgoal" not in tools, "multi-target command must not navigate as a single target")
+        require("request_human_confirm" in tools, "multi-target command must request human confirmation")
+
     arrival_distance = _dig_value(planner_context, "arrival_distance_m")
     distance_to_target = _dig_value(planner_context, "distance_to_requested_target_m")
     if arrival_distance is None:
@@ -803,6 +864,7 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
     for target in nav_targets:
         if _node_requires_photo(planner_context, target):
             require("capture_keyframe" in tools, f"photo_required target {target!r} must capture_keyframe after arrival")
+
 
 
 def run_local_llm_planner(

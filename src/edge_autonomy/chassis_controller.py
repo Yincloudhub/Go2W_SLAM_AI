@@ -153,21 +153,37 @@ class ChassisController:
             aliases = node.get("aliases", [])
             if isinstance(aliases, list):
                 terms.extend(str(item) for item in aliases if item)
-            hit_terms = [term for term in terms if term and term.lower() in query]
+            hit_terms = []
+            first_index: int | None = None
+            for term in dict.fromkeys(term for term in terms if term):
+                term_lower = term.lower()
+                index = query.find(term_lower)
+                if index < 0:
+                    continue
+                hit_terms.append(term)
+                first_index = index if first_index is None else min(first_index, index)
             if hit_terms:
                 matches.append(
                     {
                         "node_id": node_id,
                         "name": node.get("name"),
                         "matched_terms": hit_terms,
+                        "first_index": first_index,
                         "needs_calibration": "needs_calibration" in node.get("tags", []) if isinstance(node.get("tags"), list) else False,
                     }
                 )
         if not matches:
             return {"matched": False, "reason": "no registry node alias matched", "matches": []}
         exact = [item for item in matches if item["node_id"].lower() == query]
-        selected = exact[0] if exact else sorted(matches, key=lambda item: max(len(term) for term in item["matched_terms"]), reverse=True)[0]
-        return {"matched": True, "selected": selected, "ambiguous": len(matches) > 1, "matches": matches}
+        ordered = sorted(matches, key=lambda item: (item["first_index"] if item.get("first_index") is not None else 10**9, -max(len(term) for term in item["matched_terms"])))
+        selected = exact[0] if exact else ordered[0]
+        return {
+            "matched": True,
+            "selected": selected,
+            "ambiguous": len(matches) > 1,
+            "multi_target": len(matches) > 1,
+            "matches": ordered,
+        }
 
     def world_state(self) -> dict[str, Any]:
         return run_gateway_command({"action": "get_world_state"}, self.gateway)
