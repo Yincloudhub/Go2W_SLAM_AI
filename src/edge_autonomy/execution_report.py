@@ -40,6 +40,10 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "pointcloud_alive": None,
         "slam_info_alive": None,
         "blocked_reason": "",
+        "task_queue_id": None,
+        "task_queue_targets": None,
+        "task_queue_completed": None,
+        "user_reply": "",
         "semantic_trace": None,
         "steps": [step.get("step") for step in output.get("steps", []) if isinstance(step, dict)],
     }
@@ -97,6 +101,11 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
                 planner = payload.get("planner", {})
                 if isinstance(planner, dict):
                     summary["llm_elapsed_s"] = planner.get("llm_elapsed_s")
+                    summary["user_reply"] = planner.get("user_reply", "") or ""
+                    task_queue = planner.get("task_queue")
+                    if isinstance(task_queue, dict):
+                        summary["task_queue_id"] = task_queue.get("queue_id")
+                        summary["task_queue_targets"] = "|".join(str(v) for v in task_queue.get("targets", []) if v) if isinstance(task_queue.get("targets"), list) else None
                     plan = planner.get("plan", {})
                     if isinstance(plan, dict):
                         summary["plan_mode"] = plan.get("mode")
@@ -110,6 +119,10 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(execution, dict):
                     summary["executed"] = bool(execution.get("executed"))
                     summary["blocked_reason"] = execution.get("blocked_reason", "")
+                queue_execution = payload.get("queue_execution")
+                if isinstance(queue_execution, dict):
+                    summary["task_queue_completed"] = queue_execution.get("completed")
+                    summary["blocked_reason"] = queue_execution.get("blocked_reason", summary["blocked_reason"]) or summary["blocked_reason"]
         elif name == "auto_pause_on_arrival" and isinstance(result, dict):
             summary["arrived"] = result.get("arrived")
             summary["paused"] = result.get("paused")
@@ -161,6 +174,10 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "pointcloud_alive",
         "slam_info_alive",
         "blocked_reason",
+        "task_queue_id",
+        "task_queue_targets",
+        "task_queue_completed",
+        "user_reply",
     ]
     row = {"timestamp": ts, **{key: summary.get(key) for key in fieldnames if key != "timestamp"}}
     exists = csv_path.exists()

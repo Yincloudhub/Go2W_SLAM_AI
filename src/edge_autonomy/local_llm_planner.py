@@ -161,6 +161,9 @@ class PlannerRunResult:
     plan: dict[str, Any]
     raw_answer: str
     elapsed_s: float
+    task_queue: dict[str, Any] | None = None
+    user_reply: str = ""
+    weak_link_payload: dict[str, Any] | None = None
 
 
 class LocalCommandBackend:
@@ -317,6 +320,184 @@ def build_lightweight_planner_prompt(planner_context: dict[str, Any]) -> str:
     return LIGHTWEIGHT_PROMPT_TEMPLATE.format(planner_context=json.dumps(light_context, ensure_ascii=False, separators=(",", ":")))
 
 
+CAPTURE_TERMS = (
+    "\u62cd\u7167",
+    "\u62cd\u4e00\u5f20",
+    "\u7167\u7247",
+    "\u5173\u952e\u5e27",
+    "photo",
+    "capture",
+    "keyframe",
+)
+
+
+def command_requests_capture(user_command: str) -> bool:
+    command = user_command.lower()
+    return any(term.lower() in command for term in CAPTURE_TERMS)
+
+
+def build_task_queue_from_context(planner_context: dict[str, Any]) -> dict[str, Any] | None:
+    light_context = build_lightweight_planner_context(planner_context)
+    matched_targets = light_context.get("matched_targets", [])
+    if not isinstance(matched_targets, list) or len(matched_targets) < 2:
+        return None
+    if not light_context.get("slam_ok") or not light_context.get("localized"):
+        return None
+
+    known_nodes = {str(candidate.get("node_id")) for candidate in light_context.get("candidates", []) if isinstance(candidate, dict)}
+    ordered_targets = [item for item in matched_targets if isinstance(item, dict) and str(item.get("node_id") or "") in known_nodes]
+    if len(ordered_targets) < 2:
+        return None
+
+    weak_link = bool(light_context.get("weak_bandwidth"))
+    communication_policy = _weak_communication_policy() if weak_link else _normal_communication_policy()
+    user_command = str(planner_context.get("user_command", ""))
+    explicit_capture = command_requests_capture(user_command)
+    explicit_capture_used = False
+    steps: list[dict[str, Any]] = []
+
+    for index, target in enumerate(ordered_targets, start=1):
+        node_id = str(target.get("node_id"))
+        target_name = str(target.get("name") or node_id)
+        steps.append(
+            {
+                "task_id": f"task_{len(steps) + 1}",
+                "action": "navigate",
+                "target_node": node_id,
+                "target_name": target_name,
+                "status": "pending",
+                "requires_preflight": True,
+                "semantic_reason": "matched target from user command",
+            }
+        )
+        should_capture = bool(target.get("photo_required")) or (explicit_capture and not explicit_capture_used and index == 1)
+        if should_capture:
+            explicit_capture_used = True
+            steps.append(
+                {
+                    "task_id": f"task_{len(steps) + 1}",
+                    "action": "capture_keyframe",
+                    "target_node": node_id,
+                    "target_name": target_name,
+                    "status": "pending",
+                    "requires_preflight": False,
+                    "semantic_reason": "photo requested or target marked photo_required",
+                }
+            )
+
+    target_names = [str(target.get("name") or target.get("node_id")) for target in ordered_targets]
+    if len(target_names) >= 2:
+        reply = f"\u5df2\u89e3\u6790\u4e3a{len(ordered_targets)}\u4e2a\u76ee\u6807\u7684\u4e32\u884c\u4efb\u52a1\uff1a" + "\u2192".join(target_names)
+    else:
+        reply = "\u5df2\u89e3\u6790\u4e3a\u4e32\u884c\u4efb\u52a1"
+    steps.append(
+        {
+            "task_id": f"task_{len(steps) + 1}",
+            "action": "report",
+            "status": "pending",
+            "message": reply,
+            "requires_preflight": False,
+            "semantic_reason": "summarize queued task to operator",
+        }
+    )
+
+    queue = {
+        "queue_id": f"queue_{int(time.time() * 1000)}",
+        "mode": "sequential",
+        "status": "planned",
+        "source": "semantic_topology",
+        "targets": [str(target.get("node_id")) for target in ordered_targets],
+        "steps": steps,
+        "communication_policy": communication_policy,
+        "user_reply": reply,
+    }
+    queue["weak_link_payload"] = build_weak_link_payload(queue)
+    return queue
+
+
+def task_queue_to_plan(task_queue: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
+    map_id = _dig_value(planner_context, "map_id") or "unknown"
+    communication_policy = task_queue.get("communication_policy")
+    if not isinstance(communication_policy, dict):
+        communication_policy = _normal_communication_policy()
+
+    plan_steps: list[dict[str, Any]] = []
+    if communication_policy.get("mode") == "semantic_only":
+        plan_steps.append({"step_id": "comm_1", "tool": "set_communication_policy", "arguments": communication_policy})
+
+    nav_count = 0
+    capture_count = 0
+    for task in task_queue.get("steps", []):
+        if not isinstance(task, dict):
+            continue
+        action = task.get("action")
+        target_node = str(task.get("target_node") or "")
+        if action == "navigate" and target_node:
+            nav_count += 1
+            plan_steps.append(
+                {
+                    "step_id": f"nav_{nav_count}",
+                    "tool": "create_navigation_subgoal",
+                    "arguments": {"map_id": map_id, "target_node": target_node},
+                }
+            )
+            plan_steps.append(
+                {
+                    "step_id": f"wait_{nav_count}",
+                    "tool": "wait_until",
+                    "arguments": {"condition": "arrived"},
+                }
+            )
+        elif action == "capture_keyframe" and target_node:
+            capture_count += 1
+            plan_steps.append(
+                {
+                    "step_id": f"capture_{capture_count}",
+                    "tool": "capture_keyframe",
+                    "arguments": {"target_node": target_node},
+                }
+            )
+
+    if len(plan_steps) > 6:
+        reason = "task queue is too long for one safe execution"
+        return {
+            "plan_id": f"queue_blocked_{int(time.time() * 1000)}",
+            "mode": "human_confirm",
+            "confidence": 1.0,
+            "reason": reason,
+            "steps": [{"step_id": "ask_1", "tool": "request_human_confirm", "arguments": {"reason": reason}}],
+            "communication_policy": communication_policy,
+            "requires_human_ack": True,
+        }
+
+    return {
+        "plan_id": f"queue_plan_{int(time.time() * 1000)}",
+        "mode": "mapped_navigation" if nav_count else "safe_hold",
+        "confidence": 1.0,
+        "reason": "sequential task queue from semantic targets",
+        "steps": plan_steps or [{"step_id": "hold_1", "tool": "hold_position", "arguments": {"reason": "empty task queue"}}],
+        "communication_policy": communication_policy,
+        "requires_human_ack": False,
+    }
+
+
+def build_weak_link_payload(task_queue: dict[str, Any]) -> dict[str, Any]:
+    communication_policy = task_queue.get("communication_policy", {})
+    steps = task_queue.get("steps", [])
+    targets = task_queue.get("targets", [])
+    return {
+        "mode": communication_policy.get("mode", "normal") if isinstance(communication_policy, dict) else "normal",
+        "send": communication_policy.get("send", []) if isinstance(communication_policy, dict) else [],
+        "drop": communication_policy.get("drop", []) if isinstance(communication_policy, dict) else [],
+        "task_state": {
+            "queue_id": task_queue.get("queue_id"),
+            "status": task_queue.get("status"),
+            "target_nodes": targets if isinstance(targets, list) else [],
+            "step_count": len(steps) if isinstance(steps, list) else 0,
+        },
+    }
+
+
 def build_intent_planner_prompt(planner_context: dict[str, Any]) -> str:
     light_context = build_lightweight_planner_context(planner_context)
     return INTENT_PROMPT_TEMPLATE.format(planner_context=json.dumps(light_context, ensure_ascii=False, separators=(",", ":")))
@@ -393,11 +574,11 @@ def deterministic_intent_from_context(planner_context: dict[str, Any]) -> dict[s
     matched_targets = light_context.get("matched_targets", [])
     if isinstance(matched_targets, list) and len(matched_targets) > 1:
         return {
-            "mode": "human_confirm",
+            "mode": "mapped_navigation",
             "target_node": str(matched_targets[0].get("node_id", "")) if isinstance(matched_targets[0], dict) else "",
             "confidence": 1.0,
-            "reason": "multi-target command requires explicit task queue or split commands",
-            "requires_human_ack": True,
+            "reason": "multi-target command will use sequential task queue",
+            "requires_human_ack": False,
         }
 
     target_node = str(light_context.get("requested_target_guess") or "")
@@ -690,31 +871,10 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
             steps[0]["arguments"] = weak_comm
 
     matched_targets = light_context.get("matched_targets", [])
-    if isinstance(matched_targets, list) and len(matched_targets) > 1:
-        target_ids = [str(item.get("node_id")) for item in matched_targets if isinstance(item, dict) and item.get("node_id")]
-        reason = "multi-target command requires split commands or task queue"
-        fixed.update(
-            {
-                "mode": "human_confirm",
-                "reason": reason,
-                "steps": _with_communication_prefix(
-                    [
-                        {
-                            "step_id": "ask_1",
-                            "tool": "request_human_confirm",
-                            "arguments": {"reason": reason, "matched_targets": target_ids},
-                        }
-                    ],
-                    fixed["communication_policy"],
-                    weak_link=weak_link,
-                ),
-                "requires_human_ack": True,
-            }
-        )
-        return fixed
-
+    is_multi_target = isinstance(matched_targets, list) and len(matched_targets) > 1
     known_nodes = _semantic_nodes(planner_context)
     nav_targets = _nav_target_nodes(fixed)
+
     if fixed.get("mode") == "mapped_navigation" and known_nodes and any(target not in known_nodes for target in nav_targets):
         target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
         reason = f"target node is not registered: {target}".strip()
@@ -732,29 +892,11 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
         )
         return fixed
 
-    arrival_distance = light_context.get("arrival_distance_m")
-    distance_to_target = light_context.get("distance_to_requested_target_m")
-    if isinstance(arrival_distance, (int, float)) and isinstance(distance_to_target, (int, float)) and float(distance_to_target) <= float(arrival_distance):
-        target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
-        fixed.update(
-            {
-                "mode": "safe_hold",
-                "reason": "already near target; hold position",
-                "steps": _with_communication_prefix(
-                    [{"step_id": "hold_1", "tool": "hold_position", "arguments": {"target_node": target, "distance_to_target_m": float(distance_to_target)}}],
-                    fixed["communication_policy"],
-                    weak_link=weak_link,
-                ),
-                "requires_human_ack": False,
-            }
-        )
-        return fixed
-
     battery_percent = light_context.get("battery_percent")
     low_battery = light_context.get("low_battery_percent")
     user_command = str(planner_context.get("user_command", ""))
-    emergency = any(word in user_command.lower() for word in ("emergency", "urgent")) or any(word in user_command for word in ("紧急", "急救", "危险"))
-    charging_task = any(target == "charging_point" for target in nav_targets) or "充电" in user_command or "回充" in user_command
+    emergency = any(word in user_command.lower() for word in ("emergency", "urgent")) or any(word in user_command for word in ("\u7d27\u6025", "\u6025\u6551", "\u5371\u9669"))
+    charging_task = any(target == "charging_point" for target in nav_targets) or "\u5145\u7535" in user_command or "\u56de\u5145" in user_command
     if isinstance(battery_percent, (int, float)) and isinstance(low_battery, (int, float)) and float(battery_percent) < float(low_battery) and not emergency and not charging_task:
         target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
         reason = "low battery requires human confirmation"
@@ -772,39 +914,66 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
         )
         return fixed
 
+    if is_multi_target:
+        target_ids = [str(item.get("node_id")) for item in matched_targets if isinstance(item, dict) and item.get("node_id")]
+        if len(nav_targets) < len(target_ids) or nav_targets[: len(target_ids)] != target_ids:
+            reason = "multi-target command requires sequential task queue"
+            fixed.update(
+                {
+                    "mode": "human_confirm",
+                    "reason": reason,
+                    "steps": _with_communication_prefix(
+                        [{"step_id": "ask_1", "tool": "request_human_confirm", "arguments": {"reason": reason, "matched_targets": target_ids}}],
+                        fixed["communication_policy"],
+                        weak_link=weak_link,
+                    ),
+                    "requires_human_ack": True,
+                }
+            )
+            return fixed
+
+    arrival_distance = light_context.get("arrival_distance_m")
+    distance_to_target = light_context.get("distance_to_requested_target_m")
+    if not is_multi_target and isinstance(arrival_distance, (int, float)) and isinstance(distance_to_target, (int, float)) and float(distance_to_target) <= float(arrival_distance):
+        target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
+        fixed.update(
+            {
+                "mode": "safe_hold",
+                "reason": "already near target; hold position",
+                "steps": _with_communication_prefix(
+                    [{"step_id": "hold_1", "tool": "hold_position", "arguments": {"target_node": target, "distance_to_target_m": float(distance_to_target)}}],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": False,
+            }
+        )
+        return fixed
+
     if fixed.get("mode") == "mapped_navigation":
         nav_index = next((i for i, step in enumerate(steps) if isinstance(step, dict) and step.get("tool") == "create_navigation_subgoal"), None)
         if nav_index is not None:
             nav_args = steps[nav_index].setdefault("arguments", {})
-            if isinstance(nav_args, dict):
-                if not nav_args.get("map_id"):
-                    map_id = _dig_value(planner_context, "map_id")
-                    if map_id:
-                        nav_args["map_id"] = map_id
+            if isinstance(nav_args, dict) and not nav_args.get("map_id"):
+                map_id = _dig_value(planner_context, "map_id")
+                if map_id:
+                    nav_args["map_id"] = map_id
         has_wait = any(isinstance(step, dict) and step.get("tool") == "wait_until" for step in steps)
         if nav_index is not None and not has_wait:
-            steps.insert(
-                nav_index + 1,
-                {
-                    "step_id": "wait_1",
-                    "tool": "wait_until",
-                    "arguments": {"source": "/slam_info", "condition": "ctrl_info_arrived_or_finished"},
-                },
-            )
+            steps.insert(nav_index + 1, {"step_id": "wait_1", "tool": "wait_until", "arguments": {"source": "/slam_info", "condition": "ctrl_info_arrived_or_finished"}})
         nav_targets = _nav_target_nodes(fixed)
-        if nav_targets and _node_requires_photo(planner_context, nav_targets[0]):
-            has_capture = any(isinstance(step, dict) and step.get("tool") == "capture_keyframe" for step in steps)
-            if not has_capture:
-                wait_index = next((i for i, step in enumerate(steps) if isinstance(step, dict) and step.get("tool") == "wait_until"), nav_index)
-                insert_at = (wait_index + 1) if wait_index is not None else len(steps)
-                steps.insert(
-                    insert_at,
-                    {
-                        "step_id": "capture_1",
-                        "tool": "capture_keyframe",
-                        "arguments": {"target_node": nav_targets[0], "reason": "photo_required target"},
-                    },
-                )
+        capture_targets = {
+            str(step.get("arguments", {}).get("target_node"))
+            for step in steps
+            if isinstance(step, dict) and step.get("tool") == "capture_keyframe" and isinstance(step.get("arguments"), dict)
+        }
+        for target in nav_targets:
+            if not _node_requires_photo(planner_context, target) or target in capture_targets:
+                continue
+            wait_index = next((i for i, step in enumerate(steps) if isinstance(step, dict) and step.get("tool") == "wait_until"), nav_index)
+            insert_at = (wait_index + 1) if wait_index is not None else len(steps)
+            steps.insert(insert_at, {"step_id": f"capture_{len(capture_targets) + 1}", "tool": "capture_keyframe", "arguments": {"target_node": target, "reason": "photo_required target"}})
+            capture_targets.add(target)
 
     fixed["steps"] = steps[:6]
     return fixed
@@ -821,9 +990,12 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
 
     matched_targets = light_context.get("matched_targets", [])
     if isinstance(matched_targets, list) and len(matched_targets) > 1:
-        require(plan.get("mode") == "human_confirm", "multi-target command must request confirmation or task queue")
-        require("create_navigation_subgoal" not in tools, "multi-target command must not navigate as a single target")
-        require("request_human_confirm" in tools, "multi-target command must request human confirmation")
+        matched_ids = [str(item.get("node_id")) for item in matched_targets if isinstance(item, dict) and item.get("node_id")]
+        if plan.get("mode") == "human_confirm":
+            require("request_human_confirm" in tools, "multi-target confirmation must request human confirmation")
+        else:
+            require(plan.get("mode") == "mapped_navigation", "multi-target command must use mapped_navigation task queue or human_confirm")
+            require(nav_targets[: len(matched_ids)] == matched_ids, "multi-target navigation must follow matched target order")
 
     arrival_distance = _dig_value(planner_context, "arrival_distance_m")
     distance_to_target = _dig_value(planner_context, "distance_to_requested_target_m")
@@ -831,7 +1003,7 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
         arrival_distance = light_context.get("arrival_distance_m")
     if distance_to_target is None:
         distance_to_target = light_context.get("distance_to_requested_target_m")
-    if isinstance(arrival_distance, (int, float)) and isinstance(distance_to_target, (int, float)):
+    if not (isinstance(matched_targets, list) and len(matched_targets) > 1) and isinstance(arrival_distance, (int, float)) and isinstance(distance_to_target, (int, float)):
         if float(distance_to_target) <= float(arrival_distance):
             require("create_navigation_subgoal" not in tools, "already near target: do not create navigation subgoal")
             require("hold_position" in tools, "already near target: must hold_position")
@@ -876,7 +1048,22 @@ def run_local_llm_planner(
     timeout_s: int = 240,
     prompt_mode: str = "full",
 ) -> PlannerRunResult:
+    task_queue = build_task_queue_from_context(planner_context)
     if prompt_mode == "hybrid":
+        if task_queue is not None:
+            plan = task_queue_to_plan(task_queue, planner_context)
+            plan = apply_context_policy_overrides(plan, planner_context)
+            validate_local_llm_plan(plan)
+            validate_execution_contract(plan)
+            validate_context_policy(plan, planner_context)
+            return PlannerRunResult(
+                plan=plan,
+                raw_answer=json.dumps({"task_queue": task_queue}, ensure_ascii=False),
+                elapsed_s=0.0,
+                task_queue=task_queue,
+                user_reply=str(task_queue.get("user_reply") or ""),
+                weak_link_payload=task_queue.get("weak_link_payload") if isinstance(task_queue.get("weak_link_payload"), dict) else None,
+            )
         intent = deterministic_intent_from_context(planner_context)
         if intent is not None:
             plan = intent_to_local_plan(intent, planner_context)
@@ -906,8 +1093,17 @@ def run_local_llm_planner(
     else:
         plan = extract_json_object(raw_answer)
         plan = repair_partial_navigation_plan(plan, planner_context)
+    if task_queue is not None:
+        plan = task_queue_to_plan(task_queue, planner_context)
     plan = apply_context_policy_overrides(plan, planner_context)
     validate_local_llm_plan(plan)
     validate_execution_contract(plan)
     validate_context_policy(plan, planner_context)
-    return PlannerRunResult(plan=plan, raw_answer=raw_answer, elapsed_s=elapsed_s)
+    return PlannerRunResult(
+        plan=plan,
+        raw_answer=raw_answer,
+        elapsed_s=elapsed_s,
+        task_queue=task_queue,
+        user_reply=str(task_queue.get("user_reply") or "") if task_queue else "",
+        weak_link_payload=task_queue.get("weak_link_payload") if isinstance(task_queue, dict) and isinstance(task_queue.get("weak_link_payload"), dict) else None,
+    )

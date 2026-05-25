@@ -4,6 +4,7 @@ import argparse
 import getpass
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -16,6 +17,13 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
 
 from edge_autonomy.llm_context import build_planner_context, plan_to_slam_command  # noqa: E402
 from edge_autonomy.local_llm_planner import (  # noqa: E402
@@ -140,6 +148,8 @@ def build_semantic_trace(
     gateway_state: dict[str, Any] | None,
     registry_allowed: bool,
     registry_reason: str,
+    task_queue: dict[str, Any] | None = None,
+    queue_execution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     summary = planner_context.get("world_state_summary", {})
     robot = summary.get("robot", {}) if isinstance(summary, dict) else {}
@@ -189,6 +199,23 @@ def build_semantic_trace(
             "reason": plan.get("reason"),
             "tools": tools,
         },
+        "task_queue": {
+            "queue_id": task_queue.get("queue_id"),
+            "status": task_queue.get("status"),
+            "targets": task_queue.get("targets"),
+            "step_count": len(task_queue.get("steps", [])) if isinstance(task_queue.get("steps"), list) else 0,
+            "user_reply": task_queue.get("user_reply"),
+        }
+        if isinstance(task_queue, dict)
+        else None,
+        "queue_execution": {
+            "completed": queue_execution.get("completed"),
+            "failed_step": queue_execution.get("failed_step"),
+            "blocked_reason": queue_execution.get("blocked_reason"),
+            "event_count": len(queue_execution.get("events", [])) if isinstance(queue_execution.get("events"), list) else 0,
+        }
+        if isinstance(queue_execution, dict)
+        else None,
         "policy_gates": {
             "registry_allowed": registry_allowed,
             "registry_reason": registry_reason,
@@ -205,6 +232,215 @@ def build_semantic_trace(
         }
         if isinstance(slam_command, dict)
         else None,
+    }
+
+
+def distance_to_pose(world_state_result: dict[str, Any], target_pose: dict[str, Any]) -> float | None:
+    world = world_state_result.get("world_state", {})
+    pose = world.get("current_pose", {}).get("pose", {}) if isinstance(world, dict) else {}
+    if not isinstance(pose, dict):
+        return None
+    try:
+        return ((float(pose["x"]) - float(target_pose["x"])) ** 2 + (float(pose["y"]) - float(target_pose["y"])) ** 2) ** 0.5
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    target_pose = command.get("target_pose")
+    if not isinstance(target_pose, dict):
+        return {"arrived": False, "paused": False, "reason": "missing target_pose", "samples": []}
+
+    samples = []
+    entered_count = 0
+    deadline = time.time() + args.arrival_monitor_s
+    while time.time() < deadline:
+        state = run_gateway_command(
+            {"action": "get_world_state"},
+            client_path=args.gateway_client,
+            network_interface=args.network_interface,
+            timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
+        )
+        distance_m = distance_to_pose(state, target_pose)
+        world = state.get("world_state", {}) if isinstance(state, dict) else {}
+        sample = {
+            "timestamp_ms": world.get("timestamp_ms") if isinstance(world, dict) else None,
+            "distance_to_target_m": distance_m,
+            "navigation": world.get("navigation") if isinstance(world, dict) else None,
+            "localization": world.get("localization") if isinstance(world, dict) else None,
+            "safety": world.get("safety") if isinstance(world, dict) else None,
+        }
+        samples.append(sample)
+        if distance_m is not None and distance_m <= args.arrival_distance_m:
+            entered_count += 1
+            if entered_count >= args.arrival_confirm_samples:
+                pause_result = run_gateway_command(
+                    {"action": "pause_navigation"},
+                    client_path=args.gateway_client,
+                    network_interface=args.network_interface,
+                    timeout_s=args.timeout_s,
+                    startup_wait_s=args.gateway_startup_wait_s,
+                )
+                return {
+                    "arrived": True,
+                    "paused": bool(pause_result.get("accepted")),
+                    "threshold_m": args.arrival_distance_m,
+                    "samples": samples,
+                    "pause_result": pause_result,
+                }
+        else:
+            entered_count = 0
+        time.sleep(args.arrival_monitor_interval_s)
+
+    return {
+        "arrived": False,
+        "paused": False,
+        "threshold_m": args.arrival_distance_m,
+        "samples": samples,
+        "reason": "arrival threshold not reached before timeout",
+    }
+
+
+def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    target_node = str(task.get("target_node") or "")
+    if not args.capture_command:
+        return {
+            "captured": False,
+            "target_node": target_node,
+            "reason": "capture command not configured; recorded semantic keyframe event only",
+        }
+    env = os.environ.copy()
+    env["GO2W_TARGET_NODE"] = target_node
+    completed = subprocess.run(
+        ["bash", "-lc", args.capture_command],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        timeout=args.timeout_s,
+        env=env,
+    )
+    return {
+        "captured": completed.returncode == 0,
+        "target_node": target_node,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+
+
+def execute_task_queue(
+    task_queue: dict[str, Any],
+    *,
+    registry: MapRegistry,
+    args: argparse.Namespace,
+    nav_speed: float | None,
+) -> dict[str, Any]:
+    events: list[dict[str, Any]] = []
+    blocked_reason = ""
+    failed_step = None
+    profile = registry.get_map(args.map_id)
+
+    for task in task_queue.get("steps", []):
+        if not isinstance(task, dict):
+            continue
+        action = str(task.get("action") or "")
+        task_id = str(task.get("task_id") or "")
+        if action == "report":
+            events.append({"task_id": task_id, "action": action, "status": "ok", "message": task.get("message")})
+            continue
+        if action == "capture_keyframe":
+            result = run_capture_keyframe(task, args) if args.execute else {"captured": False, "reason": "dry run; capture not executed", "target_node": task.get("target_node")}
+            events.append({"task_id": task_id, "action": action, "status": "ok", "result": result})
+            continue
+        if action != "navigate":
+            events.append({"task_id": task_id, "action": action, "status": "skipped", "reason": "unsupported task action"})
+            continue
+
+        target_node = str(task.get("target_node") or "")
+        try:
+            slam_command = profile.navigate_to_node_command(target_node, speed=nav_speed, mode=args.nav_mode)
+        except Exception as exc:
+            blocked_reason = f"failed to build navigation command for {target_node}: {exc}"
+            failed_step = task_id
+            events.append({"task_id": task_id, "action": action, "status": "failed", "target_node": target_node, "blocked_reason": blocked_reason})
+            break
+
+        preflight_state = None
+        gateway_allowed = True
+        gateway_reason = "gateway check skipped"
+        if not args.skip_gateway_check:
+            preflight_state = run_gateway_command(
+                {"action": "get_world_state"},
+                client_path=args.gateway_client,
+                network_interface=args.network_interface,
+                timeout_s=args.timeout_s,
+                startup_wait_s=args.gateway_startup_wait_s,
+            )
+            gateway_allowed, gateway_reason = gateway_allows_navigation(preflight_state)
+        if not gateway_allowed:
+            blocked_reason = gateway_reason
+            failed_step = task_id
+            events.append(
+                {
+                    "task_id": task_id,
+                    "action": action,
+                    "status": "blocked",
+                    "target_node": target_node,
+                    "blocked_reason": blocked_reason,
+                    "preflight": preflight_state,
+                }
+            )
+            break
+
+        if not args.execute:
+            events.append(
+                {
+                    "task_id": task_id,
+                    "action": action,
+                    "status": "dry_run",
+                    "target_node": target_node,
+                    "slam_command": slam_command,
+                    "preflight": preflight_state,
+                }
+            )
+            continue
+
+        result = run_gateway_command(
+            slam_command,
+            client_path=args.gateway_client,
+            network_interface=args.network_interface,
+            timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
+        )
+        accepted = bool(result.get("accepted", False))
+        arrival = wait_for_arrival(slam_command, args) if accepted else {"arrived": False, "reason": "gateway did not accept navigation"}
+        status = "ok" if accepted and arrival.get("arrived") else "failed"
+        events.append(
+            {
+                "task_id": task_id,
+                "action": action,
+                "status": status,
+                "target_node": target_node,
+                "slam_command": slam_command,
+                "send_result": result,
+                "arrival": arrival,
+            }
+        )
+        if status != "ok":
+            blocked_reason = str(arrival.get("reason") or "navigation failed")
+            failed_step = task_id
+            break
+
+    return {
+        "queue_id": task_queue.get("queue_id"),
+        "executed": bool(args.execute),
+        "completed": failed_step is None,
+        "failed_step": failed_step,
+        "blocked_reason": blocked_reason,
+        "events": events,
+        "user_reply": task_queue.get("user_reply"),
     }
 
 
@@ -257,6 +493,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-gateway-check", action="store_true")
     parser.add_argument("--nav-speed-mps", type=float, default=0.0, help="Override navigation speed for the generated slam command. 0 keeps registry/plan speed.")
     parser.add_argument("--nav-mode", type=int, default=None, help="Override Unitree navigation mode for the generated slam command.")
+    parser.add_argument("--arrival-distance-m", type=float, default=0.25)
+    parser.add_argument("--arrival-confirm-samples", type=int, default=2)
+    parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
+    parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
+    parser.add_argument("--capture-command", default="", help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")
     return parser
@@ -292,6 +533,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     nav_speed = args.nav_speed_mps if args.nav_speed_mps > 0 else None
     slam_command = plan_to_slam_command(result.plan, registry, speed=nav_speed, mode=args.nav_mode)
+    task_queue = result.task_queue
+    queue_execution = None
 
     gateway_state = None
     gateway_allowed = False
@@ -309,7 +552,12 @@ def main(argv: list[str] | None = None) -> int:
     executed = False
     execution_result = None
     blocked_reason = ""
-    if slam_command is None:
+    if isinstance(task_queue, dict) and result.plan.get("mode") == "mapped_navigation":
+        queue_execution = execute_task_queue(task_queue, registry=registry, args=args, nav_speed=nav_speed)
+        executed = bool(args.execute and queue_execution.get("completed"))
+        blocked_reason = str(queue_execution.get("blocked_reason") or ("dry run; pass --execute to send queued commands" if not args.execute else ""))
+        execution_result = queue_execution
+    elif slam_command is None:
         blocked_reason = "planner did not produce a slam command"
     elif not args.execute:
         blocked_reason = "dry run; pass --execute to send command"
@@ -332,6 +580,9 @@ def main(argv: list[str] | None = None) -> int:
             "llm_elapsed_s": result.elapsed_s,
             "plan": result.plan,
             "slam_command": slam_command,
+            "task_queue": task_queue,
+            "user_reply": result.user_reply,
+            "weak_link_payload": result.weak_link_payload,
         },
         "semantic_trace": build_semantic_trace(
             command=args.command,
@@ -341,7 +592,10 @@ def main(argv: list[str] | None = None) -> int:
             gateway_state=gateway_state,
             registry_allowed=registry_allowed,
             registry_reason=registry_reason,
+            task_queue=task_queue,
+            queue_execution=queue_execution,
         ),
+        "queue_execution": queue_execution,
         "gateway": {
             "checked": not args.skip_gateway_check,
             "allowed": gateway_allowed,

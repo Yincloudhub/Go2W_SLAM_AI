@@ -17,6 +17,13 @@ if str(SRC_ROOT) not in sys.path:
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except (AttributeError, ValueError):
+    pass
+
 from edge_autonomy.chassis_controller import (  # noqa: E402
     ChassisController,
     GatewayConfig,
@@ -341,6 +348,20 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
         argv.extend(["--nav-speed-mps", str(args.nav_speed_mps)])
     if args.nav_mode is not None and args.nav_mode >= 0:
         argv.extend(["--nav-mode", str(args.nav_mode)])
+    argv.extend(
+        [
+            "--arrival-distance-m",
+            str(args.arrival_distance_m),
+            "--arrival-confirm-samples",
+            str(args.arrival_confirm_samples),
+            "--arrival-monitor-s",
+            str(args.arrival_monitor_s),
+            "--arrival-monitor-interval-s",
+            str(args.arrival_monitor_interval_s),
+        ]
+    )
+    if args.capture_command:
+        argv.extend(["--capture-command", args.capture_command])
     if args.no_live_snapshot:
         argv.append("--no-live-snapshot")
         try:
@@ -455,6 +476,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
     parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
+    parser.add_argument("--capture-command", default="", help="Optional bash command for queued capture_keyframe steps.")
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
     parser.add_argument("--relocate", action="store_true", help="Start relocation before planning/execution.")
     parser.add_argument("--status", action="store_true", help="Print gateway world_state.")
@@ -585,7 +607,8 @@ def main(argv: list[str] | None = None) -> int:
         slam_command = None
         if isinstance(closed_loop_payload, dict):
             slam_command = closed_loop_payload.get("planner", {}).get("slam_command") if isinstance(closed_loop_payload.get("planner"), dict) else None
-        if args.execute and not args.no_auto_pause:
+        queue_execution = closed_loop_payload.get("queue_execution") if isinstance(closed_loop_payload, dict) else None
+        if args.execute and not args.no_auto_pause and not queue_execution:
             output["steps"].append({"step": "auto_pause_on_arrival", "result": auto_pause_on_arrival(args, slam_command)})
 
     if args.monitor_s > 0:

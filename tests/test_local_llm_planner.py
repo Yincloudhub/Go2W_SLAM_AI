@@ -3,8 +3,10 @@ import unittest
 from edge_autonomy.local_llm_planner import (
     apply_context_policy_overrides,
     build_lightweight_planner_context,
+    build_task_queue_from_context,
     deterministic_intent_from_context,
     extract_json_object,
+    task_queue_to_plan,
     validate_context_policy,
     validate_execution_contract,
     validate_local_llm_plan,
@@ -125,9 +127,7 @@ class LocalLlmPlannerTests(unittest.TestCase):
         self.assertTrue(light["multi_target"])
         self.assertEqual([item["node_id"] for item in light["matched_targets"]], ["room701", "station"])
 
-    def test_multi_target_command_requires_confirmation_not_near_target_hold(self) -> None:
-        plan = make_plan()
-        plan["steps"][0]["arguments"]["target_node"] = "room701"
+    def test_multi_target_command_builds_sequential_task_queue(self) -> None:
         context = {
             "user_command": "go room701 then return station",
             "world_state_summary": {
@@ -155,13 +155,23 @@ class LocalLlmPlannerTests(unittest.TestCase):
             },
         }
 
+        task_queue = build_task_queue_from_context(context)
+        self.assertIsNotNone(task_queue)
+        plan = task_queue_to_plan(task_queue, context)
         fixed = apply_context_policy_overrides(plan, context)
         intent = deterministic_intent_from_context(context)
 
-        self.assertEqual(fixed["mode"], "human_confirm")
-        self.assertEqual(fixed["steps"][0]["tool"], "request_human_confirm")
-        self.assertEqual(intent["mode"], "human_confirm")
+        nav_targets = [
+            step["arguments"]["target_node"]
+            for step in fixed["steps"]
+            if step["tool"] == "create_navigation_subgoal"
+        ]
+        self.assertEqual(fixed["mode"], "mapped_navigation")
+        self.assertEqual(nav_targets, ["room701", "station"])
+        self.assertIn("capture_keyframe", [step["tool"] for step in fixed["steps"]])
+        self.assertEqual(intent["mode"], "mapped_navigation")
         validate_local_llm_plan(fixed)
+        validate_execution_contract(fixed)
         validate_context_policy(fixed, context)
 
 
