@@ -67,3 +67,7 @@ Watch-only mode:
 
 The Qt/RViz2 UI should reuse this command/state boundary instead of directly
 embedding model inference inside the visualization layer.
+
+Encoding note: do not pipe Chinese text from Windows PowerShell into this C++
+binary. Use MobaXterm/Linux terminal input, ASCII node IDs, or the existing
+base64 Python entrypoint when crossing unstable Windows shell boundaries.

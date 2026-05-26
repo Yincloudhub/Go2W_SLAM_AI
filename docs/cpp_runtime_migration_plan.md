@@ -40,6 +40,25 @@ Qt/RViz2 UI 或 C++ TUI
   - C++ 到点监控和自动 `pause_navigation`
   - 未匹配到拓扑点时才 fallback 到 Python/LLM
 
+## 现场验证
+
+机器人端已在 `~/go2w_slam_agent/cpp` 编译通过：
+
+```bash
+cmake -S . -B build
+cmake --build build -j2
+```
+
+C++ 路由干跑验证：
+
+```bash
+printf 'yin_siyuan_station\n/quit\n' | ./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --current-node initial_point
+```
+
+输出显示 `C++语义路由：C++ topology route`，并生成 `cpp_queue`。
+
+注意：不要从 Windows PowerShell 管道直接传中文到机器人端 C++ 面板，中文可能在 PowerShell 源文本阶段变成 `????`。现场应在 MobaXterm/Linux 终端里直接输入中文，或继续用 base64 入口。
+
 ## 暂时保留 Python 的部分
 
 - `scripts/generate_*`：训练数据和评测数据生成。
