@@ -390,6 +390,9 @@ def format_semantic_world(snapshot: dict[str, Any]) -> str:
     obstacle = snapshot.get("local_obstacle") if isinstance(snapshot.get("local_obstacle"), dict) else {}
     allow_text = "允许导航" if safety.get("allow_navigation") is True else "禁止导航"
     target = nav.get("target_node") or "无"
+    has_active_target = bool(nav.get("target_node")) and nav.get("state") not in (None, "", "idle")
+    goal_distance_text = fmt_m(nav.get("distance_to_goal_m")) if has_active_target else "无"
+    arrived_text = str(nav.get("is_arrived")) if has_active_target else "无"
     nearest_text = "未知"
     if nearest:
         nearest_text = f"{nearest.get('name') or nearest.get('node_id')}({fmt_m(nearest.get('distance_m'))})"
@@ -398,7 +401,7 @@ def format_semantic_world(snapshot: dict[str, Any]) -> str:
         f"SLAM:{health.get('status', '未知')} | "
         f"位置:x={fmt_num(pose.get('x'))}, y={fmt_num(pose.get('y'))}, yaw={fmt_num(pose.get('yaw'))} | "
         f"最近点:{nearest_text} | "
-        f"导航:{nav.get('state', '未知')} 目标:{target} 距目标:{fmt_m(nav.get('distance_to_goal_m'))} 到达:{nav.get('is_arrived')} | "
+        f"导航:{nav.get('state', '未知')} 目标:{target} 距目标:{goal_distance_text} 到达:{arrived_text} | "
         f"前方净空:{fmt_m(obstacle.get('front_clearance_m'))} 建议:{obstacle.get('recommended_action', '未知')} | "
         f"安全:{allow_text}({safety.get('reason', '未知')})"
     )
