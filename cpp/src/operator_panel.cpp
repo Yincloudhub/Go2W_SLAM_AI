@@ -74,6 +74,17 @@ double jsonNumber(const nlohmann::json* value, double fallback = 0.0)
     return value->get<double>();
 }
 
+double poseDistance(const nlohmann::json& world_state_result, const nlohmann::json& target_pose)
+{
+    const auto* pose = objectAt(world_state_result, {"world_state", "current_pose", "pose"});
+    if (!pose || !pose->is_object()) return -1.0;
+    const double x = jsonNumber(objectAt(*pose, {"x"}));
+    const double y = jsonNumber(objectAt(*pose, {"y"}));
+    const double tx = jsonNumber(objectAt(target_pose, {"x"}));
+    const double ty = jsonNumber(objectAt(target_pose, {"y"}));
+    return std::hypot(x - tx, y - ty);
+}
+
 std::string nowTime()
 {
     const std::time_t now = std::time(nullptr);
@@ -211,14 +222,21 @@ nlohmann::json OperatorPanel::loadRegistry() const
 
 nlohmann::json OperatorPanel::getWorldState() const
 {
-    const nlohmann::json request = {{"action", "get_world_state"}};
+    return sendGatewayCommand({{"action", "get_world_state"}});
+}
+
+nlohmann::json OperatorPanel::sendGatewayCommand(const nlohmann::json& command_json) const
+{
     const std::string command = shellQuote(config_.gateway_client) + " " + shellQuote(config_.network_interface);
-    const CommandResult result = runShellCommandWithInput(command, request.dump() + "\n");
+    const CommandResult result = runShellCommandWithInput(command, command_json.dump() + "\n");
     const auto objects = extractJsonObjects(result.stdout_text);
     for (const auto& object : objects) {
         if (object.contains("world_state")) return object;
     }
-    throw std::runtime_error("gateway did not return world_state: " + result.stderr_text);
+    for (const auto& object : objects) {
+        if (object.contains("accepted")) return object;
+    }
+    throw std::runtime_error("gateway did not return JSON: " + result.stderr_text);
 }
 
 std::string OperatorPanel::nearestNodeText(const nlohmann::json& result) const
@@ -338,6 +356,16 @@ void OperatorPanel::watchWorld(int seconds) const
 
 CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
 {
+    const SemanticRouter router(loadRegistry(), "go2w_real_site");
+    const SemanticRoute route = router.planText(text, config_.nav_speed_mps, config_.nav_mode);
+    if (route.matched) {
+        return executeSemanticRoute(route);
+    }
+    return fallbackPythonCommand(text);
+}
+
+CommandResult OperatorPanel::fallbackPythonCommand(const std::string& text) const
+{
     const std::string encoded = base64Encode(text);
     std::ostringstream cmd;
     cmd << "cd " << shellQuote(config_.repo_root)
@@ -351,6 +379,87 @@ CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
     if (config_.execute_enabled) cmd << " --execute";
     if (!config_.current_node.empty()) cmd << " --current-node " << shellQuote(config_.current_node);
     return runShellCommandWithInput(cmd.str(), "");
+}
+
+bool OperatorPanel::waitForArrival(const nlohmann::json& target_pose, std::ostream& log) const
+{
+    const auto start = std::chrono::steady_clock::now();
+    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < config_.arrival_monitor_s) {
+        try {
+            const auto state = getWorldState();
+            const double distance = poseDistance(state, target_pose);
+            log << "  到点监控: distance=" << std::fixed << std::setprecision(2) << distance << "m\n";
+            if (distance >= 0.0 && distance <= config_.arrival_distance_m) {
+                const auto pause_result = sendGatewayCommand({{"action", "pause_navigation"}});
+                log << "  已到达阈值，已发送暂停: accepted=" << (pause_result.value("accepted", false) ? "true" : "false") << "\n";
+                return true;
+            }
+        } catch (const std::exception& exc) {
+            log << "  到点监控失败: " << exc.what() << "\n";
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+    return false;
+}
+
+CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) const
+{
+    CommandResult result;
+    std::ostringstream out;
+    out << "C++语义路由：" << route.reason << "\n";
+    out << "目标队列：";
+    for (std::size_t i = 0; i < route.targets.size(); ++i) {
+        if (i) out << " -> ";
+        out << route.targets[i].name << "(" << route.targets[i].node_id << ")";
+    }
+    out << "\n";
+
+    if (!config_.execute_enabled) {
+        out << "执行状态：干跑/未下发运动。输入 /execute on 后才允许真实执行。\n";
+        out << "任务队列JSON：" << route.task_queue.dump(2) << "\n";
+        result.stdout_text = out.str();
+        result.exit_code = 0;
+        return result;
+    }
+
+    std::string reason;
+    const auto state = getWorldState();
+    if (!worldAllowsNavigation(state, &reason)) {
+        out << "安全检查：未通过，原因：" << reason << "\n";
+        result.stdout_text = out.str();
+        result.exit_code = 2;
+        return result;
+    }
+    out << "安全检查：通过，原因：" << reason << "\n";
+
+    for (std::size_t i = 0; i < route.slam_commands.size(); ++i) {
+        const auto& command = route.slam_commands.at(i);
+        const std::string target_node = command.value("target_node", "");
+        out << "下发导航：" << target_node << "\n";
+        const auto send_result = sendGatewayCommand(command);
+        out << "  gateway accepted=" << (send_result.value("accepted", false) ? "true" : "false") << "\n";
+        if (!send_result.value("accepted", false)) {
+            out << "  导航拒绝：" << send_result.dump() << "\n";
+            result.stdout_text = out.str();
+            result.exit_code = 3;
+            return result;
+        }
+        const bool arrived = waitForArrival(command.at("target_pose"), out);
+        if (!arrived) {
+            out << "  超时未进入到点阈值，停止后续队列。\n";
+            result.stdout_text = out.str();
+            result.exit_code = 4;
+            return result;
+        }
+        if (i < route.targets.size() && (route.targets[i].photo_required || (route.capture_requested && i == 0))) {
+            out << "  capture_keyframe：当前C++原型记录语义事件，真实相机命令下一步接入。\n";
+        }
+    }
+
+    out << "队列执行完成。\n";
+    result.stdout_text = out.str();
+    result.exit_code = 0;
+    return result;
 }
 
 void OperatorPanel::printHelp() const

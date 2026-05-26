@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(go2w_plan_executor_core
     src/plan_executor.cpp
     src/operator_panel.cpp
+    src/semantic_router.cpp
 )
 
 target_include_directories(go2w_plan_executor_core PUBLIC

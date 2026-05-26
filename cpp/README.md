@@ -46,6 +46,8 @@ It is the first step toward a Qt/RViz2-style UI:
 - accepts Chinese LLM commands and forwards them through the UTF-8 base64
   `go2w_agent_entry.py --go-b64 ... --human` path;
 - defaults to dry-run and only executes movement after `/execute on`.
+- routes known topology commands in C++ first; Python/LLM is now only the
+  fallback when no registered semantic point matches.
 
 Run on the robot/NX:
 

@@ -6,6 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "go2w/semantic_router.hpp"
+
 namespace go2w {
 
 struct OperatorPanelConfig {
@@ -39,7 +41,11 @@ public:
     CommandResult submitUserCommand(const std::string& text) const;
 
 private:
+    nlohmann::json sendGatewayCommand(const nlohmann::json& command) const;
     nlohmann::json getWorldState() const;
+    CommandResult executeSemanticRoute(const SemanticRoute& route) const;
+    CommandResult fallbackPythonCommand(const std::string& text) const;
+    bool waitForArrival(const nlohmann::json& target_pose, std::ostream& log) const;
     std::string formatWorldState(const nlohmann::json& result) const;
     std::string formatFullWorldState(const nlohmann::json& result) const;
     std::string formatWeakWorldState(const nlohmann::json& result) const;
