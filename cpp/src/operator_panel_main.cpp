@@ -1,0 +1,63 @@
+#include "go2w/operator_panel.hpp"
+
+#include <cstdlib>
+#include <iostream>
+#include <string>
+
+namespace {
+
+void usage(const char* argv0)
+{
+    std::cerr << "Usage: " << argv0 << " [options]\n"
+              << "Options:\n"
+              << "  --repo-root PATH             Repo root, default ..\n"
+              << "  --gateway-client PATH         slam_llm_command_client path\n"
+              << "  --interface IFACE             Network interface, default eth0\n"
+              << "  --python PATH                 Python executable, default python3\n"
+              << "  --current-node NODE_ID        Known current anchor node\n"
+              << "  --execute                     Allow real robot execution\n"
+              << "  --weak                        Start in weak-link summary mode\n"
+              << "  --watch SECONDS               Non-interactive watch mode; 0 means forever\n";
+}
+
+}  // namespace
+
+int main(int argc, char** argv)
+{
+    go2w::OperatorPanelConfig config;
+    int watch_seconds = -1;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--repo-root" && i + 1 < argc) {
+            config.repo_root = argv[++i];
+        } else if (arg == "--gateway-client" && i + 1 < argc) {
+            config.gateway_client = argv[++i];
+        } else if (arg == "--interface" && i + 1 < argc) {
+            config.network_interface = argv[++i];
+        } else if (arg == "--python" && i + 1 < argc) {
+            config.python = argv[++i];
+        } else if (arg == "--current-node" && i + 1 < argc) {
+            config.current_node = argv[++i];
+        } else if (arg == "--execute") {
+            config.execute_enabled = true;
+        } else if (arg == "--weak") {
+            config.weak_link_mode = true;
+        } else if (arg == "--watch" && i + 1 < argc) {
+            watch_seconds = std::atoi(argv[++i]);
+        } else if (arg == "-h" || arg == "--help") {
+            usage(argv[0]);
+            return 0;
+        } else {
+            usage(argv[0]);
+            return 2;
+        }
+    }
+
+    go2w::OperatorPanel panel(config);
+    if (watch_seconds >= 0) {
+        panel.watchWorld(watch_seconds);
+        return 0;
+    }
+    return panel.runInteractive();
+}

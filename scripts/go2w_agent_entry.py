@@ -36,7 +36,7 @@ from edge_autonomy.execution_report import summarize_agent_output, write_executi
 
 
 DEFAULT_GATEWAY_CLIENT = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"
-DEFAULT_START_SLAM = "/home/unitree/go2w_slam/go2w_edge_autonomy/scripts/start_go2w_slam_stack.sh"
+DEFAULT_START_SLAM = str(REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh")
 DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
 DEFAULT_MAP_ID = "go2w_real_site"

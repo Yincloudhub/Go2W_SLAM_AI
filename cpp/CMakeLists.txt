@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(go2w_plan_executor_core
     src/plan_executor.cpp
+    src/operator_panel.cpp
 )
 
 target_include_directories(go2w_plan_executor_core PUBLIC
@@ -18,3 +19,9 @@ add_executable(go2w_plan_executor_dry_run
 )
 
 target_link_libraries(go2w_plan_executor_dry_run PRIVATE go2w_plan_executor_core)
+
+add_executable(go2w_operator_panel
+    src/operator_panel_main.cpp
+)
+
+target_link_libraries(go2w_operator_panel PRIVATE go2w_plan_executor_core)

@@ -34,3 +34,34 @@ This executable does not move the robot. It validates the plan and prints the
 `navigate_to_pose` command plus the planned `resume -> navigate -> wait -> pause`
 sequence. The same validation logic can later be moved into the Unitree SDK
 client before `slam_llm_command_client` sends real commands.
+
+## Operator panel prototype
+
+Build also creates `go2w_operator_panel`, a C++ operator-facing terminal panel.
+It is the first step toward a Qt/RViz2-style UI:
+
+- reads `world_state` through `slam_llm_command_client`;
+- prints Chinese semantic status instead of raw JSON;
+- supports weak-link compact status with `/weak on`;
+- accepts Chinese LLM commands and forwards them through the UTF-8 base64
+  `go2w_agent_entry.py --go-b64 ... --human` path;
+- defaults to dry-run and only executes movement after `/execute on`.
+
+Run on the robot/NX:
+
+```bash
+cd ~/go2w_slam_agent/cpp
+cmake -S . -B build
+cmake --build build -j
+
+./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --current-node yin_siyuan_station
+```
+
+Watch-only mode:
+
+```bash
+./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --watch 0
+```
+
+The Qt/RViz2 UI should reuse this command/state boundary instead of directly
+embedding model inference inside the visualization layer.
