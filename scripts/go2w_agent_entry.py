@@ -66,6 +66,20 @@ def print_json(value: Any, *, pretty: bool) -> None:
         print(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
 
 
+def fmt_m(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}m"
+    except (TypeError, ValueError):
+        return "未知"
+
+
+def fmt_num(value: Any, digits: int = 2) -> str:
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return "未知"
+
+
 def run_start_slam(script: str) -> dict[str, Any]:
     completed = subprocess.run(["bash", script], text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=30)
     return {
@@ -273,6 +287,171 @@ def yaw_error_to_target(world_state_result: dict[str, Any], target_pose: dict[st
     return yaw_error(pose, target_pose)
 
 
+def nearest_registry_node(args: argparse.Namespace, world_state_result: dict[str, Any]) -> dict[str, Any] | None:
+    world = world_state_result.get("world_state", {})
+    pose = world.get("current_pose", {}).get("pose", {}) if isinstance(world, dict) else {}
+    if not isinstance(pose, dict):
+        return None
+    chassis = make_chassis(args, startup_wait_s=0.0)
+    nearest: dict[str, Any] | None = None
+    nearest_distance: float | None = None
+    for node in chassis.nodes():
+        node_pose = node.get("pose")
+        if not isinstance(node_pose, dict):
+            continue
+        distance = pose_distance(pose, node_pose)
+        if distance is None:
+            continue
+        if nearest_distance is None or distance < nearest_distance:
+            nearest = node
+            nearest_distance = distance
+    if nearest is None:
+        return None
+    return {
+        "node_id": nearest.get("node_id"),
+        "name": nearest.get("name"),
+        "distance_m": nearest_distance,
+        "needs_calibration": "needs_calibration" in nearest.get("tags", []) if isinstance(nearest.get("tags"), list) else False,
+    }
+
+
+def semantic_world_snapshot(args: argparse.Namespace, world_state_result: dict[str, Any]) -> dict[str, Any]:
+    world = world_state_result.get("world_state", {})
+    if not isinstance(world, dict):
+        return {"available": False, "reason": "missing world_state"}
+    pose = world.get("current_pose", {}).get("pose", {})
+    localization = world.get("localization", {})
+    slam_health = world.get("slam_health", {})
+    safety = world.get("safety", {})
+    navigation = world.get("navigation", {})
+    obstacle = world.get("local_obstacle", {})
+    return {
+        "available": True,
+        "timestamp_ms": world.get("timestamp_ms"),
+        "pose": {
+            "x": pose.get("x"),
+            "y": pose.get("y"),
+            "yaw": pose.get("yaw"),
+        }
+        if isinstance(pose, dict)
+        else None,
+        "nearest_node": nearest_registry_node(args, world_state_result),
+        "localization": {
+            "status": localization.get("status"),
+            "confidence": localization.get("confidence"),
+            "pose_age_ms": localization.get("pose_age_ms"),
+        }
+        if isinstance(localization, dict)
+        else None,
+        "slam_health": {
+            "status": slam_health.get("status"),
+            "lidar_alive": slam_health.get("lidar_alive"),
+            "localization_alive": slam_health.get("localization_alive"),
+            "odom_alive": slam_health.get("odom_alive"),
+        }
+        if isinstance(slam_health, dict)
+        else None,
+        "safety": {
+            "allow_navigation": safety.get("allow_navigation"),
+            "reason": safety.get("reason"),
+            "recommended_mode": safety.get("recommended_mode"),
+        }
+        if isinstance(safety, dict)
+        else None,
+        "navigation": {
+            "state": navigation.get("state"),
+            "target_node": navigation.get("target_node"),
+            "distance_to_goal_m": navigation.get("distance_to_goal_m"),
+            "failure_reason": navigation.get("failure_reason"),
+            "is_arrived": navigation.get("is_arrived"),
+        }
+        if isinstance(navigation, dict)
+        else None,
+        "local_obstacle": {
+            "front_clearance_m": obstacle.get("front_clearance_m"),
+            "left_clearance_m": obstacle.get("left_clearance_m"),
+            "right_clearance_m": obstacle.get("right_clearance_m"),
+            "recommended_action": obstacle.get("recommended_action"),
+        }
+        if isinstance(obstacle, dict)
+        else None,
+    }
+
+
+def format_semantic_world(snapshot: dict[str, Any]) -> str:
+    if not snapshot.get("available"):
+        return f"世界状态不可用：{snapshot.get('reason', 'unknown')}"
+    pose = snapshot.get("pose") if isinstance(snapshot.get("pose"), dict) else {}
+    nearest = snapshot.get("nearest_node") if isinstance(snapshot.get("nearest_node"), dict) else {}
+    loc = snapshot.get("localization") if isinstance(snapshot.get("localization"), dict) else {}
+    health = snapshot.get("slam_health") if isinstance(snapshot.get("slam_health"), dict) else {}
+    safety = snapshot.get("safety") if isinstance(snapshot.get("safety"), dict) else {}
+    nav = snapshot.get("navigation") if isinstance(snapshot.get("navigation"), dict) else {}
+    obstacle = snapshot.get("local_obstacle") if isinstance(snapshot.get("local_obstacle"), dict) else {}
+    allow_text = "允许导航" if safety.get("allow_navigation") is True else "禁止导航"
+    target = nav.get("target_node") or "无"
+    nearest_text = "未知"
+    if nearest:
+        nearest_text = f"{nearest.get('name') or nearest.get('node_id')}({fmt_m(nearest.get('distance_m'))})"
+    return (
+        f"定位:{loc.get('status', '未知')} conf={fmt_num(loc.get('confidence'))} | "
+        f"SLAM:{health.get('status', '未知')} | "
+        f"位置:x={fmt_num(pose.get('x'))}, y={fmt_num(pose.get('y'))}, yaw={fmt_num(pose.get('yaw'))} | "
+        f"最近点:{nearest_text} | "
+        f"导航:{nav.get('state', '未知')} 目标:{target} 距目标:{fmt_m(nav.get('distance_to_goal_m'))} 到达:{nav.get('is_arrived')} | "
+        f"前方净空:{fmt_m(obstacle.get('front_clearance_m'))} 建议:{obstacle.get('recommended_action', '未知')} | "
+        f"安全:{allow_text}({safety.get('reason', '未知')})"
+    )
+
+
+def format_agent_summary(summary: dict[str, Any]) -> str:
+    lines = []
+    command = summary.get("command")
+    if command:
+        lines.append(f"用户指令：{command}")
+    if summary.get("resolved_target") or summary.get("target_name"):
+        lines.append(f"目标匹配：{summary.get('target_name') or summary.get('resolved_target')} ({summary.get('resolved_target') or summary.get('target_node')})")
+    if summary.get("preflight_allowed") is not None:
+        state = "通过" if summary.get("preflight_allowed") else "未通过"
+        lines.append(f"安全检查：{state}，原因：{summary.get('preflight_reason') or '无'}")
+    if summary.get("plan_mode") or summary.get("planner_route"):
+        lines.append(f"规划路径：{summary.get('planner_route') or '未知'} / {summary.get('plan_mode') or '未知'}")
+    if summary.get("task_queue_targets"):
+        lines.append(f"任务队列：{summary.get('task_queue_targets')}，完成：{summary.get('task_queue_completed')}")
+    if summary.get("execute"):
+        result = "已执行" if summary.get("executed") else "未执行"
+        lines.append(f"执行状态：{result}，到点：{summary.get('arrived')}，自动暂停：{summary.get('paused')}，最终距离：{fmt_m(summary.get('final_distance_m'))}")
+    else:
+        lines.append("执行状态：干跑/未下发运动")
+    if summary.get("blocked_reason"):
+        lines.append(f"阻塞原因：{summary.get('blocked_reason')}")
+    if summary.get("user_reply"):
+        lines.append(f"对用户反馈：{summary.get('user_reply')}")
+    logs = summary.get("logs")
+    if isinstance(logs, dict):
+        lines.append(f"日志：JSON={logs.get('json')} CSV={logs.get('csv')}")
+    return "\n".join(lines) if lines else "没有可显示的中文摘要。"
+
+
+def format_human_output(args: argparse.Namespace, output: dict[str, Any], logs: dict[str, str] | None = None) -> str:
+    summary = summarize_agent_output(output)
+    if logs:
+        summary["logs"] = logs
+    text = format_agent_summary(summary)
+    latest_state: dict[str, Any] | None = None
+    for step in output.get("steps", []):
+        if not isinstance(step, dict):
+            continue
+        result = step.get("result")
+        if isinstance(result, dict) and isinstance(result.get("world_state"), dict):
+            latest_state = result
+        if isinstance(result, dict) and isinstance(result.get("result"), dict) and isinstance(result["result"].get("world_state"), dict):
+            latest_state = result["result"]
+    if latest_state:
+        text = f"{text}\n当前世界：{format_semantic_world(semantic_world_snapshot(args, latest_state))}"
+    return text
+
+
 def auto_pause_on_arrival(args: argparse.Namespace, slam_command: dict[str, Any] | None) -> dict[str, Any]:
     if not slam_command or slam_command.get("action") != "navigate_to_pose":
         return {"skipped": True, "reason": "no navigation command"}
@@ -414,6 +593,24 @@ def monitor(args: argparse.Namespace) -> list[dict[str, Any]]:
     return samples
 
 
+def watch_world(args: argparse.Namespace) -> int:
+    deadline = time.time() + args.monitor_s if args.monitor_s > 0 else None
+    index = 0
+    try:
+        while deadline is None or time.time() < deadline:
+            index += 1
+            try:
+                state = get_world_state(args)
+                snapshot = semantic_world_snapshot(args, state)
+                print(f"[{time.strftime('%H:%M:%S')}] {format_semantic_world(snapshot)}", flush=True)
+            except Exception as exc:  # pragma: no cover - field robustness
+                print(f"[{time.strftime('%H:%M:%S')}] 世界状态读取失败：{exc}", flush=True)
+            time.sleep(max(0.2, args.monitor_interval_s))
+    except KeyboardInterrupt:
+        print("已停止实时世界状态监控。", flush=True)
+    return 0
+
+
 def speak(args: argparse.Namespace, text: str) -> dict[str, Any]:
     volume = max(0, min(100, int(args.voice_volume_percent)))
     volume_cmd = subprocess.run(
@@ -458,6 +655,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-auto-start-slam", action="store_true", help="For --go, do not auto-start SLAM when health is not ready.")
     parser.add_argument("--no-auto-relocate", action="store_true", help="For --go, do not auto-relocate from --current-node.")
     parser.add_argument("--brief", action="store_true", help="Print a compact execution summary instead of the full trace.")
+    parser.add_argument("--human", action="store_true", help="Print a Chinese operator summary instead of JSON.")
     parser.add_argument("--full-output", action="store_true", help="For --go, print the full trace instead of the default compact summary.")
     parser.add_argument("--log-dir", default="", help="Write full JSON and CSV run logs to this directory. --go defaults to artifacts/robot_runs.")
     parser.add_argument("--command", default="", help="Natural-language command. Prefer --command-b64 over SSH if encoding is unstable.")
@@ -485,6 +683,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
     parser.add_argument("--relocate", action="store_true", help="Start relocation before planning/execution.")
     parser.add_argument("--status", action="store_true", help="Print gateway world_state.")
+    parser.add_argument("--watch-world", action="store_true", help="Stream live Chinese semantic world-state lines. Use --monitor-s to stop after N seconds; default runs until Ctrl+C.")
     parser.add_argument("--pause", action="store_true", help="Pause current navigation task.")
     parser.add_argument("--calibrate-node", default="", help="Update this registry node pose from the current live robot pose.")
     parser.add_argument("--monitor-s", type=float, default=0.0, help="Monitor world_state for N seconds after command.")
@@ -511,6 +710,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.watch_world:
+        return watch_world(args)
+
     if args.go or args.go_b64:
         args.execute = not args.dry_run
         args.no_live_snapshot = True
@@ -583,7 +785,10 @@ def main(argv: list[str] | None = None) -> int:
             output["steps"].append({"step": "go_status_after_relocate", "allowed": allowed, "reason": reason, "result": state})
         if args.execute and not allowed:
             output["steps"].append({"step": "go_blocked", "reason": reason})
-            print_json(output, pretty=args.pretty)
+            if args.human:
+                print(format_human_output(args, output))
+            else:
+                print_json(output, pretty=args.pretty)
             return 2
 
     if args.start_slam:
@@ -626,7 +831,9 @@ def main(argv: list[str] | None = None) -> int:
     if (args.go or args.go_b64) and not log_dir:
         log_dir = str(DEFAULT_LOG_DIR)
     logs = write_execution_log(output, log_dir) if log_dir else None
-    if args.brief or ((args.go or args.go_b64) and not args.full_output):
+    if args.human:
+        print(format_human_output(args, output, logs))
+    elif args.brief or ((args.go or args.go_b64) and not args.full_output):
         summary = summarize_agent_output(output)
         if logs:
             summary["logs"] = logs
