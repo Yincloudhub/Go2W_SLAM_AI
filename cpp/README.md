@@ -41,6 +41,8 @@ Build also creates `go2w_operator_panel`, a C++ operator-facing terminal panel.
 It is the first step toward a Qt/RViz2-style UI:
 
 - reads `world_state` through `slam_llm_command_client`;
+- uses a C++ `GatewayClient` with fork/pipe instead of shell temp files for
+  gateway reads, navigation commands, and pause commands;
 - prints Chinese semantic status instead of raw JSON;
 - supports weak-link compact status with `/weak on`;
 - accepts Chinese LLM commands and forwards them through the UTF-8 base64

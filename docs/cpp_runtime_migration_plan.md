@@ -39,6 +39,10 @@ Qt/RViz2 UI 或 C++ TUI
   - C++ 前置检查 `worldAllowsNavigation`
   - C++ 到点监控和自动 `pause_navigation`
   - 未匹配到拓扑点时才 fallback 到 Python/LLM
+- `cpp/GatewayClient`
+  - C++ 通过 fork/pipe 直接连接 `slam_llm_command_client`
+  - 状态读取、导航下发和暂停不再通过 shell 临时文件
+  - 保留超时控制和 stderr/stdout 捕获
 
 ## 现场验证
 
@@ -68,11 +72,10 @@ printf 'yin_siyuan_station\n/quit\n' | ./build/go2w_operator_panel --repo-root ~
 
 ## 下一步迁移优先级
 
-1. `GatewayClient` 正式 C++ 封装：替换当前通过 shell 调 `slam_llm_command_client` 的方式。
-2. `QueueExecutor` 完整化：拍照命令、语音反馈、队列事件日志、失败暂停。
-3. `SafetyGate` 完整化：低电量、弱网、已在目标附近、目标不存在、门关闭/人群风险。
-4. Qt Widget/RViz2 Panel：把当前 TUI 的状态和输入搬到图形界面。
-5. LLM HTTP client：C++ 调本地 llama.cpp server，替代 Python planner fallback。
+1. `QueueExecutor` 完整化：拍照命令、语音反馈、队列事件日志、失败暂停。
+2. `SafetyGate` 完整化：低电量、弱网、已在目标附近、目标不存在、门关闭/人群风险。
+3. Qt Widget/RViz2 Panel：把当前 TUI 的状态和输入搬到图形界面。
+4. LLM HTTP client：C++ 调本地 llama.cpp server，替代 Python planner fallback。
 
 ## 不建议迁移的内容
 

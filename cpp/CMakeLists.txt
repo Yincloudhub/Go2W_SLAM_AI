@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(go2w_plan_executor_core
+    src/gateway_client.cpp
     src/plan_executor.cpp
     src/operator_panel.cpp
     src/semantic_router.cpp

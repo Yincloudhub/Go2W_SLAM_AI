@@ -227,16 +227,8 @@ nlohmann::json OperatorPanel::getWorldState() const
 
 nlohmann::json OperatorPanel::sendGatewayCommand(const nlohmann::json& command_json) const
 {
-    const std::string command = shellQuote(config_.gateway_client) + " " + shellQuote(config_.network_interface);
-    const CommandResult result = runShellCommandWithInput(command, command_json.dump() + "\n");
-    const auto objects = extractJsonObjects(result.stdout_text);
-    for (const auto& object : objects) {
-        if (object.contains("world_state")) return object;
-    }
-    for (const auto& object : objects) {
-        if (object.contains("accepted")) return object;
-    }
-    throw std::runtime_error("gateway did not return JSON: " + result.stderr_text);
+    GatewayClient client({config_.gateway_client, config_.network_interface, config_.gateway_timeout_s});
+    return client.send(command_json).response;
 }
 
 std::string OperatorPanel::nearestNodeText(const nlohmann::json& result) const

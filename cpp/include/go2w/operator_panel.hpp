@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "go2w/gateway_client.hpp"
 #include "go2w/semantic_router.hpp"
 
 namespace go2w {
@@ -21,6 +22,7 @@ struct OperatorPanelConfig {
     double arrival_distance_m = 0.7;
     double arrival_monitor_s = 75.0;
     double gateway_startup_wait_s = 1.0;
+    int gateway_timeout_s = 30;
     bool execute_enabled = false;
     bool weak_link_mode = false;
 };

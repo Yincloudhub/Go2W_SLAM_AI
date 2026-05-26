@@ -13,6 +13,7 @@ void usage(const char* argv0)
               << "  --repo-root PATH             Repo root, default ..\n"
               << "  --gateway-client PATH         slam_llm_command_client path\n"
               << "  --interface IFACE             Network interface, default eth0\n"
+              << "  --gateway-timeout-s SECONDS   Gateway command timeout, default 30\n"
               << "  --python PATH                 Python executable, default python3\n"
               << "  --current-node NODE_ID        Known current anchor node\n"
               << "  --execute                     Allow real robot execution\n"
@@ -35,6 +36,8 @@ int main(int argc, char** argv)
             config.gateway_client = argv[++i];
         } else if (arg == "--interface" && i + 1 < argc) {
             config.network_interface = argv[++i];
+        } else if (arg == "--gateway-timeout-s" && i + 1 < argc) {
+            config.gateway_timeout_s = std::atoi(argv[++i]);
         } else if (arg == "--python" && i + 1 < argc) {
             config.python = argv[++i];
         } else if (arg == "--current-node" && i + 1 < argc) {
