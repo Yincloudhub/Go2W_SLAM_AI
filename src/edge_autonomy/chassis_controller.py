@@ -199,7 +199,12 @@ class ChassisController:
         if not isinstance(pose, dict):
             return {"accepted": False, "action": "relocate", "reason": f"node_id {node_id!r} has no pose"}
         return run_gateway_command(
-            {"action": "relocate", "map_path": self.map_path(map_path_fallback), "init_pose": pose},
+            {
+                "action": "relocate",
+                "map_path": self.map_path(map_path_fallback),
+                "initial_pose": pose,
+                "init_pose": pose,
+            },
             self.gateway,
         )
 

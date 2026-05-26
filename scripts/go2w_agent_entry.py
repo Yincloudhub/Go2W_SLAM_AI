@@ -172,7 +172,12 @@ def relocate(args: argparse.Namespace) -> dict[str, Any]:
         "q_w": 1.0,
     }
     return run_gateway_command(
-        {"action": "relocate", "map_path": args.map_path, "init_pose": init_pose},
+        {
+            "action": "relocate",
+            "map_path": args.map_path,
+            "initial_pose": init_pose,
+            "init_pose": init_pose,
+        },
         GatewayConfig(
             client_path=args.gateway_client,
             network_interface=args.network_interface,
