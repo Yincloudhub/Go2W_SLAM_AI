@@ -85,6 +85,14 @@ std::string nowTime()
     return buf;
 }
 
+std::string trimAscii(const std::string& value)
+{
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return "";
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1);
+}
+
 }  // namespace
 
 std::string shellQuote(const std::string& value)
@@ -359,7 +367,16 @@ CommandResult OperatorPanel::fallbackPythonCommand(const std::string& text) cons
         << " --arrival-monitor-s " << config_.arrival_monitor_s
         << " --gateway-startup-wait-s " << config_.gateway_startup_wait_s;
     if (config_.execute_enabled) cmd << " --execute";
+    if (!config_.execute_enabled) cmd << " --dry-run";
     if (!config_.current_node.empty()) cmd << " --current-node " << shellQuote(config_.current_node);
+    return runShellCommandWithInput(cmd.str(), "");
+}
+
+CommandResult OperatorPanel::ensureSlam() const
+{
+    std::ostringstream cmd;
+    cmd << "cd " << shellQuote(config_.repo_root)
+        << " && bash " << shellQuote(config_.start_slam_script);
     return runShellCommandWithInput(cmd.str(), "");
 }
 
@@ -409,6 +426,7 @@ void OperatorPanel::printHelp() const
 {
     std::cout << "命令:\n"
               << "  /status              刷新一次世界状态\n"
+              << "  /start-slam          启动/确认雷达 driver 和 SLAM\n"
               << "  /watch [秒]          连续显示世界状态；0 表示一直显示\n"
               << "  /weak on|off         切换弱网摘要显示\n"
               << "  /execute on|off      是否允许真实下发运动；默认 off\n"
@@ -433,15 +451,29 @@ void OperatorPanel::setExecute(bool enabled)
 int OperatorPanel::runInteractive()
 {
     std::cout << "GO2W operator panel. 输入 /help 查看命令。\n";
+    if (config_.ensure_slam_on_start) {
+        std::cout << "正在启动/确认 SLAM 与雷达 driver...\n";
+        const auto result = ensureSlam();
+        if (!result.stdout_text.empty()) std::cout << result.stdout_text;
+        if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
+        std::cout << "start_slam_exit_code=" << result.exit_code << "\n";
+    }
     printStatusOnce();
     std::string line;
     while (true) {
         std::cout << (config_.execute_enabled ? "go2w[EXEC]> " : "go2w[dry]> ") << std::flush;
         if (!std::getline(std::cin, line)) break;
+        line = trimAscii(line);
         if (line.empty() || line == "/status") {
             printStatusOnce();
         } else if (line == "/help") {
             printHelp();
+        } else if (line == "/start-slam") {
+            const auto result = ensureSlam();
+            if (!result.stdout_text.empty()) std::cout << result.stdout_text;
+            if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
+            std::cout << "start_slam_exit_code=" << result.exit_code << "\n";
+            printStatusOnce();
         } else if (line == "/quit" || line == "/exit") {
             break;
         } else if (line.rfind("/watch", 0) == 0) {

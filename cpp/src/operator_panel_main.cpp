@@ -12,6 +12,8 @@ void usage(const char* argv0)
               << "Options:\n"
               << "  --repo-root PATH             Repo root, default ..\n"
               << "  --gateway-client PATH         slam_llm_command_client path\n"
+              << "  --start-slam-script PATH      SLAM startup script relative to repo root or absolute\n"
+              << "  --ensure-slam-on-start        Start/check LiDAR driver and SLAM before opening panel\n"
               << "  --interface IFACE             Network interface, default eth0\n"
               << "  --gateway-timeout-s SECONDS   Gateway command timeout, default 30\n"
               << "  --slam-poll-interval-s SEC    World-state polling interval during execution\n"
@@ -42,6 +44,10 @@ int main(int argc, char** argv)
             config.repo_root = argv[++i];
         } else if (arg == "--gateway-client" && i + 1 < argc) {
             config.gateway_client = argv[++i];
+        } else if (arg == "--start-slam-script" && i + 1 < argc) {
+            config.start_slam_script = argv[++i];
+        } else if (arg == "--ensure-slam-on-start") {
+            config.ensure_slam_on_start = true;
         } else if (arg == "--interface" && i + 1 < argc) {
             config.network_interface = argv[++i];
         } else if (arg == "--gateway-timeout-s" && i + 1 < argc) {

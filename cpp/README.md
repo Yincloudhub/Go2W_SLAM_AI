@@ -61,6 +61,19 @@ cmake --build build -j
 ./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --current-node yin_siyuan_station
 ```
 
+One-command robot-side launch, including LiDAR driver and SLAM startup/check:
+
+```bash
+cd ~/go2w_slam_agent
+./scripts/run_go2w_operator_ui.sh
+```
+
+The current UI is a robot-side terminal panel. Open it from MobaXterm by SSHing
+to the robot/NX and running the launcher above; X11 forwarding is not required.
+A later Qt/RViz2 panel can reuse the same operator-core boundary, but the safer
+field path today is to keep gateway, LiDAR, SLAM, and the terminal UI on the
+robot/NX.
+
 Watch-only mode:
 
 ```bash

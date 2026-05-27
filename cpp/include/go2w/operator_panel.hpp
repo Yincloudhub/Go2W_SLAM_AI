@@ -16,6 +16,7 @@ struct OperatorPanelConfig {
     std::string gateway_client = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client";
     std::string network_interface = "eth0";
     std::string python = "python3";
+    std::string start_slam_script = "scripts/start_go2w_slam_stack.sh";
     std::string current_node = "";
     double nav_speed_mps = 0.25;
     int nav_mode = 1;
@@ -33,6 +34,7 @@ struct OperatorPanelConfig {
     int gateway_timeout_s = 30;
     bool execute_enabled = false;
     bool weak_link_mode = false;
+    bool ensure_slam_on_start = false;
 };
 
 struct CommandResult {
@@ -49,6 +51,7 @@ public:
     void printStatusOnce() const;
     void watchWorld(int seconds) const;
     CommandResult submitUserCommand(const std::string& text) const;
+    CommandResult ensureSlam() const;
 
 private:
     nlohmann::json sendGatewayCommand(const nlohmann::json& command) const;
