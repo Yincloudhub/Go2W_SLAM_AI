@@ -77,6 +77,57 @@ void pushFeedback(nlohmann::json* event, const nlohmann::json& message)
     (*event)["operator_feedback"].push_back(message);
 }
 
+nlohmann::json llmFeedbackRequest(
+    const std::string& phase,
+    const std::string& target_node,
+    const std::string& target_name,
+    double distance_m,
+    const std::string& reason = "")
+{
+    nlohmann::json request = {
+        {"phase", phase},
+        {"target_node", target_node},
+        {"target_name", target_name},
+        {"reason", reason},
+        {"instruction", "用一句自然中文向操作者说明当前正在前往哪里、剩余大致距离、是否到达或是否需要人工干预。"},
+    };
+    if (distance_m >= 0.0) request["distance_to_target_m"] = distance_m;
+    return request;
+}
+
+std::string templateLlmFeedbackText(const nlohmann::json& request)
+{
+    const std::string phase = request.value("phase", "progress");
+    const std::string name = request.value("target_name", request.value("target_node", "目标点"));
+    if (phase == "queued") return "已将" + name + "加入任务队列，等待执行。";
+    if (phase == "arrived") return "已到达" + name + "，导航已暂停。";
+    if (phase == "blocked") return "前往" + name + "已被安全门阻断，请人工确认。";
+    if (phase == "timeout") return "还未确认到达" + name + "，已停止后续队列，请人工确认。";
+    if (request.contains("distance_to_target_m") && request["distance_to_target_m"].is_number()) {
+        std::ostringstream msg;
+        msg << "正在前往" << name << "，距离约" << std::fixed << std::setprecision(2)
+            << request["distance_to_target_m"].get<double>() << "米。";
+        return msg.str();
+    }
+    return "正在前往" + name + "。";
+}
+
+void pushLlmFeedback(nlohmann::json* event, const nlohmann::json& request)
+{
+    if (!event) return;
+    (*event)["llm_feedback_requests"].push_back(request);
+    nlohmann::json result = {
+        {"phase", request.value("phase", "")},
+        {"target_node", request.value("target_node", "")},
+        {"target_name", request.value("target_name", "")},
+        {"source", "template"},
+        {"llm_surface", true},
+        {"text", templateLlmFeedbackText(request)},
+    };
+    if (request.contains("distance_to_target_m")) result["distance_to_target_m"] = request["distance_to_target_m"];
+    (*event)["llm_feedback_results"].push_back(result);
+}
+
 std::map<std::string, nlohmann::json> commandsByTarget(const SemanticRoute& route)
 {
     std::map<std::string, nlohmann::json> commands;
@@ -146,6 +197,7 @@ bool QueueExecutor::waitForArrival(
                         };
                     }
                     pushFeedback(event, feedbackMessage("blocked", "error", "运行中安全门阻断，已停止等待：" + runtime_safety.reason, target_node, name, distance));
+                    pushLlmFeedback(event, llmFeedbackRequest("blocked", target_node, name, distance, runtime_safety.reason));
                     return false;
                 }
             }
@@ -163,15 +215,7 @@ bool QueueExecutor::waitForArrival(
                 last_feedback = now;
             }
             if (now - last_llm_feedback >= std::chrono::duration_cast<std::chrono::steady_clock::duration>(std::chrono::duration<double>(positiveOr(config_.feedback_policy.llm_feedback_interval_s, 8.0)))) {
-                if (event) {
-                    (*event)["llm_feedback_requests"].push_back({
-                        {"phase", "progress"},
-                        {"target_node", target_node},
-                        {"target_name", name},
-                        {"distance_to_target_m", distance},
-                        {"instruction", "用一句自然中文向操作者说明当前正在前往哪里、剩余大致距离和是否需要干预。"},
-                    });
-                }
+                pushLlmFeedback(event, llmFeedbackRequest("progress", target_node, name, distance));
                 last_llm_feedback = now;
             }
             if (distance >= 0.0 && distance <= config_.arrival_distance_m) {
@@ -181,6 +225,7 @@ bool QueueExecutor::waitForArrival(
                     if (event) (*event)["pause_result"] = pause_result;
                     log << "  已到达阈值，已发送暂停 accepted=" << (pause_result.value("accepted", false) ? "true" : "false") << "\n";
                     pushFeedback(event, feedbackMessage("arrived", "ok", "已到达" + name + "，导航已暂停。", target_node, name, distance));
+                    pushLlmFeedback(event, llmFeedbackRequest("arrived", target_node, name, distance, "arrived and paused"));
                     return true;
                 }
             } else {
@@ -194,12 +239,14 @@ bool QueueExecutor::waitForArrival(
                 const std::string reason = "gateway feedback failed repeatedly: " + std::string(exc.what());
                 if (event) (*event)["blocked_reason"] = reason;
                 pushFeedback(event, feedbackMessage("blocked", "error", "连续读取 SLAM 状态失败，停止等待并请求人工确认。", target_node, name));
+                pushLlmFeedback(event, llmFeedbackRequest("blocked", target_node, name, -1.0, reason));
                 return false;
             }
         }
         std::this_thread::sleep_for(poll_interval);
     }
     pushFeedback(event, feedbackMessage("timeout", "warning", "未在限定时间内确认到达" + name + "，停止后续队列。", target_node, name));
+    pushLlmFeedback(event, llmFeedbackRequest("timeout", target_node, name, -1.0, "arrival threshold not reached before timeout"));
     return false;
 }
 
@@ -301,6 +348,7 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
             event["status"] = "dry_run";
             event["slam_command"] = command;
             pushFeedback(&event, feedbackMessage("queued", "info", "干跑：将前往" + displayName(target_node, target_name) + "，不会下发运动。", target_node, displayName(target_node, target_name)));
+            pushLlmFeedback(&event, llmFeedbackRequest("queued", target_node, displayName(target_node, target_name), -1.0, "dry run"));
             execution["events"].push_back(event);
             continue;
         }
@@ -311,6 +359,8 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
         if (!safety.allowed) {
             event["status"] = "blocked";
             event["blocked_reason"] = safety.reason;
+            pushFeedback(&event, feedbackMessage("blocked", "error", "安全检查未通过：" + safety.reason, target_node, displayName(target_node, target_name)));
+            pushLlmFeedback(&event, llmFeedbackRequest("blocked", target_node, displayName(target_node, target_name), -1.0, safety.reason));
             execution["events"].push_back(event);
             execution["failed_step"] = step_id;
             execution["blocked_reason"] = safety.reason;

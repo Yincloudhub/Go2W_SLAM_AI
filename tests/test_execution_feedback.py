@@ -18,7 +18,10 @@ class ExecutionFeedbackTests(unittest.TestCase):
                                         "operator_feedback": [
                                             {"text": "正在前往701门口"},
                                             {"text": "已到达701门口，导航已暂停。"},
-                                        ]
+                                        ],
+                                        "llm_feedback_results": [
+                                            {"text": "已到达701门口，任务完成。", "source": "local_llm"}
+                                        ],
                                     }
                                 ],
                             },
@@ -34,6 +37,9 @@ class ExecutionFeedbackTests(unittest.TestCase):
 
         self.assertEqual(summary["operator_feedback_count"], 2)
         self.assertEqual(summary["operator_feedback_latest"], "已到达701门口，导航已暂停。")
+        self.assertEqual(summary["llm_feedback_count"], 1)
+        self.assertEqual(summary["llm_feedback_latest"], "已到达701门口，任务完成。")
+        self.assertEqual(summary["llm_feedback_source"], "local_llm")
 
 
 if __name__ == "__main__":

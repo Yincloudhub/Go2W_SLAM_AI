@@ -46,6 +46,11 @@ DEFAULT_LOCAL_COMMAND = (
     f"MODEL_PATH={DEFAULT_MODEL} {DEFAULT_ASK_SCRIPT} "
     "--ctx 4096 --max-tokens {max_tokens} --system {system} {prompt}"
 )
+FEEDBACK_SYSTEM_PROMPT = (
+    "你是 Unitree GO2W 机器狗的操作面板反馈助手。"
+    "只输出一句自然中文，面向现场操作者，说明当前去哪、是否到达、是否需要人工介入。"
+    "不要输出 JSON、Markdown、解释或多余前后缀。"
+)
 
 
 def run_gateway_command(
@@ -270,6 +275,130 @@ def operator_feedback_message(
     return message
 
 
+def build_llm_feedback_request(
+    phase: str,
+    *,
+    target_node: str,
+    target_name: str,
+    distance_m: float | None = None,
+    reason: str = "",
+) -> dict[str, Any]:
+    return {
+        "phase": phase,
+        "target_node": target_node,
+        "target_name": target_name,
+        "distance_to_target_m": distance_m,
+        "reason": reason,
+        "instruction": "用一句自然中文向操作者说明当前正在前往哪里、剩余大致距离、是否到达或是否需要人工干预。",
+    }
+
+
+def template_llm_feedback_text(request: dict[str, Any]) -> str:
+    phase = str(request.get("phase") or "progress")
+    target_name = str(request.get("target_name") or request.get("target_node") or "目标点")
+    reason = str(request.get("reason") or "")
+    distance = request.get("distance_to_target_m")
+    if phase == "queued":
+        return f"已将{target_name}加入任务队列，等待执行。"
+    if phase == "arrived":
+        return f"已到达{target_name}，导航已暂停。"
+    if phase == "blocked":
+        suffix = f"：{reason}" if reason else "，请人工确认。"
+        return f"前往{target_name}已被安全门阻断{suffix}"
+    if phase == "timeout":
+        return f"还未确认到达{target_name}，已停止后续队列，请人工确认。"
+    try:
+        return f"正在前往{target_name}，距离约{float(distance):.2f}米。"
+    except (TypeError, ValueError):
+        return f"正在前往{target_name}。"
+
+
+def clean_llm_feedback_text(raw_text: str, fallback: str) -> str:
+    text = raw_text.strip().strip("`").strip()
+    if not text:
+        return fallback
+    if text.startswith('"') and text.endswith('"') and len(text) >= 2:
+        text = text[1:-1].strip()
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    text = first_line or text
+    return text[:120] if len(text) > 120 else text
+
+
+def generate_llm_feedback_result(
+    request: dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    backend: LocalCommandBackend | None = None,
+) -> dict[str, Any] | None:
+    mode = str(getattr(args, "llm_feedback_mode", "template"))
+    if mode == "off":
+        return None
+
+    fallback = template_llm_feedback_text(request)
+    base = {
+        "phase": request.get("phase"),
+        "target_node": request.get("target_node"),
+        "target_name": request.get("target_name"),
+        "distance_to_target_m": request.get("distance_to_target_m"),
+        "llm_surface": True,
+    }
+    if mode != "live":
+        return {**base, "source": "template", "text": fallback}
+
+    prompt = (
+        "请根据这条机器人运行反馈请求，输出一句给现场操作者看的中文短句。\n"
+        f"{json.dumps(request, ensure_ascii=False, separators=(',', ':'))}"
+    )
+    try:
+        llm_backend = backend or LocalCommandBackend(args.local_command)
+        raw_answer = llm_backend.generate(
+            prompt,
+            system_prompt=getattr(args, "llm_feedback_system", FEEDBACK_SYSTEM_PROMPT),
+            max_tokens=int(getattr(args, "llm_feedback_max_tokens", 48)),
+            timeout_s=int(getattr(args, "llm_feedback_timeout_s", 6)),
+        )
+        return {**base, "source": "local_llm", "text": clean_llm_feedback_text(raw_answer, fallback), "raw_answer": raw_answer}
+    except Exception as exc:  # pragma: no cover - field robustness
+        return {**base, "source": "template_fallback", "text": fallback, "error": str(exc)}
+
+
+def append_llm_feedback(
+    *,
+    phase: str,
+    target_node: str,
+    target_name: str,
+    distance_m: float | None,
+    reason: str,
+    args: argparse.Namespace,
+    requests: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    operator_feedback: list[dict[str, Any]],
+) -> None:
+    request = build_llm_feedback_request(
+        phase,
+        target_node=target_node,
+        target_name=target_name,
+        distance_m=distance_m,
+        reason=reason,
+    )
+    result = generate_llm_feedback_result(request, args)
+    if result is None:
+        return
+    requests.append(request)
+    results.append(result)
+    message = operator_feedback_message(
+        "llm_feedback",
+        str(result.get("text") or ""),
+        target_node=target_node,
+        target_name=target_name,
+        severity="info" if phase not in {"blocked", "timeout"} else "warning",
+        distance_m=distance_m,
+    )
+    message["source"] = result.get("source")
+    message["llm_request_index"] = len(requests) - 1
+    operator_feedback.append(message)
+
+
 def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, target_name: str = "") -> dict[str, Any]:
     target_pose = command.get("target_pose")
     if not isinstance(target_pose, dict):
@@ -280,6 +409,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
     samples = []
     operator_feedback: list[dict[str, Any]] = []
     llm_feedback_requests: list[dict[str, Any]] = []
+    llm_feedback_results: list[dict[str, Any]] = []
     entered_count = 0
     consecutive_errors = 0
     max_errors = max(1, int(getattr(args, "gateway_error_limit", 3)))
@@ -305,23 +435,36 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             consecutive_errors += 1
             samples.append({"error": str(exc), "consecutive_errors": consecutive_errors})
             if consecutive_errors >= max_errors:
+                reason = f"gateway feedback failed repeatedly: {exc}"
+                operator_feedback.append(
+                    operator_feedback_message(
+                        "blocked",
+                        "连续读取 SLAM 状态失败，停止等待并请求人工确认。",
+                        target_node=target_node,
+                        target_name=target_label,
+                        severity="error",
+                    )
+                )
+                append_llm_feedback(
+                    phase="blocked",
+                    target_node=target_node,
+                    target_name=target_label,
+                    distance_m=None,
+                    reason=reason,
+                    args=args,
+                    requests=llm_feedback_requests,
+                    results=llm_feedback_results,
+                    operator_feedback=operator_feedback,
+                )
                 return {
                     "arrived": False,
                     "paused": False,
                     "threshold_m": args.arrival_distance_m,
                     "samples": samples,
-                    "operator_feedback": operator_feedback
-                    + [
-                        operator_feedback_message(
-                            "blocked",
-                            "连续读取 SLAM 状态失败，停止等待并请求人工确认。",
-                            target_node=target_node,
-                            target_name=target_label,
-                            severity="error",
-                        )
-                    ],
+                    "operator_feedback": operator_feedback,
                     "llm_feedback_requests": llm_feedback_requests,
-                    "reason": f"gateway feedback failed repeatedly: {exc}",
+                    "llm_feedback_results": llm_feedback_results,
+                    "reason": reason,
                 }
             time.sleep(poll_interval)
             continue
@@ -340,6 +483,17 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     distance_m=distance_m,
                 )
             )
+            append_llm_feedback(
+                phase="blocked",
+                target_node=target_node,
+                target_name=target_label,
+                distance_m=distance_m,
+                reason=reason,
+                args=args,
+                requests=llm_feedback_requests,
+                results=llm_feedback_results,
+                operator_feedback=operator_feedback,
+            )
             return {
                 "arrived": False,
                 "paused": False,
@@ -347,6 +501,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                 "samples": samples,
                 "operator_feedback": operator_feedback,
                 "llm_feedback_requests": llm_feedback_requests,
+                "llm_feedback_results": llm_feedback_results,
                 "runtime_safety": {"allowed": False, "reason": reason},
                 "reason": reason,
             }
@@ -372,14 +527,16 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             )
             last_feedback = now
         if now - last_llm_feedback >= llm_feedback_interval:
-            llm_feedback_requests.append(
-                {
-                    "phase": "progress",
-                    "target_node": target_node,
-                    "target_name": target_label,
-                    "distance_to_target_m": distance_m,
-                    "instruction": "用一句自然中文向操作者说明当前正在前往哪里、剩余大致距离和是否需要干预。",
-                }
+            append_llm_feedback(
+                phase="progress",
+                target_node=target_node,
+                target_name=target_label,
+                distance_m=distance_m,
+                reason="",
+                args=args,
+                requests=llm_feedback_requests,
+                results=llm_feedback_results,
+                operator_feedback=operator_feedback,
             )
             last_llm_feedback = now
         if distance_m is not None and distance_m <= args.arrival_distance_m:
@@ -392,46 +549,71 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     timeout_s=args.timeout_s,
                     startup_wait_s=args.gateway_startup_wait_s,
                 )
+                operator_feedback.append(
+                    operator_feedback_message(
+                        "arrived",
+                        f"已到达{target_label}，导航已暂停。",
+                        target_node=target_node,
+                        target_name=target_label,
+                        severity="ok",
+                        distance_m=distance_m,
+                    )
+                )
+                append_llm_feedback(
+                    phase="arrived",
+                    target_node=target_node,
+                    target_name=target_label,
+                    distance_m=distance_m,
+                    reason="arrived and paused",
+                    args=args,
+                    requests=llm_feedback_requests,
+                    results=llm_feedback_results,
+                    operator_feedback=operator_feedback,
+                )
                 return {
                     "arrived": True,
                     "paused": bool(pause_result.get("accepted")),
                     "threshold_m": args.arrival_distance_m,
                     "samples": samples,
-                    "operator_feedback": operator_feedback
-                    + [
-                        operator_feedback_message(
-                            "arrived",
-                            f"已到达{target_label}，导航已暂停。",
-                            target_node=target_node,
-                            target_name=target_label,
-                            severity="ok",
-                            distance_m=distance_m,
-                        )
-                    ],
+                    "operator_feedback": operator_feedback,
                     "llm_feedback_requests": llm_feedback_requests,
+                    "llm_feedback_results": llm_feedback_results,
                     "pause_result": pause_result,
                 }
         else:
             entered_count = 0
         time.sleep(poll_interval)
 
+    timeout_reason = "arrival threshold not reached before timeout"
+    operator_feedback.append(
+        operator_feedback_message(
+            "timeout",
+            f"未在限定时间内确认到达{target_label}，停止后续队列。",
+            target_node=target_node,
+            target_name=target_label,
+            severity="warning",
+        )
+    )
+    append_llm_feedback(
+        phase="timeout",
+        target_node=target_node,
+        target_name=target_label,
+        distance_m=None,
+        reason=timeout_reason,
+        args=args,
+        requests=llm_feedback_requests,
+        results=llm_feedback_results,
+        operator_feedback=operator_feedback,
+    )
     return {
         "arrived": False,
         "paused": False,
         "threshold_m": args.arrival_distance_m,
         "samples": samples,
-        "operator_feedback": operator_feedback
-        + [
-            operator_feedback_message(
-                "timeout",
-                f"未在限定时间内确认到达{target_label}，停止后续队列。",
-                target_node=target_node,
-                target_name=target_label,
-                severity="warning",
-            )
-        ],
+        "operator_feedback": operator_feedback,
         "llm_feedback_requests": llm_feedback_requests,
-        "reason": "arrival threshold not reached before timeout",
+        "llm_feedback_results": llm_feedback_results,
+        "reason": timeout_reason,
     }
 
 
@@ -480,6 +662,7 @@ def execute_task_queue(
         "ui_refresh_interval_s": getattr(args, "ui_refresh_interval_s", args.arrival_monitor_interval_s),
         "operator_feedback_interval_s": getattr(args, "operator_feedback_interval_s", 5.0),
         "llm_feedback_interval_s": getattr(args, "llm_feedback_interval_s", 8.0),
+        "llm_feedback_mode": getattr(args, "llm_feedback_mode", "template"),
         "max_consecutive_gateway_errors": getattr(args, "gateway_error_limit", 3),
         "runtime_safety_check": True,
     }
@@ -550,6 +733,28 @@ def execute_task_queue(
         if not gateway_allowed:
             blocked_reason = gateway_reason
             failed_step = task_id
+            blocked_feedback = [
+                operator_feedback_message(
+                    "blocked",
+                    f"安全检查未通过：{blocked_reason}",
+                    target_node=target_node,
+                    target_name=target_name,
+                    severity="error",
+                )
+            ]
+            blocked_llm_requests: list[dict[str, Any]] = []
+            blocked_llm_results: list[dict[str, Any]] = []
+            append_llm_feedback(
+                phase="blocked",
+                target_node=target_node,
+                target_name=target_name,
+                distance_m=None,
+                reason=blocked_reason,
+                args=args,
+                requests=blocked_llm_requests,
+                results=blocked_llm_results,
+                operator_feedback=blocked_feedback,
+            )
             events.append(
                 {
                     "task_id": task_id,
@@ -558,11 +763,35 @@ def execute_task_queue(
                     "target_node": target_node,
                     "blocked_reason": blocked_reason,
                     "preflight": preflight_state,
+                    "operator_feedback": blocked_feedback,
+                    "llm_feedback_requests": blocked_llm_requests,
+                    "llm_feedback_results": blocked_llm_results,
                 }
             )
             break
 
         if not args.execute:
+            queued_feedback = [
+                operator_feedback_message(
+                    "queued",
+                    f"干跑：将前往{target_name}，不会下发运动。",
+                    target_node=target_node,
+                    target_name=target_name,
+                )
+            ]
+            queued_llm_requests: list[dict[str, Any]] = []
+            queued_llm_results: list[dict[str, Any]] = []
+            append_llm_feedback(
+                phase="queued",
+                target_node=target_node,
+                target_name=target_name,
+                distance_m=None,
+                reason="dry run",
+                args=args,
+                requests=queued_llm_requests,
+                results=queued_llm_results,
+                operator_feedback=queued_feedback,
+            )
             events.append(
                 {
                     "task_id": task_id,
@@ -571,14 +800,9 @@ def execute_task_queue(
                     "target_node": target_node,
                     "slam_command": slam_command,
                     "preflight": preflight_state,
-                    "operator_feedback": [
-                        operator_feedback_message(
-                            "queued",
-                            f"干跑：将前往{target_name}，不会下发运动。",
-                            target_node=target_node,
-                            target_name=target_name,
-                        )
-                    ],
+                    "operator_feedback": queued_feedback,
+                    "llm_feedback_requests": queued_llm_requests,
+                    "llm_feedback_results": queued_llm_results,
                 }
             )
             continue
@@ -597,7 +821,38 @@ def execute_task_queue(
             startup_wait_s=args.gateway_startup_wait_s,
         )
         accepted = bool(result.get("accepted", False))
-        arrival = wait_for_arrival(slam_command, args, target_name=target_name) if accepted else {"arrived": False, "reason": "gateway did not accept navigation", "operator_feedback": []}
+        if accepted:
+            arrival = wait_for_arrival(slam_command, args, target_name=target_name)
+        else:
+            rejected_feedback = [
+                operator_feedback_message(
+                    "blocked",
+                    "gateway 未接受导航命令，已停止等待。",
+                    target_node=target_node,
+                    target_name=target_name,
+                    severity="error",
+                )
+            ]
+            rejected_llm_requests: list[dict[str, Any]] = []
+            rejected_llm_results: list[dict[str, Any]] = []
+            append_llm_feedback(
+                phase="blocked",
+                target_node=target_node,
+                target_name=target_name,
+                distance_m=None,
+                reason="gateway did not accept navigation",
+                args=args,
+                requests=rejected_llm_requests,
+                results=rejected_llm_results,
+                operator_feedback=rejected_feedback,
+            )
+            arrival = {
+                "arrived": False,
+                "reason": "gateway did not accept navigation",
+                "operator_feedback": rejected_feedback,
+                "llm_feedback_requests": rejected_llm_requests,
+                "llm_feedback_results": rejected_llm_results,
+            }
         status = "ok" if accepted and arrival.get("arrived") else "failed"
         events.append(
             {
@@ -610,6 +865,7 @@ def execute_task_queue(
                 "arrival": arrival,
                 "operator_feedback": [departing_feedback] + list(arrival.get("operator_feedback") or []),
                 "llm_feedback_requests": list(arrival.get("llm_feedback_requests") or []),
+                "llm_feedback_results": list(arrival.get("llm_feedback_results") or []),
             }
         )
         if status != "ok":
@@ -686,6 +942,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ui-refresh-interval-s", type=float, default=1.0)
     parser.add_argument("--operator-feedback-interval-s", type=float, default=5.0)
     parser.add_argument("--llm-feedback-interval-s", type=float, default=8.0)
+    parser.add_argument("--llm-feedback-mode", choices=["off", "template", "live"], default="template")
+    parser.add_argument("--llm-feedback-max-tokens", type=int, default=48)
+    parser.add_argument("--llm-feedback-timeout-s", type=int, default=6)
+    parser.add_argument("--llm-feedback-system", default=FEEDBACK_SYSTEM_PROMPT)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument("--capture-command", default="", help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")

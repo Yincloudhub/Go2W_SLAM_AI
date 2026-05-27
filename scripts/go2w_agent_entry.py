@@ -430,6 +430,9 @@ def format_agent_summary(summary: dict[str, Any]) -> str:
         lines.append(f"阻塞原因：{summary.get('blocked_reason')}")
     if summary.get("operator_feedback_latest"):
         lines.append(f"现场反馈：{summary.get('operator_feedback_latest')}")
+    if summary.get("llm_feedback_latest"):
+        source = summary.get("llm_feedback_source") or "unknown"
+        lines.append(f"LLM回馈：{summary.get('llm_feedback_latest')}（{source}）")
     if summary.get("user_reply"):
         lines.append(f"对用户反馈：{summary.get('user_reply')}")
     logs = summary.get("logs")
@@ -547,6 +550,22 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
             str(args.arrival_monitor_s),
             "--arrival-monitor-interval-s",
             str(args.arrival_monitor_interval_s),
+            "--slam-poll-interval-s",
+            str(args.slam_poll_interval_s),
+            "--ui-refresh-interval-s",
+            str(args.ui_refresh_interval_s),
+            "--operator-feedback-interval-s",
+            str(args.operator_feedback_interval_s),
+            "--llm-feedback-interval-s",
+            str(args.llm_feedback_interval_s),
+            "--llm-feedback-mode",
+            args.llm_feedback_mode,
+            "--llm-feedback-max-tokens",
+            str(args.llm_feedback_max_tokens),
+            "--llm-feedback-timeout-s",
+            str(args.llm_feedback_timeout_s),
+            "--gateway-error-limit",
+            str(args.gateway_error_limit),
         ]
     )
     if args.capture_command:
@@ -684,6 +703,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
     parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
+    parser.add_argument("--slam-poll-interval-s", type=float, default=1.0)
+    parser.add_argument("--ui-refresh-interval-s", type=float, default=1.0)
+    parser.add_argument("--operator-feedback-interval-s", type=float, default=5.0)
+    parser.add_argument("--llm-feedback-interval-s", type=float, default=8.0)
+    parser.add_argument("--llm-feedback-mode", choices=["off", "template", "live"], default="template")
+    parser.add_argument("--llm-feedback-max-tokens", type=int, default=48)
+    parser.add_argument("--llm-feedback-timeout-s", type=int, default=6)
+    parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument("--capture-command", default="", help="Optional bash command for queued capture_keyframe steps.")
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
     parser.add_argument("--relocate", action="store_true", help="Start relocation before planning/execution.")

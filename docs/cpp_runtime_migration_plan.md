@@ -50,8 +50,9 @@ Qt/RViz2 UI 或 C++ TUI
   - 从 operator panel 中拆出队列执行器
   - 每个导航 step 前重新读取 world_state 并过 SafetyGate
   - 生成 `queue_execution` 事件日志，失败时停止后续 step
-  - 区分 SLAM 轮询、UI 刷新、操作员反馈和 LLM 反馈请求频率
+  - 区分 SLAM 轮询、UI 刷新、操作员反馈和 LLM 反馈频率
   - 每段导航输出 `operator_feedback`，供 UI 显示“正在去哪/到了哪里/为何阻塞”
+  - 输出 `llm_feedback_requests` 和 template `llm_feedback_results`，后续可替换为 C++ LLM HTTP service
 - `task_queue` IR
   - 新增 `schemas/task_queue.schema.json`
   - C++ `TaskQueueValidator` 在执行前校验队列结构
@@ -85,7 +86,7 @@ printf 'yin_siyuan_station\n/quit\n' | ./build/go2w_operator_panel --repo-root ~
 
 ## 下一步迁移优先级
 
-1. `QueueExecutor` 完整化：拍照命令配置、语音反馈、事件日志落盘、失败暂停、LLM feedback renderer。
+1. `QueueExecutor` 完整化：拍照命令配置、语音反馈、事件日志落盘、失败暂停、LLM feedback renderer service 化。
 2. `SafetyGate` 策略化：把 allow/deny 扩展为 block/hold/slow/semantic_only/confirm/replan。
 3. `task_queue` schema 严格化：从迁移期兼容 `step_id` 收敛到统一 `task_id`。
 4. Qt Widget/RViz2 Panel：把当前 TUI 的状态和输入搬到图形界面。
