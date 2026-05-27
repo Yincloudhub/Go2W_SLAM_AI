@@ -87,6 +87,15 @@ chmod +x scripts/build_on_go2.sh build_on_go2.sh
 ./scripts/build_on_go2.sh
 ```
 
+2026-05-27 复查：机器狗端 `/home/unitree/slam_gateway_refactor/src/slam_gateway.cpp` 已经把上述 `j.value` 风险修成 `pose.mode = 0`。新的优先修正点是 `slam_llm_command_client` 的机器可读入口需要更严格的输入校验：
+
+- `navigate_to_pose` 不应在 `target_pose` 缺少 `x/y` 时默认导航到地图原点。
+- `relocate` 不应在缺少 `initial_pose` 时默认用零点重定位。
+- `speed`、`mode` 应限制在安全范围。
+- `start_mapping`、`end_mapping`、`stop_slam` 这类高风险动作应要求显式 `operator_ack=true` 或 `confirm=true`。
+
+本地版本管理目录 `robot/slam_gateway_refactor` 已加入这些防护，后续同步到机器人端后需要重编 `/home/unitree/slam_gateway_refactor`。
+
 ## 4. 推理后端选择建议
 
 结论：P0 阶段优先用 `llama.cpp`，后续再评估 TensorRT/Edge-LLM。
@@ -442,4 +451,3 @@ src/llm_planner_main.cpp
 - 需要明显更高性能。
 - 确认 JetPack / CUDA / 硬件满足要求。
 - 能接受模型转换和部署复杂度。
-

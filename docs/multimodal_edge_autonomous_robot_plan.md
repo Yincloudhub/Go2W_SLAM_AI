@@ -10,6 +10,16 @@
 
 这条路线保留最初的弱网闭环想法，但把重点从“模拟某种通信制式”转成“弱链路下仍能完成本地自治、语义回传和安全巡检”。系统可以逐步接入本体 SLAM/LiDAR、本地 LLM、语音、拍照、双目深度相机、外接 NX + TI 毫米波雷达边缘节点，但每个模块都应是可插拔增强项，而不是主闭环的强依赖。
 
+赛道选择上，建议主线放在“大模型与智能体系统”，弱网语义通信、感知辅助通信和多模态边缘节点作为支撑实验，而不是主报“通感一体物理层”。这样更贴合当前已有工程资产：GO2W、SLAM Gateway、MapRegistry、TaskQueue、SafetyGate、本地 Qwen3-4B、弱网摘要、运行日志和后续训练库。
+
+推荐题目口径：
+
+> 基于语义通信与边缘大模型的四足机器人智能体系统。
+
+或：
+
+> 面向弱链路场景的多模态边缘自主机器狗智能体系统。
+
 ## 最终呈现效果
 
 建议最终演示收敛成一条主线：
@@ -67,6 +77,117 @@ Operator UI / Voice Input
 - UI 只显示和输入，不直接拼底层运动命令。
 - 弱网下优先保留任务状态、安全原因、异常摘要和关键帧索引。
 
+## 深化主线
+
+外部规划中的 `WorldState -> ToolCall -> SafetyGate -> 执行 -> 日志 -> 训练库` 可以作为后续深化主轴，但需要和当前代码术语对齐：
+
+| 规划术语 | 当前工程术语 | 说明 |
+|---|---|---|
+| `WorldState` | `world_state` / `runtime_snapshot` / `planner_context` | 模型和 UI 看到的结构化状态 |
+| `ToolCallSchema` | `TaskQueue IR` / `Action Registry` | LLM 或规则只能输出受限动作 |
+| `SafetyGate` | C++ `SafetyGate` / Python `SafetySupervisor` | 所有运动前必须校验 |
+| `SLAMGateway` | `slam_llm_command_client` / `GatewayClient` | 受控下发 Unitree SLAM 命令 |
+| 任务状态机 | `queue_execution` / `operator_feedback` / 后续 `state_journal` | 记录任务处于规划、执行、到达、阻断还是完成 |
+| 训练库 | `runtime_log_schema` / `failure_case_bank` / 后续 JSONL | 为后续 MiniMind-GO2 或轻量规划模型提供数据 |
+
+### WorldState v1
+
+第一版不要追求大而全，建议先固定 12 个关键字段：
+
+```text
+localized
+map_loaded
+current_node
+candidate_nodes
+front_clearance_m
+obstacle_status
+detected_objects
+network_level
+task_phase
+last_execution_result
+motion_allowed
+available_tools
+```
+
+多模态扩展必须给每个感知摘要加上：
+
+```text
+source
+confidence
+stale
+latency_ms
+timestamp_ms
+```
+
+这样 TI 雷达、双目、相机关键帧和 LiDAR 摘要可以统一进入 `WorldState`，而不会让 LLM 直接处理原始点云、连续视频或雷达 ADC。
+
+### TaskQueue / ToolCall v1
+
+后续所有 LLM、规则和 UI 生成的动作都应先进入统一队列，不直接下发底层命令。建议第一版动作集合：
+
+```text
+mapped_navigation / navigate
+safe_hold
+ask_human_confirm
+request_relocalization
+capture_keyframe
+semantic_report
+return_to_base
+patrol_route
+cancel_task
+speak
+inspect_area
+```
+
+与当前 C++ 实现对齐时，`mapped_navigation` 应落到 `navigate` step，`capture_keyframe` 先保持 dry-run/语义事件，后续再接真实相机命令。
+
+### SafetyGate policy v1
+
+SafetyGate 输出应从简单 allow/deny 逐步稳定为：
+
+```text
+allow
+hold
+slow
+block
+semantic_only
+confirm
+replan
+```
+
+必须拦截的情况：
+
+- `localized=false` 时禁止 mapped navigation。
+- `map_loaded=false` 时禁止 mapped navigation。
+- `front_clearance_m` 低于阈值时禁止移动。
+- `target_node` 不存在时转人工确认。
+- 已经在目标附近时禁止重复导航。
+- 弱网下请求 raw video 或 dense pointcloud 时改为 semantic report。
+- 工具不在 `available_tools` 中时拒绝执行。
+
+### 任务状态机 v1
+
+任务不是一次模型输出，而是完整生命周期。建议状态：
+
+```text
+idle
+planning
+waiting_safety_check
+executing_navigation
+arrived
+executing_after_arrival_action
+reporting
+completed
+failed
+blocked
+not_localized
+target_unknown
+human_confirm_required
+cancelled
+```
+
+这些状态应进入 `state_journal` 和 UI 反馈区域，让操作员能看到“现在去哪、到哪了、为什么停、是否需要确认”。
+
 ## 可选模块
 
 ### 1. 弱网语义闭环
@@ -85,6 +206,27 @@ Operator UI / Voice Input
 ```
 
 打开后，UI 进入弱网摘要模式，LLM 只做低频或终态解释，主闭环继续由确定性状态驱动。
+
+建议把弱网做成可量化实验，而不是概念展示：
+
+| 模式 | 上传内容 | 作用 |
+|---|---|---|
+| 全量视频模式 | 持续视频流 | 传统基线 |
+| 关键帧+语义模式 | 目标、位置、风险、关键帧 | 语义通信方案 |
+| 纯语义模式 | 结构化状态、任务日志 | 极低带宽方案 |
+| 本地智能体闭环 | 仅上报任务结果和异常事件 | 边缘智能方案 |
+
+评估指标：
+
+```text
+平均上传带宽
+单次任务上传数据量
+端到端响应时延
+弱网任务成功率
+关键事件漏报率
+操作员可理解性
+人工接管次数
+```
 
 ### 2. TI 毫米波雷达 + NX 边缘节点
 
@@ -239,6 +381,8 @@ UI 不需要做成复杂控制台，第一版只需要五个稳定区域：
 - UI 显示任务队列、到达回复、安全原因。
 - 弱网模式显示 semantic-only 策略。
 - 拍照先以 `capture_keyframe` 事件记录。
+- 固定 `WorldState v1`、`TaskQueue/ToolCall v1`、`SafetyGate policy v1`、运行日志 schema 和评估指标。
+- 每次任务记录用户指令、WorldState、候选节点、LLM/规则输出、SafetyGate 结果、执行结果和人工修正。
 
 ### P1：可见能力增强
 
@@ -248,6 +392,8 @@ UI 不需要做成复杂控制台，第一版只需要五个稳定区域：
 - 增加 `speak` 动作，播报到达、阻断、异常。
 - 引入模拟 `RadarDetectionSummary`，UI 展示雷达告警。
 - 双目深度摘要接入 SafetyGate。
+- 增加弱网实验脚本或演示开关，比较全量视频、关键帧+语义、纯语义和本地智能体闭环。
+- 建立失败样本库：JSON 格式错误、目标匹配错误、安全拦截、执行失败、人工修正。
 
 ### P2：多模态边缘节点
 
@@ -256,6 +402,7 @@ UI 不需要做成复杂控制台，第一版只需要五个稳定区域：
 - LLM 常驻服务化，C++/Python 通过 HTTP 调用。
 - 弱网模式压测：延迟、丢包、带宽限制下任务是否继续。
 - 生成巡检结束报告。
+- 当高质量日志达到 500-1000 条后，再评估 MiniMind-GO2 或其他轻量规划模型。
 
 ### P3：研究扩展
 
@@ -263,6 +410,23 @@ UI 不需要做成复杂控制台，第一版只需要五个稳定区域：
 - 评估本地模型微调，让小模型稳定输出任务队列 JSON。
 - 接入更多边缘节点，例如热成像、气体传感器、固定摄像头。
 - Qt/RViz2 图形化面板。
+
+## 近期交付物
+
+建议优先形成这些文件或模块：
+
+```text
+world_state_schema_v1.json
+task_queue_schema_v1.json / tool_schema_v1.json
+safety_gate_rules.md
+task_state_machine.md
+runtime_log_schema.json
+eval_metric_plan.md
+semantic_upload_policy.md
+failure_case_bank.jsonl
+```
+
+其中已有基础的部分应优先复用当前代码：`task_queue.py`、C++ `task_queue_validator.cpp`、C++ `SafetyGate`、`execution_report.py`、`llm_feedback_results` 和 operator panel。
 
 ## 风险边界
 

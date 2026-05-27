@@ -92,6 +92,13 @@ Allowed high-level actions:
 
 Raw API IDs from LLM are rejected. The LLM should output task-level commands, not Unitree API IDs.
 
+The machine-readable path is intentionally stricter than the keyboard path:
+
+- `navigate_to_pose` and `relocate` require finite `x` and `y` values instead of silently defaulting to the map origin.
+- `speed` must be in the safe range `(0, 0.8]` for navigation.
+- `mode` must be `0` or `1`.
+- `start_mapping`, `end_mapping`, and `stop_slam` require `operator_ack=true` or `confirm=true`.
+
 ## Example LLM command
 
 ```json
