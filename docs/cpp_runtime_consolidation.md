@@ -65,6 +65,41 @@ gateway world_state
 The Python `world_state_v1.py`, `operator_display.py`, and `runtime_log.py`
 remain as prototype parity and offline test tools.
 
+The robot-side UI launcher now defaults to `scripts/start_go2w_slam_stack.sh`.
+Startup therefore runs as:
+
+```text
+run_go2w_operator_ui.sh
+  -> go2w_operator_panel --ensure-slam-on-start
+      -> start_go2w_slam_stack.sh
+      -> C++ GatewayClient get_world_state
+```
+
+The older Python startup supervisor is kept for diagnostics, but it is no
+longer on the default live UI path.
+
+## Robot-side non-motion verification
+
+2026-05-27 verified on `unitree@192.168.123.18` without sending motion commands:
+
+```text
+cd /home/unitree/go2w_slam_agent
+bash -n scripts/run_go2w_operator_ui.sh
+cd cpp
+cmake -S . -B build
+cmake --build build -j2
+./build/go2w_world_state_v1_smoke_test
+```
+
+Result:
+
+- `go2w_plan_executor_core` built.
+- `go2w_operator_panel` built.
+- `go2w_plan_executor_dry_run` built.
+- `go2w_world_state_v1_smoke_test` built and passed.
+- No navigation, relocation, mapping, stop-SLAM, or chassis motion command was
+  sent.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,

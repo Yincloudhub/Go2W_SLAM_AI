@@ -77,6 +77,11 @@ A later Qt/RViz2 panel can reuse the same operator-core boundary, but the safer
 field path today is to keep gateway, LiDAR, SLAM, and the terminal UI on the
 robot/NX.
 
+The launcher defaults to `scripts/start_go2w_slam_stack.sh` and lets the C++
+operator panel perform the gateway world-state check immediately after startup.
+This keeps the live path as `shell launcher -> C++ panel -> C++ gateway client`;
+the Python startup supervisor remains available only as a diagnostic helper.
+
 Watch-only mode:
 
 ```bash

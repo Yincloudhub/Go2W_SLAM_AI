@@ -11,7 +11,7 @@ BUILD_DIR="${GO2W_CPP_BUILD_DIR:-${REPO_ROOT}/cpp/build}"
 CURRENT_NODE="${GO2W_CURRENT_NODE:-initial_point}"
 GATEWAY_CLIENT="${GO2W_GATEWAY_CLIENT:-/home/unitree/slam_gateway_refactor/build/slam_llm_command_client}"
 NETWORK_INTERFACE="${GO2W_NETWORK_INTERFACE:-eth0}"
-START_SLAM_SCRIPT="${GO2W_START_SLAM_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_runtime_stack.sh}"
+START_SLAM_SCRIPT="${GO2W_START_SLAM_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_slam_stack.sh}"
 
 if [[ ! -x "${BUILD_DIR}/go2w_operator_panel" ]]; then
   if ! command -v cmake >/dev/null 2>&1; then
