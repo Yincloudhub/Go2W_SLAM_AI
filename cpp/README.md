@@ -50,6 +50,9 @@ It is the first step toward a Qt/RViz2-style UI:
 - defaults to dry-run and only executes movement after `/execute on`.
 - routes known topology commands in C++ first; Python/LLM is now only the
   fallback when no registered semantic point matches.
+- builds `WorldState v1`, `OperatorDisplayState`, and bounded runtime-log records
+  in C++ so the hot operator path no longer depends on the Python prototype data
+  model.
 
 Run on the robot/NX:
 
@@ -82,6 +85,21 @@ Watch-only mode:
 
 The Qt/RViz2 UI should reuse this command/state boundary instead of directly
 embedding model inference inside the visualization layer.
+
+## Runtime ownership rule
+
+New real-time behavior should enter `cpp/` first:
+
+- `world_state_v1.cpp`: low-rate state contract for UI, LLM, and policy code;
+- `operator_panel.cpp`: operator input and display shell;
+- `queue_executor.cpp`: task queue execution, arrival feedback, and bounded
+  event buffers;
+- `safety_gate.cpp`: deterministic safety policy;
+- `semantic_router.cpp`: topology matching and deterministic task queues.
+
+Python remains useful for offline data generation, map tooling, evaluation,
+and LLM fallback, but it should not become the owner of a new hot-loop runtime
+feature.
 
 Encoding note: do not pipe Chinese text from Windows PowerShell into this C++
 binary. Use MobaXterm/Linux terminal input, ASCII node IDs, or the existing

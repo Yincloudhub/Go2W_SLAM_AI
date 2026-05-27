@@ -58,6 +58,7 @@ private:
     nlohmann::json getWorldState() const;
     CommandResult executeSemanticRoute(const SemanticRoute& route) const;
     CommandResult fallbackPythonCommand(const std::string& text) const;
+    nlohmann::json buildPanelWorldState(const nlohmann::json& result) const;
     std::string formatWorldState(const nlohmann::json& result) const;
     std::string formatFullWorldState(const nlohmann::json& result) const;
     std::string formatWeakWorldState(const nlohmann::json& result) const;

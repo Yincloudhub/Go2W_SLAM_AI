@@ -12,6 +12,7 @@ add_library(go2w_plan_executor_core
     src/safety_gate.cpp
     src/semantic_router.cpp
     src/task_queue_validator.cpp
+    src/world_state_v1.cpp
 )
 
 target_include_directories(go2w_plan_executor_core PUBLIC
@@ -30,3 +31,12 @@ add_executable(go2w_operator_panel
 )
 
 target_link_libraries(go2w_operator_panel PRIVATE go2w_plan_executor_core)
+
+add_executable(go2w_world_state_v1_smoke_test
+    src/world_state_v1_smoke_test.cpp
+)
+
+target_link_libraries(go2w_world_state_v1_smoke_test PRIVATE go2w_plan_executor_core)
+
+enable_testing()
+add_test(NAME go2w_world_state_v1_smoke_test COMMAND go2w_world_state_v1_smoke_test)

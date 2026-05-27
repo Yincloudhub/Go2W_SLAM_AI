@@ -1,5 +1,6 @@
 #include "go2w/operator_panel.hpp"
 #include "go2w/queue_executor.hpp"
+#include "go2w/world_state_v1.hpp"
 
 #include <array>
 #include <cmath>
@@ -229,6 +230,18 @@ nlohmann::json OperatorPanel::sendGatewayCommand(const nlohmann::json& command_j
     return client.send(command_json).response;
 }
 
+nlohmann::json OperatorPanel::buildPanelWorldState(const nlohmann::json& result) const
+{
+    return buildWorldStateV1(
+        result,
+        {
+            {"current_node", nearestNodeText(result)},
+            {"motion_allowed", config_.execute_enabled},
+            {"network_level", config_.weak_link_mode ? "weak" : "normal"},
+            {"task_phase", "idle"},
+        });
+}
+
 std::string OperatorPanel::nearestNodeText(const nlohmann::json& result) const
 {
     const auto* pose = objectAt(result, {"world_state", "current_pose", "pose"});
@@ -265,56 +278,27 @@ std::string OperatorPanel::nearestNodeText(const nlohmann::json& result) const
 
 std::string OperatorPanel::formatFullWorldState(const nlohmann::json& result) const
 {
-    const nlohmann::json empty = nlohmann::json::object();
-    const auto* pose_ptr = objectAt(result, {"world_state", "current_pose", "pose"});
-    const auto* loc_ptr = objectAt(result, {"world_state", "localization"});
-    const auto* health_ptr = objectAt(result, {"world_state", "slam_health"});
-    const auto* safety_ptr = objectAt(result, {"world_state", "safety"});
-    const auto* nav_ptr = objectAt(result, {"world_state", "navigation"});
-    const auto* obstacle_ptr = objectAt(result, {"world_state", "local_obstacle"});
-    const nlohmann::json& pose = pose_ptr && pose_ptr->is_object() ? *pose_ptr : empty;
-    const nlohmann::json& loc = loc_ptr && loc_ptr->is_object() ? *loc_ptr : empty;
-    const nlohmann::json& health = health_ptr && health_ptr->is_object() ? *health_ptr : empty;
-    const nlohmann::json& safety = safety_ptr && safety_ptr->is_object() ? *safety_ptr : empty;
-    const nlohmann::json& nav = nav_ptr && nav_ptr->is_object() ? *nav_ptr : empty;
-    const nlohmann::json& obstacle = obstacle_ptr && obstacle_ptr->is_object() ? *obstacle_ptr : empty;
+    const nlohmann::json world = buildPanelWorldState(result);
+    const nlohmann::json display = buildOperatorDisplayState(world);
+    const auto* pose = objectAt(world, {"current_pose"});
 
-    const bool allow = jsonBool(objectAt(safety, {"allow_navigation"}), false);
-    const std::string target_value = jsonString(objectAt(nav, {"target_node"}), "无");
-    const std::string target = target_value.empty() ? "无" : target_value;
-    const bool has_target = target != "无" && jsonString(objectAt(nav, {"state"}), "") != "idle";
     std::ostringstream ss;
-    ss << "定位:" << jsonString(objectAt(loc, {"status"}))
-       << " conf=" << fmtDouble(loc.value("confidence", nlohmann::json(nullptr))) << " | "
-       << "SLAM:" << jsonString(objectAt(health, {"status"})) << " | "
-       << "位置:x=" << fmtDouble(pose.value("x", nlohmann::json(nullptr))) << ", y=" << fmtDouble(pose.value("y", nlohmann::json(nullptr))) << ", yaw=" << fmtDouble(pose.value("yaw", nlohmann::json(nullptr))) << " | "
-       << "最近点:" << nearestNodeText(result) << " | "
-       << "导航:" << jsonString(objectAt(nav, {"state"})) << " 目标:" << target
-       << " 距目标:" << (has_target ? fmtMeters(nav.value("distance_to_goal_m", nlohmann::json(nullptr))) : "无") << " | "
-       << "前方净空:" << fmtMeters(obstacle.value("front_clearance_m", nlohmann::json(nullptr))) << " | "
-       << "安全:" << (allow ? "允许导航" : "禁止导航") << "(" << jsonString(objectAt(safety, {"reason"})) << ")";
+    ss << formatOperatorDisplayLine(display, false);
+    if (pose && pose->is_object()) {
+        ss << " | pose:x=" << fmtDouble(pose->value("x", nlohmann::json(nullptr)))
+           << ", y=" << fmtDouble(pose->value("y", nlohmann::json(nullptr)))
+           << ", yaw=" << fmtDouble(pose->value("yaw", nlohmann::json(nullptr)));
+    }
+    ss << " | map_id=" << jsonString(objectAt(world, {"map_id"}), "unknown")
+       << " | health=" << jsonString(objectAt(world, {"source_health", "slam_status"}), "unknown")
+       << "/" << jsonString(objectAt(world, {"source_health", "localization_status"}), "unknown");
     return ss.str();
 }
 
 std::string OperatorPanel::formatWeakWorldState(const nlohmann::json& result) const
 {
-    const nlohmann::json empty = nlohmann::json::object();
-    const auto* loc_ptr = objectAt(result, {"world_state", "localization"});
-    const auto* health_ptr = objectAt(result, {"world_state", "slam_health"});
-    const auto* safety_ptr = objectAt(result, {"world_state", "safety"});
-    const auto* nav_ptr = objectAt(result, {"world_state", "navigation"});
-    const nlohmann::json& loc = loc_ptr && loc_ptr->is_object() ? *loc_ptr : empty;
-    const nlohmann::json& health = health_ptr && health_ptr->is_object() ? *health_ptr : empty;
-    const nlohmann::json& safety = safety_ptr && safety_ptr->is_object() ? *safety_ptr : empty;
-    const nlohmann::json& nav = nav_ptr && nav_ptr->is_object() ? *nav_ptr : empty;
-    const bool allow = jsonBool(objectAt(safety, {"allow_navigation"}), false);
-    std::ostringstream ss;
-    ss << "弱网摘要 | 定位:" << jsonString(objectAt(loc, {"status"}))
-       << " | SLAM:" << jsonString(objectAt(health, {"status"}))
-       << " | 最近点:" << nearestNodeText(result)
-       << " | 导航:" << jsonString(objectAt(nav, {"state"}))
-       << " | 安全:" << (allow ? "允许" : "禁止") << "(" << jsonString(objectAt(safety, {"reason"})) << ")";
-    return ss.str();
+    const nlohmann::json world = buildPanelWorldState(result);
+    return formatOperatorDisplayLine(buildOperatorDisplayState(world), true);
 }
 
 std::string OperatorPanel::formatWorldState(const nlohmann::json& result) const
