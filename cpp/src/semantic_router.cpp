@@ -28,16 +28,6 @@ double yawFromQuaternion(double qx, double qy, double qz, double qw)
     return std::atan2(siny_cosp, cosy_cosp);
 }
 
-const nlohmann::json* objectAt(const nlohmann::json& root, const std::initializer_list<const char*> keys)
-{
-    const nlohmann::json* current = &root;
-    for (const char* key : keys) {
-        if (!current->is_object() || !current->contains(key)) return nullptr;
-        current = &current->at(key);
-    }
-    return current;
-}
-
 std::vector<std::string> uniqueTerms(const nlohmann::json& node)
 {
     std::vector<std::string> terms;
@@ -218,33 +208,6 @@ SemanticRoute SemanticRouter::planText(const std::string& text, double speed_mps
         }
     }
     return route;
-}
-
-bool worldAllowsNavigation(const nlohmann::json& world_state_result, std::string* reason)
-{
-    const auto* safety = objectAt(world_state_result, {"world_state", "safety"});
-    if (safety && safety->is_object() && safety->value("allow_navigation", false) != true) {
-        if (reason) *reason = "safety disallows navigation: " + safety->value("reason", std::string("unknown"));
-        return false;
-    }
-    const auto* health = objectAt(world_state_result, {"world_state", "slam_health"});
-    if (health && health->is_object()) {
-        const std::string status = health->value("status", "");
-        if (!status.empty() && status != "ok") {
-            if (reason) *reason = "slam health is " + status;
-            return false;
-        }
-    }
-    const auto* loc = objectAt(world_state_result, {"world_state", "localization"});
-    if (loc && loc->is_object()) {
-        const std::string status = loc->value("status", "");
-        if (!status.empty() && status != "localized_or_tracking" && status != "tracking" && status != "localized") {
-            if (reason) *reason = "localization is " + status;
-            return false;
-        }
-    }
-    if (reason) *reason = "gateway allows navigation";
-    return true;
 }
 
 }  // namespace go2w

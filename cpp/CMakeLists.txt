@@ -8,6 +8,8 @@ add_library(go2w_plan_executor_core
     src/gateway_client.cpp
     src/plan_executor.cpp
     src/operator_panel.cpp
+    src/queue_executor.cpp
+    src/safety_gate.cpp
     src/semantic_router.cpp
 )
 

@@ -1,4 +1,5 @@
 #include "go2w/operator_panel.hpp"
+#include "go2w/queue_executor.hpp"
 
 #include <array>
 #include <cmath>
@@ -72,17 +73,6 @@ double jsonNumber(const nlohmann::json* value, double fallback = 0.0)
 {
     if (!value || !value->is_number()) return fallback;
     return value->get<double>();
-}
-
-double poseDistance(const nlohmann::json& world_state_result, const nlohmann::json& target_pose)
-{
-    const auto* pose = objectAt(world_state_result, {"world_state", "current_pose", "pose"});
-    if (!pose || !pose->is_object()) return -1.0;
-    const double x = jsonNumber(objectAt(*pose, {"x"}));
-    const double y = jsonNumber(objectAt(*pose, {"y"}));
-    const double tx = jsonNumber(objectAt(target_pose, {"x"}));
-    const double ty = jsonNumber(objectAt(target_pose, {"y"}));
-    return std::hypot(x - tx, y - ty);
 }
 
 std::string nowTime()
@@ -373,27 +363,6 @@ CommandResult OperatorPanel::fallbackPythonCommand(const std::string& text) cons
     return runShellCommandWithInput(cmd.str(), "");
 }
 
-bool OperatorPanel::waitForArrival(const nlohmann::json& target_pose, std::ostream& log) const
-{
-    const auto start = std::chrono::steady_clock::now();
-    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < config_.arrival_monitor_s) {
-        try {
-            const auto state = getWorldState();
-            const double distance = poseDistance(state, target_pose);
-            log << "  到点监控: distance=" << std::fixed << std::setprecision(2) << distance << "m\n";
-            if (distance >= 0.0 && distance <= config_.arrival_distance_m) {
-                const auto pause_result = sendGatewayCommand({{"action", "pause_navigation"}});
-                log << "  已到达阈值，已发送暂停: accepted=" << (pause_result.value("accepted", false) ? "true" : "false") << "\n";
-                return true;
-            }
-        } catch (const std::exception& exc) {
-            log << "  到点监控失败: " << exc.what() << "\n";
-        }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-    return false;
-}
-
 CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) const
 {
     CommandResult result;
@@ -409,48 +378,22 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
     if (!config_.execute_enabled) {
         out << "执行状态：干跑/未下发运动。输入 /execute on 后才允许真实执行。\n";
         out << "任务队列JSON：" << route.task_queue.dump(2) << "\n";
-        result.stdout_text = out.str();
-        result.exit_code = 0;
-        return result;
     }
 
-    std::string reason;
-    const auto state = getWorldState();
-    if (!worldAllowsNavigation(state, &reason)) {
-        out << "安全检查：未通过，原因：" << reason << "\n";
-        result.stdout_text = out.str();
-        result.exit_code = 2;
-        return result;
-    }
-    out << "安全检查：通过，原因：" << reason << "\n";
-
-    for (std::size_t i = 0; i < route.slam_commands.size(); ++i) {
-        const auto& command = route.slam_commands.at(i);
-        const std::string target_node = command.value("target_node", "");
-        out << "下发导航：" << target_node << "\n";
-        const auto send_result = sendGatewayCommand(command);
-        out << "  gateway accepted=" << (send_result.value("accepted", false) ? "true" : "false") << "\n";
-        if (!send_result.value("accepted", false)) {
-            out << "  导航拒绝：" << send_result.dump() << "\n";
-            result.stdout_text = out.str();
-            result.exit_code = 3;
-            return result;
-        }
-        const bool arrived = waitForArrival(command.at("target_pose"), out);
-        if (!arrived) {
-            out << "  超时未进入到点阈值，停止后续队列。\n";
-            result.stdout_text = out.str();
-            result.exit_code = 4;
-            return result;
-        }
-        if (i < route.targets.size() && (route.targets[i].photo_required || (route.capture_requested && i == 0))) {
-            out << "  capture_keyframe：当前C++原型记录语义事件，真实相机命令下一步接入。\n";
-        }
-    }
-
-    out << "队列执行完成。\n";
+    QueueExecutorConfig executor_config;
+    executor_config.gateway_client = config_.gateway_client;
+    executor_config.network_interface = config_.network_interface;
+    executor_config.gateway_timeout_s = config_.gateway_timeout_s;
+    executor_config.arrival_distance_m = config_.arrival_distance_m;
+    executor_config.arrival_monitor_s = config_.arrival_monitor_s;
+    executor_config.safety_limits.arrival_distance_m = config_.arrival_distance_m;
+    executor_config.execute_enabled = config_.execute_enabled;
+    const QueueExecutor executor(executor_config);
+    const QueueExecutionResult execution = executor.execute(route);
+    out << execution.stdout_text;
+    out << "队列执行JSON：" << execution.execution.dump(2) << "\n";
     result.stdout_text = out.str();
-    result.exit_code = 0;
+    result.exit_code = execution.exit_code;
     return result;
 }
 

@@ -47,6 +47,4 @@ private:
     std::string map_id_;
 };
 
-bool worldAllowsNavigation(const nlohmann::json& world_state_result, std::string* reason);
-
 }  // namespace go2w
