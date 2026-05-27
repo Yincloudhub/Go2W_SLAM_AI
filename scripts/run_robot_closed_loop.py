@@ -34,6 +34,7 @@ from edge_autonomy.local_llm_planner import (  # noqa: E402
 )
 from edge_autonomy.map_registry import MapRegistry  # noqa: E402
 from edge_autonomy.runtime_state import build_runtime_snapshot  # noqa: E402
+from edge_autonomy.task_queue import task_step_id, validate_task_queue  # noqa: E402
 from scripts.slam_runtime_snapshot import parse_sections, run_remote_snapshot  # noqa: E402
 
 
@@ -337,6 +338,7 @@ def execute_task_queue(
     args: argparse.Namespace,
     nav_speed: float | None,
 ) -> dict[str, Any]:
+    validate_task_queue(task_queue)
     events: list[dict[str, Any]] = []
     blocked_reason = ""
     failed_step = None
@@ -346,7 +348,7 @@ def execute_task_queue(
         if not isinstance(task, dict):
             continue
         action = str(task.get("action") or "")
-        task_id = str(task.get("task_id") or "")
+        task_id = task_step_id(task)
         if action == "report":
             events.append({"task_id": task_id, "action": action, "status": "ok", "message": task.get("message")})
             continue

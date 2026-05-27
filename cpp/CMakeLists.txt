@@ -11,6 +11,7 @@ add_library(go2w_plan_executor_core
     src/queue_executor.cpp
     src/safety_gate.cpp
     src/semantic_router.cpp
+    src/task_queue_validator.cpp
 )
 
 target_include_directories(go2w_plan_executor_core PUBLIC

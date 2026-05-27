@@ -5,6 +5,7 @@ from .safety import LinkQuality, SafetyDecision, SafetySupervisor, SupervisorAct
 from .slam_adapter import InMemorySlamAdapter, NavigationFeedback, NavigationStatus, ReplaySlamAdapter, SlamNavigationAdapter
 from .slam_state import CurrentPose, LocalObstacleSummary, LocalizationState, NavigationTaskState, SlamHealth
 from .runtime_state import LidarStateSummary, OdomPoseSummary, PointCloudSummary, ProcessState, SlamRuntimeSnapshot
+from .task_queue import validate_task_queue
 
 __all__ = [
     "CurrentPose",
@@ -42,4 +43,5 @@ __all__ = [
     "build_planner_context",
     "plan_to_slam_command",
     "simulate_local_llm_plan",
+    "validate_task_queue",
 ]

@@ -9,6 +9,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .task_queue import validate_task_queue
+
 
 PLAN_REQUIRED_KEYS = {"plan_id", "mode", "confidence", "reason", "steps", "communication_policy", "requires_human_ack"}
 PLAN_MODES = {"mapped_navigation", "mapless_scout", "safe_hold", "human_confirm"}
@@ -412,6 +414,7 @@ def build_task_queue_from_context(planner_context: dict[str, Any]) -> dict[str, 
         "user_reply": reply,
     }
     queue["weak_link_payload"] = build_weak_link_payload(queue)
+    validate_task_queue(queue)
     return queue
 
 

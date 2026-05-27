@@ -64,8 +64,8 @@ input text / UI command / scripted task
 ## 下一步优先级
 
 P0：
-- 给 `task_queue` 增加 JSON schema 和 C++ validator。
-- 让 Python planner fallback 输出的队列也通过同一个 validator。
+- 给 `task_queue` 增加 JSON schema 和 C++ validator。（已完成初版）
+- 让 Python planner fallback 输出的队列也通过同一个 validator。（已完成初版）
 - `QueueExecutor` 写统一 `queue_execution` 事件日志，至少包含 step、preflight、send_result、arrival、blocked_reason。
 
 P1：

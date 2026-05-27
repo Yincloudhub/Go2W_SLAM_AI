@@ -1,4 +1,5 @@
 #include "go2w/queue_executor.hpp"
+#include "go2w/task_queue_validator.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -107,6 +108,21 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
 {
     QueueExecutionResult result;
     std::ostringstream out;
+    const TaskQueueValidationResult validation = validateTaskQueue(route.task_queue);
+    if (!validation.valid) {
+        result.exit_code = 2;
+        result.execution = {
+            {"queue_id", route.task_queue.value("queue_id", "cpp_queue")},
+            {"executed", false},
+            {"completed", false},
+            {"failed_step", nullptr},
+            {"blocked_reason", validation.summary()},
+            {"events", nlohmann::json::array()},
+        };
+        result.stdout_text = "任务队列校验失败：" + validation.summary() + "\n";
+        return result;
+    }
+
     nlohmann::json execution = {
         {"queue_id", route.task_queue.value("queue_id", "cpp_queue")},
         {"executed", config_.execute_enabled},
@@ -123,11 +139,11 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
     const auto steps = route.task_queue.value("steps", nlohmann::json::array());
 
     for (const auto& step : steps) {
-        const std::string step_id = step.value("step_id", "");
+        const std::string step_id = step.value("task_id", step.value("step_id", ""));
         const std::string action = step.value("action", "");
         const std::string target_node = step.value("target_node", "");
         nlohmann::json event = {
-            {"step_id", step_id},
+            {"task_id", step_id},
             {"action", action},
             {"target_node", target_node},
         };
@@ -141,6 +157,13 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
             };
             execution["events"].push_back(event);
             out << "  capture_keyframe：当前C++原型记录语义事件，真实相机命令下一步接入。\n";
+            continue;
+        }
+        if (action == "report") {
+            event["status"] = "ok";
+            event["message"] = step.value("message", "");
+            execution["events"].push_back(event);
+            if (step.contains("message") && step.at("message").is_string()) out << "  report：" << step.at("message").get<std::string>() << "\n";
             continue;
         }
         if (action != "navigate") {

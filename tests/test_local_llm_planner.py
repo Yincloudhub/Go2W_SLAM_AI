@@ -11,6 +11,7 @@ from edge_autonomy.local_llm_planner import (
     validate_execution_contract,
     validate_local_llm_plan,
 )
+from edge_autonomy.task_queue import validate_task_queue
 
 
 def make_plan() -> dict:
@@ -157,6 +158,7 @@ class LocalLlmPlannerTests(unittest.TestCase):
 
         task_queue = build_task_queue_from_context(context)
         self.assertIsNotNone(task_queue)
+        validate_task_queue(task_queue)
         plan = task_queue_to_plan(task_queue, context)
         fixed = apply_context_policy_overrides(plan, context)
         intent = deterministic_intent_from_context(context)

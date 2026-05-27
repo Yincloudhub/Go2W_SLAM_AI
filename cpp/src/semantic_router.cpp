@@ -187,7 +187,9 @@ SemanticRoute SemanticRouter::planText(const std::string& text, double speed_mps
     route.slam_commands = nlohmann::json::array();
     route.task_queue = {
         {"queue_id", "cpp_queue"},
+        {"mode", "sequential"},
         {"status", "planned"},
+        {"source", "deterministic_cpp"},
         {"targets", nlohmann::json::array()},
         {"steps", nlohmann::json::array()},
         {"communication_policy", {{"mode", "normal"}, {"send", {"task_state", "navigation_feedback", "world_state_summary"}}, {"drop", nlohmann::json::array()}, {"reason", "normal link"}}},
@@ -200,11 +202,27 @@ SemanticRoute SemanticRouter::planText(const std::string& text, double speed_mps
         route.task_queue["targets"].push_back(target.node_id);
         auto command = buildNavigateCommand(target.node_id, speed_mps, mode);
         route.slam_commands.push_back(command);
-        route.task_queue["steps"].push_back({{"step_id", "nav_" + std::to_string(++step_index)}, {"action", "navigate"}, {"target_node", target.node_id}, {"target_name", target.name}});
+        route.task_queue["steps"].push_back({
+            {"task_id", "task_" + std::to_string(++step_index)},
+            {"action", "navigate"},
+            {"target_node", target.node_id},
+            {"target_name", target.name},
+            {"status", "pending"},
+            {"requires_preflight", true},
+            {"semantic_reason", "matched target from user command"},
+        });
         const bool should_capture = target.photo_required || (route.capture_requested && !explicit_capture_used && (i == 0 || route.targets.size() > 1));
         if (should_capture) {
             explicit_capture_used = true;
-            route.task_queue["steps"].push_back({{"step_id", "capture_" + std::to_string(++step_index)}, {"action", "capture_keyframe"}, {"target_node", target.node_id}, {"target_name", target.name}});
+            route.task_queue["steps"].push_back({
+                {"task_id", "task_" + std::to_string(++step_index)},
+                {"action", "capture_keyframe"},
+                {"target_node", target.node_id},
+                {"target_name", target.name},
+                {"status", "pending"},
+                {"requires_preflight", false},
+                {"semantic_reason", "photo requested or target marked photo_required"},
+            });
         }
     }
     return route;

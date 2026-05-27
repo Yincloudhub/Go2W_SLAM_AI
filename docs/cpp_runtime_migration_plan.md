@@ -50,6 +50,10 @@ Qt/RViz2 UI 或 C++ TUI
   - 从 operator panel 中拆出队列执行器
   - 每个导航 step 前重新读取 world_state 并过 SafetyGate
   - 生成 `queue_execution` 事件日志，失败时停止后续 step
+- `task_queue` IR
+  - 新增 `schemas/task_queue.schema.json`
+  - C++ `TaskQueueValidator` 在执行前校验队列结构
+  - Python planner / closed-loop fallback 在生成和执行队列前使用同一字段约定
 
 ## 现场验证
 
@@ -79,9 +83,9 @@ printf 'yin_siyuan_station\n/quit\n' | ./build/go2w_operator_panel --repo-root ~
 
 ## 下一步迁移优先级
 
-1. `task_queue` schema：让 C++ deterministic route 和 Python/LLM fallback 都输出同一个队列 IR。
-2. `QueueExecutor` 完整化：拍照命令、语音反馈、事件日志落盘、失败暂停。
-3. `SafetyGate` 策略化：把 allow/deny 扩展为 block/hold/slow/semantic_only/confirm/replan。
+1. `QueueExecutor` 完整化：拍照命令配置、语音反馈、事件日志落盘、失败暂停。
+2. `SafetyGate` 策略化：把 allow/deny 扩展为 block/hold/slow/semantic_only/confirm/replan。
+3. `task_queue` schema 严格化：从迁移期兼容 `step_id` 收敛到统一 `task_id`。
 4. Qt Widget/RViz2 Panel：把当前 TUI 的状态和输入搬到图形界面。
 5. LLM HTTP client：C++ 调本地 llama.cpp server，替代 Python planner fallback。
 
