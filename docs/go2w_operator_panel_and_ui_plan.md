@@ -18,8 +18,10 @@
 ## 当前修正
 
 - `scripts/start_go2w_slam_stack.sh`：新增仓库内 SLAM 启动脚本，入口通过 `bash` 调用，不依赖旧目录脚本权限。
+- `scripts/go2w_startup_supervisor.py`：新增一体化启动/健康检查入口，默认 dry-run；显式 `--run` 后只启动/检查 SLAM、雷达 driver、gateway 世界状态探针，不发送运动命令。
 - `scripts/go2w_agent_entry.py`：默认 SLAM 启动脚本改为仓库内脚本。
 - `cpp/go2w_operator_panel`：新增 C++ 操作者面板原型。
+- `src/edge_autonomy/world_state_v1.py` 与 `src/edge_autonomy/operator_display.py`：新增 UI/LLM 共用的低频状态和任务显示屏数据契约。
 
 ## C++ 操作者面板职责
 
@@ -80,6 +82,19 @@ Qt/RViz2 Panel
 ```
 
 这样 UI 只负责显示和输入，底层 C++ core 负责状态、弱网摘要、安全开关、命令封装；LLM 推理可以先保持 Python/llama.cpp server，后续再逐步 C++ 化。
+
+## 下一轮面板接线
+
+下一轮优先把面板内部的状态显示从“直接格式化 gateway world_state”改为：
+
+```text
+gateway world_state / SSH runtime snapshot
+  -> WorldState v1
+  -> OperatorDisplayState
+  -> terminal panel / future Qt panel
+```
+
+显示频率按 `WorldState v1.refresh_policy` 执行：SLAM/雷达原始更新只给内部安全层，`WorldState` 聚合保持 2-5 Hz，UI 显示 1-2 Hz，LLM 反馈事件驱动并限制最小间隔。这样可以减少 UI 和 LLM 对实时闭环的影响。
 
 ## 现场注意
 

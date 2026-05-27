@@ -33,8 +33,11 @@ from edge_autonomy.local_llm_planner import (  # noqa: E402
     run_local_llm_planner,
 )
 from edge_autonomy.map_registry import MapRegistry  # noqa: E402
+from edge_autonomy.operator_display import build_operator_display_state  # noqa: E402
 from edge_autonomy.runtime_state import build_runtime_snapshot  # noqa: E402
+from edge_autonomy.runtime_log import build_runtime_log_record  # noqa: E402
 from edge_autonomy.task_queue import task_step_id, validate_task_queue  # noqa: E402
+from edge_autonomy.world_state_v1 import build_world_state_v1  # noqa: E402
 from scripts.slam_runtime_snapshot import parse_sections, run_remote_snapshot  # noqa: E402
 
 
@@ -1114,6 +1117,37 @@ def main(argv: list[str] | None = None) -> int:
         )
         executed = bool(execution_result.get("accepted", False))
 
+    if queue_execution and queue_execution.get("completed"):
+        task_phase = "completed"
+    elif blocked_reason:
+        task_phase = "blocked" if args.execute else "planning"
+    elif executed:
+        task_phase = "executing_navigation"
+    else:
+        task_phase = "planning"
+    world_state_v1 = build_world_state_v1(
+        gateway_state or snapshot,
+        planner_context=planner_context,
+        task_phase=task_phase,
+        last_execution_result=blocked_reason or ("executed" if executed else ""),
+        network_level="normal",
+        motion_allowed=bool(args.execute and registry_allowed and (gateway_allowed or args.skip_gateway_check)),
+    )
+    operator_display = build_operator_display_state(
+        world_state_v1,
+        task_queue=task_queue,
+        queue_execution=queue_execution,
+        user_command=args.command,
+    )
+    runtime_log_record = build_runtime_log_record(
+        world_state=world_state_v1,
+        operator_display=operator_display,
+        task_queue=task_queue,
+        queue_execution=queue_execution,
+        user_command=args.command,
+        llm_result={"elapsed_s": result.elapsed_s, "plan": result.plan, "user_reply": result.user_reply},
+    )
+
     output = {
         "command": args.command,
         "dry_run": not args.execute,
@@ -1125,6 +1159,9 @@ def main(argv: list[str] | None = None) -> int:
             "user_reply": result.user_reply,
             "weak_link_payload": result.weak_link_payload,
         },
+        "world_state_v1": world_state_v1,
+        "operator_display": operator_display,
+        "runtime_log_record": runtime_log_record,
         "semantic_trace": build_semantic_trace(
             command=args.command,
             planner_context=planner_context,

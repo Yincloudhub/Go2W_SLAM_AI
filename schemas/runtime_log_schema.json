@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/runtime_log_schema.json",
+  "title": "Go2wRuntimeLogRecord",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "timestamp_ms",
+    "user_command",
+    "world_state",
+    "artifact_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "timestamp_ms": {"type": "integer", "minimum": 0},
+    "user_command": {"type": "string"},
+    "world_state": {"$ref": "world_state_schema_v1.json"},
+    "operator_display": {
+      "anyOf": [
+        {"$ref": "operator_display_state.schema.json"},
+        {"type": "null"}
+      ]
+    },
+    "task_queue": {
+      "anyOf": [
+        {"$ref": "task_queue.schema.json"},
+        {"type": "null"}
+      ]
+    },
+    "queue_execution": {
+      "anyOf": [
+        {"type": "object"},
+        {"type": "null"}
+      ]
+    },
+    "llm_result": {
+      "anyOf": [
+        {"type": "object"},
+        {"type": "null"}
+      ]
+    },
+    "artifact_policy": {
+      "type": "object",
+      "required": [
+        "allow_raw_video",
+        "allow_dense_pointcloud",
+        "allow_keyframe",
+        "allow_semantic_summary"
+      ],
+      "properties": {
+        "allow_raw_video": {"type": "boolean"},
+        "allow_dense_pointcloud": {"type": "boolean"},
+        "allow_keyframe": {"type": "boolean"},
+        "allow_semantic_summary": {"type": "boolean"}
+      }
+    }
+  }
+}

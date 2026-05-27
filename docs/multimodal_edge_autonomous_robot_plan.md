@@ -428,6 +428,20 @@ failure_case_bank.jsonl
 
 其中已有基础的部分应优先复用当前代码：`task_queue.py`、C++ `task_queue_validator.cpp`、C++ `SafetyGate`、`execution_report.py`、`llm_feedback_results` 和 operator panel。
 
+### 2026-05-27 工程推进记录
+
+本轮先把 P0 闭环需要的“低频统一状态层”落地，不继续堆传感器功能：
+
+- 已新增 `schemas/world_state_schema_v1.json`，作为 UI、LLM、SafetyGate 共享的低频世界状态契约。
+- 已新增 `schemas/operator_display_state.schema.json`，用于 operator panel 的任务显示屏区域。
+- 已新增 `schemas/runtime_log_schema.json`，约束后续 JSONL 运行日志，不记录连续视频、完整点云或原始雷达 ADC。
+- 已新增 `src/edge_autonomy/world_state_v1.py`，把 SLAM/gateway 快照与 planner context 聚合成 `WorldState v1`。
+- 已新增 `src/edge_autonomy/operator_display.py`，从 world state、task queue、queue execution 中抽取 UI 可直接显示的任务反馈。
+- 已新增 `src/edge_autonomy/runtime_log.py`，形成后续评测、复盘和 MiniMind-GO2 数据积累的单条日志记录。
+- 已新增 `scripts/go2w_startup_supervisor.py`，默认 dry-run，显式 `--run` 后只启动/检查 SLAM、雷达 driver、gateway 世界状态探针，不发送运动命令。
+
+下一步应把 operator panel 内部从“直接打印 gateway world_state”升级为读取 `WorldState v1 + OperatorDisplayState`。当前 `scripts/run_go2w_operator_ui.sh` 已可通过 `scripts/start_go2w_runtime_stack.sh` 调用 startup supervisor，后续再把同一入口接到 Qt/RViz2 UI 启动按钮。
+
 ## 风险边界
 
 - 不把完整 6G/SAR 成像作为 P0 承诺。

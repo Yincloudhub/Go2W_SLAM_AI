@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/world_state_schema_v1.json",
+  "title": "Go2wWorldStateV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "timestamp_ms",
+    "localized",
+    "map_loaded",
+    "current_node",
+    "candidate_nodes",
+    "front_clearance_m",
+    "obstacle_status",
+    "detected_objects",
+    "network_level",
+    "task_phase",
+    "last_execution_result",
+    "motion_allowed",
+    "available_tools",
+    "source_health",
+    "perception_summaries",
+    "refresh_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "timestamp_ms": {"type": "integer", "minimum": 0},
+    "localized": {"type": "boolean"},
+    "map_loaded": {"type": "boolean"},
+    "map_id": {"type": "string"},
+    "current_pose": {
+      "anyOf": [
+        {"$ref": "#/$defs/pose2d"},
+        {"type": "null"}
+      ]
+    },
+    "current_node": {
+      "anyOf": [
+        {"type": "string"},
+        {"type": "null"}
+      ]
+    },
+    "candidate_nodes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/candidate_node"}
+    },
+    "front_clearance_m": {
+      "anyOf": [
+        {"type": "number", "minimum": 0},
+        {"type": "null"}
+      ]
+    },
+    "obstacle_status": {"type": "string", "enum": ["clear", "slow", "blocked", "unknown"]},
+    "detected_objects": {"type": "array", "items": {"type": "object"}},
+    "network_level": {"type": "string"},
+    "task_phase": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "planning",
+        "waiting_safety_check",
+        "executing_navigation",
+        "arrived",
+        "executing_after_arrival_action",
+        "reporting",
+        "completed",
+        "failed",
+        "blocked",
+        "not_localized",
+        "target_unknown",
+        "human_confirm_required",
+        "cancelled"
+      ]
+    },
+    "last_execution_result": {"type": "string"},
+    "motion_allowed": {"type": "boolean"},
+    "available_tools": {"type": "array", "items": {"type": "string"}},
+    "source_health": {"type": "object"},
+    "perception_summaries": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/perception_summary"}
+    },
+    "refresh_policy": {"type": "object"}
+  },
+  "$defs": {
+    "pose2d": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["x", "y"],
+      "properties": {
+        "x": {"type": "number"},
+        "y": {"type": "number"},
+        "z": {"type": "number"},
+        "yaw": {"type": "number"}
+      }
+    },
+    "candidate_node": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["node_id"],
+      "properties": {
+        "node_id": {"type": "string"},
+        "name": {"type": "string"},
+        "distance_from_robot_m": {
+          "anyOf": [
+            {"type": "number", "minimum": 0},
+            {"type": "null"}
+          ]
+        },
+        "node_type": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "perception_summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source", "stale", "timestamp_ms"],
+      "properties": {
+        "source": {"type": "string"},
+        "confidence": {
+          "anyOf": [
+            {"type": "number", "minimum": 0, "maximum": 1},
+            {"type": "null"}
+          ]
+        },
+        "stale": {"type": "boolean"},
+        "latency_ms": {
+          "anyOf": [
+            {"type": "number", "minimum": 0},
+            {"type": "null"}
+          ]
+        },
+        "timestamp_ms": {"type": "integer", "minimum": 0},
+        "summary": {"type": "object"}
+      }
+    }
+  }
+}

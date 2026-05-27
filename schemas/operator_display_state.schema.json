@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/operator_display_state.schema.json",
+  "title": "Go2wOperatorDisplayState",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "timestamp_ms", "refresh_hz", "screen", "event_budget"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "timestamp_ms": {"type": "integer"},
+    "refresh_hz": {"type": "number", "minimum": 0.1, "maximum": 5},
+    "screen": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "task_phase",
+        "current_target",
+        "localized",
+        "map_loaded",
+        "motion_allowed",
+        "obstacle_status",
+        "network_level",
+        "llm_reply",
+        "operator_reply"
+      ],
+      "properties": {
+        "task_phase": {"type": "string"},
+        "user_command": {"type": "string"},
+        "current_target": {"type": "string"},
+        "targets": {"type": "array", "items": {"type": "string"}},
+        "localized": {"type": "boolean"},
+        "map_loaded": {"type": "boolean"},
+        "motion_allowed": {"type": "boolean"},
+        "obstacle_status": {"type": "string"},
+        "front_clearance_m": {
+          "anyOf": [
+            {"type": "number"},
+            {"type": "null"}
+          ]
+        },
+        "network_level": {"type": "string"},
+        "safety_reason": {"type": "string"},
+        "blocked_reason": {"type": "string"},
+        "llm_reply": {"type": "string"},
+        "operator_reply": {"type": "string"}
+      }
+    },
+    "event_budget": {"type": "object"}
+  }
+}
