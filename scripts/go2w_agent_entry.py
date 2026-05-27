@@ -428,6 +428,8 @@ def format_agent_summary(summary: dict[str, Any]) -> str:
         lines.append("执行状态：干跑/未下发运动")
     if summary.get("blocked_reason"):
         lines.append(f"阻塞原因：{summary.get('blocked_reason')}")
+    if summary.get("operator_feedback_latest"):
+        lines.append(f"现场反馈：{summary.get('operator_feedback_latest')}")
     if summary.get("user_reply"):
         lines.append(f"对用户反馈：{summary.get('user_reply')}")
     logs = summary.get("logs")

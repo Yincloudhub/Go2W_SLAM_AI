@@ -387,6 +387,11 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
     executor_config.arrival_distance_m = config_.arrival_distance_m;
     executor_config.arrival_monitor_s = config_.arrival_monitor_s;
     executor_config.safety_limits.arrival_distance_m = config_.arrival_distance_m;
+    executor_config.feedback_policy.slam_poll_interval_s = config_.slam_poll_interval_s;
+    executor_config.feedback_policy.ui_refresh_interval_s = config_.ui_refresh_interval_s;
+    executor_config.feedback_policy.operator_feedback_interval_s = config_.operator_feedback_interval_s;
+    executor_config.feedback_policy.llm_feedback_interval_s = config_.llm_feedback_interval_s;
+    executor_config.feedback_policy.max_consecutive_gateway_errors = config_.max_consecutive_gateway_errors;
     executor_config.execute_enabled = config_.execute_enabled;
     const QueueExecutor executor(executor_config);
     const QueueExecutionResult execution = executor.execute(route);

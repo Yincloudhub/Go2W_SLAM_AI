@@ -14,6 +14,11 @@ void usage(const char* argv0)
               << "  --gateway-client PATH         slam_llm_command_client path\n"
               << "  --interface IFACE             Network interface, default eth0\n"
               << "  --gateway-timeout-s SECONDS   Gateway command timeout, default 30\n"
+              << "  --slam-poll-interval-s SEC    World-state polling interval during execution\n"
+              << "  --ui-refresh-interval-s SEC   Console/UI progress refresh interval\n"
+              << "  --feedback-interval-s SEC     Operator feedback message interval\n"
+              << "  --llm-feedback-interval-s SEC LLM/UI feedback request interval\n"
+              << "  --gateway-error-limit N        Consecutive world-state failures before blocking\n"
               << "  --python PATH                 Python executable, default python3\n"
               << "  --current-node NODE_ID        Known current anchor node\n"
               << "  --execute                     Allow real robot execution\n"
@@ -38,6 +43,16 @@ int main(int argc, char** argv)
             config.network_interface = argv[++i];
         } else if (arg == "--gateway-timeout-s" && i + 1 < argc) {
             config.gateway_timeout_s = std::atoi(argv[++i]);
+        } else if (arg == "--slam-poll-interval-s" && i + 1 < argc) {
+            config.slam_poll_interval_s = std::atof(argv[++i]);
+        } else if (arg == "--ui-refresh-interval-s" && i + 1 < argc) {
+            config.ui_refresh_interval_s = std::atof(argv[++i]);
+        } else if (arg == "--feedback-interval-s" && i + 1 < argc) {
+            config.operator_feedback_interval_s = std::atof(argv[++i]);
+        } else if (arg == "--llm-feedback-interval-s" && i + 1 < argc) {
+            config.llm_feedback_interval_s = std::atof(argv[++i]);
+        } else if (arg == "--gateway-error-limit" && i + 1 < argc) {
+            config.max_consecutive_gateway_errors = std::atoi(argv[++i]);
         } else if (arg == "--python" && i + 1 < argc) {
             config.python = argv[++i];
         } else if (arg == "--current-node" && i + 1 < argc) {

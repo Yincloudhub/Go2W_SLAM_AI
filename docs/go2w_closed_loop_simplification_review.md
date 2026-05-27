@@ -59,7 +59,25 @@ input text / UI command / scripted task
   -> OperatorPanel / UI summary
       - show compact reason trace
       - expose dry-run by default
+      - render operator_feedback as a screen-like status area
 ```
+
+## 运行频率与反馈策略
+
+运行时不要把所有刷新绑定到同一个频率。建议固定三层节奏：
+
+- SLAM 轮询：按 `slam_poll_interval_s` 读取 `world_state`，默认 1 Hz。现场 SLAM 频率更高时也不需要 UI 全量刷新；弱网或 CPU 压力大时可以降到 0.5 Hz。
+- UI 刷新：按 `ui_refresh_interval_s` 更新屏幕状态，默认 1 Hz。UI 展示应消费最近一次有效状态，而不是强制每帧重新查网关。
+- 操作员/LLM 反馈：按 `operator_feedback_interval_s` 和 `llm_feedback_interval_s` 生成自然语言反馈，默认 5s/8s。多点任务在每段出发、进度、到达、阻塞、超时时都要产生 `operator_feedback`。
+
+`operator_feedback` 是 UI “显示屏区域”的输入契约：字段包含 `phase`、`severity`、`channel=operator_display`、`llm_surface=true`、`text`、`target_node`、`target_name`、可选 `distance_to_target_m`。后续接入 LLM HTTP service 时，可以把 `llm_feedback_requests` 交给 LLM 改写成更自然的口播/屏幕文本，但 UI 不应依赖 LLM 才能显示基本状态。
+
+意外情况的默认处理：
+
+- 连续网关读取失败达到 `gateway_error_limit`：停止等待、阻塞后续队列、请求人工确认。
+- 运行中 SafetyGate 变为不允许导航：停止等待并记录阻断原因。
+- 到点超时：停止后续 step，反馈当前目标未确认到达。
+- dry-run：仍然生成完整 `operator_feedback` 和队列 JSON，但不访问运动下发路径。
 
 ## 下一步优先级
 
@@ -72,6 +90,7 @@ P1：
 - 把 `SafetyGate` 的 policy 输出稳定下来，并给 operator panel 用中文摘要展示。
 - 增加 `capture_keyframe` 外部命令配置，保持 dry-run 默认安全。
 - 增加 C++ 单元测试：低电量、弱网、已到点、障碍阻断、队列失败停止。
+- 接入 LLM feedback renderer：把 `llm_feedback_requests` 变成 UI 文本或语音，但保留 deterministic fallback。
 
 P2：
 - 接入 C++ LLM HTTP client，逐步替代 Python planner fallback。

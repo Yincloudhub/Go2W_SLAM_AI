@@ -7,6 +7,20 @@ from pathlib import Path
 from typing import Any
 
 
+def _operator_feedback_from_queue(queue_execution: dict[str, Any]) -> list[dict[str, Any]]:
+    feedback: list[dict[str, Any]] = []
+    events = queue_execution.get("events", [])
+    if not isinstance(events, list):
+        return feedback
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        messages = event.get("operator_feedback", [])
+        if isinstance(messages, list):
+            feedback.extend(item for item in messages if isinstance(item, dict))
+    return feedback
+
+
 def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "command": output.get("command"),
@@ -43,6 +57,8 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "task_queue_id": None,
         "task_queue_targets": None,
         "task_queue_completed": None,
+        "operator_feedback_latest": "",
+        "operator_feedback_count": 0,
         "user_reply": "",
         "semantic_trace": None,
         "steps": [step.get("step") for step in output.get("steps", []) if isinstance(step, dict)],
@@ -123,6 +139,10 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(queue_execution, dict):
                     summary["task_queue_completed"] = queue_execution.get("completed")
                     summary["blocked_reason"] = queue_execution.get("blocked_reason", summary["blocked_reason"]) or summary["blocked_reason"]
+                    feedback = _operator_feedback_from_queue(queue_execution)
+                    summary["operator_feedback_count"] = len(feedback)
+                    if feedback:
+                        summary["operator_feedback_latest"] = str(feedback[-1].get("text") or "")
         elif name == "auto_pause_on_arrival" and isinstance(result, dict):
             summary["arrived"] = result.get("arrived")
             summary["paused"] = result.get("paused")
@@ -177,6 +197,8 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "task_queue_id",
         "task_queue_targets",
         "task_queue_completed",
+        "operator_feedback_latest",
+        "operator_feedback_count",
         "user_reply",
     ]
     row = {"timestamp": ts, **{key: summary.get(key) for key in fieldnames if key != "timestamp"}}

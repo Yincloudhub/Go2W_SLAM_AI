@@ -247,24 +247,110 @@ def distance_to_pose(world_state_result: dict[str, Any], target_pose: dict[str, 
         return None
 
 
-def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+def operator_feedback_message(
+    phase: str,
+    text: str,
+    *,
+    target_node: str = "",
+    target_name: str = "",
+    severity: str = "info",
+    distance_m: float | None = None,
+) -> dict[str, Any]:
+    message = {
+        "phase": phase,
+        "severity": severity,
+        "channel": "operator_display",
+        "llm_surface": True,
+        "text": text,
+        "target_node": target_node,
+        "target_name": target_name or target_node,
+    }
+    if distance_m is not None:
+        message["distance_to_target_m"] = distance_m
+    return message
+
+
+def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, target_name: str = "") -> dict[str, Any]:
     target_pose = command.get("target_pose")
     if not isinstance(target_pose, dict):
         return {"arrived": False, "paused": False, "reason": "missing target_pose", "samples": []}
 
+    target_node = str(command.get("target_node") or "")
+    target_label = target_name or target_node
     samples = []
+    operator_feedback: list[dict[str, Any]] = []
+    llm_feedback_requests: list[dict[str, Any]] = []
     entered_count = 0
+    consecutive_errors = 0
+    max_errors = max(1, int(getattr(args, "gateway_error_limit", 3)))
+    poll_interval = max(0.1, float(getattr(args, "slam_poll_interval_s", 0.0) or args.arrival_monitor_interval_s))
+    ui_interval = max(0.1, float(getattr(args, "ui_refresh_interval_s", poll_interval)))
+    feedback_interval = max(0.1, float(getattr(args, "operator_feedback_interval_s", 5.0)))
+    llm_feedback_interval = max(0.1, float(getattr(args, "llm_feedback_interval_s", 8.0)))
+    last_ui = 0.0
+    last_feedback = 0.0
+    last_llm_feedback = 0.0
     deadline = time.time() + args.arrival_monitor_s
     while time.time() < deadline:
-        state = run_gateway_command(
-            {"action": "get_world_state"},
-            client_path=args.gateway_client,
-            network_interface=args.network_interface,
-            timeout_s=args.timeout_s,
-            startup_wait_s=args.gateway_startup_wait_s,
-        )
+        try:
+            state = run_gateway_command(
+                {"action": "get_world_state"},
+                client_path=args.gateway_client,
+                network_interface=args.network_interface,
+                timeout_s=args.timeout_s,
+                startup_wait_s=args.gateway_startup_wait_s,
+            )
+            consecutive_errors = 0
+        except Exception as exc:
+            consecutive_errors += 1
+            samples.append({"error": str(exc), "consecutive_errors": consecutive_errors})
+            if consecutive_errors >= max_errors:
+                return {
+                    "arrived": False,
+                    "paused": False,
+                    "threshold_m": args.arrival_distance_m,
+                    "samples": samples,
+                    "operator_feedback": operator_feedback
+                    + [
+                        operator_feedback_message(
+                            "blocked",
+                            "连续读取 SLAM 状态失败，停止等待并请求人工确认。",
+                            target_node=target_node,
+                            target_name=target_label,
+                            severity="error",
+                        )
+                    ],
+                    "llm_feedback_requests": llm_feedback_requests,
+                    "reason": f"gateway feedback failed repeatedly: {exc}",
+                }
+            time.sleep(poll_interval)
+            continue
+
         distance_m = distance_to_pose(state, target_pose)
         world = state.get("world_state", {}) if isinstance(state, dict) else {}
+        allowed, reason = gateway_allows_navigation(state)
+        if not allowed:
+            operator_feedback.append(
+                operator_feedback_message(
+                    "blocked",
+                    f"运行中安全门阻断，已停止等待：{reason}",
+                    target_node=target_node,
+                    target_name=target_label,
+                    severity="error",
+                    distance_m=distance_m,
+                )
+            )
+            return {
+                "arrived": False,
+                "paused": False,
+                "threshold_m": args.arrival_distance_m,
+                "samples": samples,
+                "operator_feedback": operator_feedback,
+                "llm_feedback_requests": llm_feedback_requests,
+                "runtime_safety": {"allowed": False, "reason": reason},
+                "reason": reason,
+            }
+
         sample = {
             "timestamp_ms": world.get("timestamp_ms") if isinstance(world, dict) else None,
             "distance_to_target_m": distance_m,
@@ -273,6 +359,29 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace) -> dict[
             "safety": world.get("safety") if isinstance(world, dict) else None,
         }
         samples.append(sample)
+        now = time.time()
+        if now - last_ui >= ui_interval:
+            sample["ui_refresh"] = True
+            last_ui = now
+        if now - last_feedback >= feedback_interval:
+            text = f"正在前往{target_label}"
+            if distance_m is not None:
+                text += f"，距离约{distance_m:.2f}米"
+            operator_feedback.append(
+                operator_feedback_message("progress", text, target_node=target_node, target_name=target_label, distance_m=distance_m)
+            )
+            last_feedback = now
+        if now - last_llm_feedback >= llm_feedback_interval:
+            llm_feedback_requests.append(
+                {
+                    "phase": "progress",
+                    "target_node": target_node,
+                    "target_name": target_label,
+                    "distance_to_target_m": distance_m,
+                    "instruction": "用一句自然中文向操作者说明当前正在前往哪里、剩余大致距离和是否需要干预。",
+                }
+            )
+            last_llm_feedback = now
         if distance_m is not None and distance_m <= args.arrival_distance_m:
             entered_count += 1
             if entered_count >= args.arrival_confirm_samples:
@@ -288,17 +397,40 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace) -> dict[
                     "paused": bool(pause_result.get("accepted")),
                     "threshold_m": args.arrival_distance_m,
                     "samples": samples,
+                    "operator_feedback": operator_feedback
+                    + [
+                        operator_feedback_message(
+                            "arrived",
+                            f"已到达{target_label}，导航已暂停。",
+                            target_node=target_node,
+                            target_name=target_label,
+                            severity="ok",
+                            distance_m=distance_m,
+                        )
+                    ],
+                    "llm_feedback_requests": llm_feedback_requests,
                     "pause_result": pause_result,
                 }
         else:
             entered_count = 0
-        time.sleep(args.arrival_monitor_interval_s)
+        time.sleep(poll_interval)
 
     return {
         "arrived": False,
         "paused": False,
         "threshold_m": args.arrival_distance_m,
         "samples": samples,
+        "operator_feedback": operator_feedback
+        + [
+            operator_feedback_message(
+                "timeout",
+                f"未在限定时间内确认到达{target_label}，停止后续队列。",
+                target_node=target_node,
+                target_name=target_label,
+                severity="warning",
+            )
+        ],
+        "llm_feedback_requests": llm_feedback_requests,
         "reason": "arrival threshold not reached before timeout",
     }
 
@@ -343,18 +475,52 @@ def execute_task_queue(
     blocked_reason = ""
     failed_step = None
     profile = registry.get_map(args.map_id)
+    feedback_policy = {
+        "slam_poll_interval_s": getattr(args, "slam_poll_interval_s", args.arrival_monitor_interval_s),
+        "ui_refresh_interval_s": getattr(args, "ui_refresh_interval_s", args.arrival_monitor_interval_s),
+        "operator_feedback_interval_s": getattr(args, "operator_feedback_interval_s", 5.0),
+        "llm_feedback_interval_s": getattr(args, "llm_feedback_interval_s", 8.0),
+        "max_consecutive_gateway_errors": getattr(args, "gateway_error_limit", 3),
+        "runtime_safety_check": True,
+    }
 
     for task in task_queue.get("steps", []):
         if not isinstance(task, dict):
             continue
         action = str(task.get("action") or "")
         task_id = task_step_id(task)
+        target_name = str(task.get("target_name") or task.get("target_node") or "")
         if action == "report":
-            events.append({"task_id": task_id, "action": action, "status": "ok", "message": task.get("message")})
+            events.append(
+                {
+                    "task_id": task_id,
+                    "action": action,
+                    "status": "ok",
+                    "message": task.get("message"),
+                    "operator_feedback": [
+                        operator_feedback_message("report", str(task.get("message") or ""), severity="info")
+                    ],
+                }
+            )
             continue
         if action == "capture_keyframe":
             result = run_capture_keyframe(task, args) if args.execute else {"captured": False, "reason": "dry run; capture not executed", "target_node": task.get("target_node")}
-            events.append({"task_id": task_id, "action": action, "status": "ok", "result": result})
+            events.append(
+                {
+                    "task_id": task_id,
+                    "action": action,
+                    "status": "ok",
+                    "result": result,
+                    "operator_feedback": [
+                        operator_feedback_message(
+                            "capture",
+                            f"记录{target_name}的关键帧事件。",
+                            target_node=str(task.get("target_node") or ""),
+                            target_name=target_name,
+                        )
+                    ],
+                }
+            )
             continue
         if action != "navigate":
             events.append({"task_id": task_id, "action": action, "status": "skipped", "reason": "unsupported task action"})
@@ -405,10 +571,24 @@ def execute_task_queue(
                     "target_node": target_node,
                     "slam_command": slam_command,
                     "preflight": preflight_state,
+                    "operator_feedback": [
+                        operator_feedback_message(
+                            "queued",
+                            f"干跑：将前往{target_name}，不会下发运动。",
+                            target_node=target_node,
+                            target_name=target_name,
+                        )
+                    ],
                 }
             )
             continue
 
+        departing_feedback = operator_feedback_message(
+            "departing",
+            f"正在前往{target_name}。",
+            target_node=target_node,
+            target_name=target_name,
+        )
         result = run_gateway_command(
             slam_command,
             client_path=args.gateway_client,
@@ -417,7 +597,7 @@ def execute_task_queue(
             startup_wait_s=args.gateway_startup_wait_s,
         )
         accepted = bool(result.get("accepted", False))
-        arrival = wait_for_arrival(slam_command, args) if accepted else {"arrived": False, "reason": "gateway did not accept navigation"}
+        arrival = wait_for_arrival(slam_command, args, target_name=target_name) if accepted else {"arrived": False, "reason": "gateway did not accept navigation", "operator_feedback": []}
         status = "ok" if accepted and arrival.get("arrived") else "failed"
         events.append(
             {
@@ -428,6 +608,8 @@ def execute_task_queue(
                 "slam_command": slam_command,
                 "send_result": result,
                 "arrival": arrival,
+                "operator_feedback": [departing_feedback] + list(arrival.get("operator_feedback") or []),
+                "llm_feedback_requests": list(arrival.get("llm_feedback_requests") or []),
             }
         )
         if status != "ok":
@@ -441,6 +623,7 @@ def execute_task_queue(
         "completed": failed_step is None,
         "failed_step": failed_step,
         "blocked_reason": blocked_reason,
+        "feedback_policy": feedback_policy,
         "events": events,
         "user_reply": task_queue.get("user_reply"),
     }
@@ -499,6 +682,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
     parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
+    parser.add_argument("--slam-poll-interval-s", type=float, default=1.0)
+    parser.add_argument("--ui-refresh-interval-s", type=float, default=1.0)
+    parser.add_argument("--operator-feedback-interval-s", type=float, default=5.0)
+    parser.add_argument("--llm-feedback-interval-s", type=float, default=8.0)
+    parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument("--capture-command", default="", help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")

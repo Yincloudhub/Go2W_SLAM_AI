@@ -21,6 +21,11 @@ struct OperatorPanelConfig {
     int nav_mode = 1;
     double arrival_distance_m = 0.7;
     double arrival_monitor_s = 75.0;
+    double slam_poll_interval_s = 1.0;
+    double ui_refresh_interval_s = 1.0;
+    double operator_feedback_interval_s = 5.0;
+    double llm_feedback_interval_s = 8.0;
+    int max_consecutive_gateway_errors = 3;
     double gateway_startup_wait_s = 1.0;
     int gateway_timeout_s = 30;
     bool execute_enabled = false;
