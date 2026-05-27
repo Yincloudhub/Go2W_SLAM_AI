@@ -53,6 +53,9 @@ It is the first step toward a Qt/RViz2-style UI:
 - builds `WorldState v1`, `OperatorDisplayState`, and bounded runtime-log records
   in C++ so the hot operator path no longer depends on the Python prototype data
   model.
+- can call an optional local OpenAI-compatible HTTP LLM service from C++. The
+  model is only allowed to select registered `node_id` values; C++ still builds
+  the task queue and runs SafetyGate/QueueExecutor.
 
 Run on the robot/NX:
 
@@ -81,6 +84,24 @@ The launcher defaults to `scripts/start_go2w_slam_stack.sh` and lets the C++
 operator panel perform the gateway world-state check immediately after startup.
 This keeps the live path as `shell launcher -> C++ panel -> C++ gateway client`;
 the Python startup supervisor remains available only as a diagnostic helper.
+
+Optional C++ LLM HTTP fallback:
+
+```bash
+GO2W_LLM_HTTP_URL=http://127.0.0.1:8080/v1/chat/completions \
+GO2W_LLM_HTTP_MODEL=local \
+./scripts/run_go2w_operator_ui.sh
+```
+
+When enabled, unmatched natural-language commands go to the local HTTP model.
+The expected model output is only:
+
+```json
+{"reply":"short operator reply","targets":["registered_node_id"],"capture_keyframe":false}
+```
+
+The C++ panel rejects empty or unregistered targets and does not accept raw
+coordinates or Unitree API ids from the model.
 
 Watch-only mode:
 

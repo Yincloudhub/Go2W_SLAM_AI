@@ -1,4 +1,5 @@
 #include "go2w/operator_panel.hpp"
+#include "go2w/llm_http_client.hpp"
 #include "go2w/queue_executor.hpp"
 #include "go2w/world_state_v1.hpp"
 
@@ -92,6 +93,16 @@ std::string trimAscii(const std::string& value)
     if (first == std::string::npos) return "";
     const auto last = value.find_last_not_of(" \t\r\n");
     return value.substr(first, last - first + 1);
+}
+
+std::string joinStrings(const std::vector<std::string>& values, const std::string& sep)
+{
+    std::ostringstream ss;
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (i) ss << sep;
+        ss << values[i];
+    }
+    return ss.str();
 }
 
 }  // namespace
@@ -335,7 +346,113 @@ CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
     if (route.matched) {
         return executeSemanticRoute(route);
     }
+    if (!config_.llm_http_url.empty()) {
+        return fallbackLlmHttpCommand(text);
+    }
     return fallbackPythonCommand(text);
+}
+
+std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::string& text) const
+{
+    nlohmann::json candidates = nlohmann::json::array();
+    const nlohmann::json registry = loadRegistry();
+    const auto* maps = objectAt(registry, {"maps"});
+    if (maps && maps->is_array()) {
+        for (const auto& map : *maps) {
+            if (!map.is_object() || map.value("map_id", "") != "go2w_real_site") continue;
+            const auto* nodes = objectAt(map, {"topology_nodes"});
+            if (!nodes || !nodes->is_array()) continue;
+            for (const auto& node : *nodes) {
+                if (!node.is_object()) continue;
+                candidates.push_back({
+                    {"node_id", node.value("node_id", "")},
+                    {"name", node.value("name", "")},
+                    {"aliases", node.value("aliases", nlohmann::json::array())},
+                    {"tags", node.value("tags", nlohmann::json::array())},
+                });
+            }
+        }
+    }
+
+    const std::string system_prompt =
+        "You are the GO2W robot-dog operator planner. Select only registered topology node_id values. "
+        "Return only one compact JSON object with this schema: "
+        "{\"reply\":\"short Chinese operator reply\",\"targets\":[\"node_id\"],\"capture_keyframe\":false}. "
+        "Do not output coordinates, speeds, Unitree API ids, markdown, or extra text. "
+        "If the command is unclear, return targets as an empty array.";
+    const nlohmann::json user_payload = {
+        {"command", text},
+        {"current_node", config_.current_node},
+        {"execute_enabled", config_.execute_enabled},
+        {"candidates", candidates},
+    };
+    return {
+        {{"role", "system"}, {"content", system_prompt}},
+        {{"role", "user"}, {"content", user_payload.dump()}},
+    };
+}
+
+CommandResult OperatorPanel::fallbackLlmHttpCommand(const std::string& text) const
+{
+    CommandResult result;
+    std::ostringstream out;
+    const LlmHttpClient client({
+        config_.llm_http_url,
+        config_.llm_http_model,
+        config_.llm_http_timeout_s,
+        config_.llm_http_max_tokens,
+        0.0,
+    });
+    const LlmHttpResult llm = client.chat(buildLlmHttpMessages(text));
+    if (!llm.ok) {
+        result.exit_code = 5;
+        result.stderr_text = "C++ LLM HTTP failed: " + llm.error + "\n";
+        return result;
+    }
+
+    out << "C++ LLM HTTP reply: " << llm.content << "\n";
+    const auto objects = extractJsonObjects(llm.content);
+    if (objects.empty()) {
+        result.exit_code = 4;
+        out << "C++ LLM HTTP did not return executable JSON; no command sent.\n";
+        result.stdout_text = out.str();
+        return result;
+    }
+
+    const nlohmann::json& plan = objects.front();
+    if (plan.contains("reply") && plan.at("reply").is_string()) {
+        out << "LLM operator reply: " << plan.at("reply").get<std::string>() << "\n";
+    }
+
+    std::vector<std::string> targets;
+    if (plan.contains("targets") && plan.at("targets").is_array()) {
+        for (const auto& item : plan.at("targets")) {
+            if (item.is_string() && !item.get<std::string>().empty()) targets.push_back(item.get<std::string>());
+        }
+    }
+    if (targets.empty()) {
+        result.exit_code = 4;
+        out << "C++ LLM HTTP returned no registered target; no command sent.\n";
+        result.stdout_text = out.str();
+        return result;
+    }
+
+    std::string route_text = joinStrings(targets, " ");
+    if (plan.value("capture_keyframe", false)) route_text += " capture";
+    const SemanticRouter router(loadRegistry(), "go2w_real_site");
+    const SemanticRoute route = router.planText(route_text, config_.nav_speed_mps, config_.nav_mode);
+    if (!route.matched) {
+        result.exit_code = 4;
+        out << "C++ LLM HTTP targets did not match registry after validation; no command sent.\n";
+        result.stdout_text = out.str();
+        return result;
+    }
+
+    CommandResult execution = executeSemanticRoute(route);
+    result.exit_code = execution.exit_code;
+    result.stdout_text = out.str() + execution.stdout_text;
+    result.stderr_text = execution.stderr_text;
+    return result;
 }
 
 CommandResult OperatorPanel::fallbackPythonCommand(const std::string& text) const

@@ -16,6 +16,10 @@ void usage(const char* argv0)
               << "  --ensure-slam-on-start        Start/check LiDAR driver and SLAM before opening panel\n"
               << "  --interface IFACE             Network interface, default eth0\n"
               << "  --gateway-timeout-s SECONDS   Gateway command timeout, default 30\n"
+              << "  --llm-http-url URL            OpenAI-compatible local HTTP endpoint, disabled by default\n"
+              << "  --llm-http-model MODEL        HTTP LLM model name, default local\n"
+              << "  --llm-http-timeout-s SECONDS  HTTP LLM timeout, default 20\n"
+              << "  --llm-http-max-tokens N       HTTP LLM max tokens, default 256\n"
               << "  --slam-poll-interval-s SEC    World-state polling interval during execution\n"
               << "  --ui-refresh-interval-s SEC   Console/UI progress refresh interval\n"
               << "  --feedback-interval-s SEC     Operator feedback message interval\n"
@@ -52,6 +56,14 @@ int main(int argc, char** argv)
             config.network_interface = argv[++i];
         } else if (arg == "--gateway-timeout-s" && i + 1 < argc) {
             config.gateway_timeout_s = std::atoi(argv[++i]);
+        } else if (arg == "--llm-http-url" && i + 1 < argc) {
+            config.llm_http_url = argv[++i];
+        } else if (arg == "--llm-http-model" && i + 1 < argc) {
+            config.llm_http_model = argv[++i];
+        } else if (arg == "--llm-http-timeout-s" && i + 1 < argc) {
+            config.llm_http_timeout_s = std::atoi(argv[++i]);
+        } else if (arg == "--llm-http-max-tokens" && i + 1 < argc) {
+            config.llm_http_max_tokens = std::atoi(argv[++i]);
         } else if (arg == "--slam-poll-interval-s" && i + 1 < argc) {
             config.slam_poll_interval_s = std::atof(argv[++i]);
         } else if (arg == "--ui-refresh-interval-s" && i + 1 < argc) {

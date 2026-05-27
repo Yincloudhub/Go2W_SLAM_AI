@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(go2w_plan_executor_core
     src/gateway_client.cpp
+    src/llm_http_client.cpp
     src/plan_executor.cpp
     src/operator_panel.cpp
     src/queue_executor.cpp
@@ -40,3 +41,11 @@ target_link_libraries(go2w_world_state_v1_smoke_test PRIVATE go2w_plan_executor_
 
 enable_testing()
 add_test(NAME go2w_world_state_v1_smoke_test COMMAND go2w_world_state_v1_smoke_test)
+
+add_executable(go2w_llm_http_client_smoke_test
+    src/llm_http_client_smoke_test.cpp
+)
+
+target_link_libraries(go2w_llm_http_client_smoke_test PRIVATE go2w_plan_executor_core)
+
+add_test(NAME go2w_llm_http_client_smoke_test COMMAND go2w_llm_http_client_smoke_test)

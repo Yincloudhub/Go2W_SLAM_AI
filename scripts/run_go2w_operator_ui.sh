@@ -12,6 +12,11 @@ CURRENT_NODE="${GO2W_CURRENT_NODE:-initial_point}"
 GATEWAY_CLIENT="${GO2W_GATEWAY_CLIENT:-/home/unitree/slam_gateway_refactor/build/slam_llm_command_client}"
 NETWORK_INTERFACE="${GO2W_NETWORK_INTERFACE:-eth0}"
 START_SLAM_SCRIPT="${GO2W_START_SLAM_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_slam_stack.sh}"
+LLM_HTTP_ARGS=()
+if [[ -n "${GO2W_LLM_HTTP_URL:-}" ]]; then
+  LLM_HTTP_ARGS+=(--llm-http-url "${GO2W_LLM_HTTP_URL}")
+  LLM_HTTP_ARGS+=(--llm-http-model "${GO2W_LLM_HTTP_MODEL:-local}")
+fi
 
 if [[ ! -x "${BUILD_DIR}/go2w_operator_panel" ]]; then
   if ! command -v cmake >/dev/null 2>&1; then
@@ -29,4 +34,5 @@ exec "${BUILD_DIR}/go2w_operator_panel" \
   --interface "${NETWORK_INTERFACE}" \
   --current-node "${CURRENT_NODE}" \
   --ensure-slam-on-start \
+  "${LLM_HTTP_ARGS[@]}" \
   "$@"

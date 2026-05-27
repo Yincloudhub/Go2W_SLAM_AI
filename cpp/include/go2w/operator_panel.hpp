@@ -17,6 +17,8 @@ struct OperatorPanelConfig {
     std::string network_interface = "eth0";
     std::string python = "python3";
     std::string start_slam_script = "scripts/start_go2w_slam_stack.sh";
+    std::string llm_http_url = "";
+    std::string llm_http_model = "local";
     std::string current_node = "";
     double nav_speed_mps = 0.25;
     int nav_mode = 1;
@@ -32,6 +34,8 @@ struct OperatorPanelConfig {
     int max_llm_feedback_events = 40;
     double gateway_startup_wait_s = 1.0;
     int gateway_timeout_s = 30;
+    int llm_http_timeout_s = 20;
+    int llm_http_max_tokens = 256;
     bool execute_enabled = false;
     bool weak_link_mode = false;
     bool ensure_slam_on_start = false;
@@ -57,7 +61,9 @@ private:
     nlohmann::json sendGatewayCommand(const nlohmann::json& command) const;
     nlohmann::json getWorldState() const;
     CommandResult executeSemanticRoute(const SemanticRoute& route) const;
+    CommandResult fallbackLlmHttpCommand(const std::string& text) const;
     CommandResult fallbackPythonCommand(const std::string& text) const;
+    std::vector<nlohmann::json> buildLlmHttpMessages(const std::string& text) const;
     nlohmann::json buildPanelWorldState(const nlohmann::json& result) const;
     std::string formatWorldState(const nlohmann::json& result) const;
     std::string formatFullWorldState(const nlohmann::json& result) const;

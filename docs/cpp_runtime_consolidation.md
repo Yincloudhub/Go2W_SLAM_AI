@@ -52,6 +52,9 @@ This step adds C++ equivalents for the previous Python state contract:
 - `cpp/include/go2w/world_state_v1.hpp`
 - `cpp/src/world_state_v1.cpp`
 - `cpp/src/world_state_v1_smoke_test.cpp`
+- `cpp/include/go2w/llm_http_client.hpp`
+- `cpp/src/llm_http_client.cpp`
+- `cpp/src/llm_http_client_smoke_test.cpp`
 
 The C++ operator panel now formats status through:
 
@@ -64,6 +67,18 @@ gateway world_state
 
 The Python `world_state_v1.py`, `operator_display.py`, and `runtime_log.py`
 remain as prototype parity and offline test tools.
+
+The operator panel can now call an optional OpenAI-compatible local HTTP LLM
+service directly from C++. The LLM output is constrained to registered
+`node_id` targets:
+
+```json
+{"reply":"short operator reply","targets":["registered_node_id"],"capture_keyframe":false}
+```
+
+C++ then routes those `node_id` values through `SemanticRouter`, `TaskQueue`,
+`SafetyGate`, and `QueueExecutor`. The model is not allowed to output raw
+coordinates, speeds, Unitree API ids, or direct motion commands.
 
 The robot-side UI launcher now defaults to `scripts/start_go2w_slam_stack.sh`.
 Startup therefore runs as:
@@ -89,6 +104,7 @@ cd cpp
 cmake -S . -B build
 cmake --build build -j2
 ./build/go2w_world_state_v1_smoke_test
+./build/go2w_llm_http_client_smoke_test
 ```
 
 Result:
@@ -97,6 +113,7 @@ Result:
 - `go2w_operator_panel` built.
 - `go2w_plan_executor_dry_run` built.
 - `go2w_world_state_v1_smoke_test` built and passed.
+- `go2w_llm_http_client_smoke_test` built and passed.
 - No navigation, relocation, mapping, stop-SLAM, or chassis motion command was
   sent.
 
@@ -104,10 +121,8 @@ Result:
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,
    keeping the existing shell wrapper only as a compatibility entry.
-2. Replace Python LLM fallback with a C++ HTTP client to a local llama.cpp or
-   OpenAI-compatible service.
-3. Move runtime log writing from Python into `QueueExecutor`.
-4. Add C++ sensor-summary adapters for stereo depth and TI radar/NX, with stale
+2. Move runtime log writing from Python into `QueueExecutor`.
+3. Add C++ sensor-summary adapters for stereo depth and TI radar/NX, with stale
    data ignored rather than blocking the robot loop.
-5. Keep Python-only files under an explicit `offline/prototype` boundary after
+4. Keep Python-only files under an explicit `offline/prototype` boundary after
    the C++ path is stable.
