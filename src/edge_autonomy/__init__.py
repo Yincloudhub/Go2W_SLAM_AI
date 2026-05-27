@@ -1,6 +1,7 @@
 from .models import MapReference, NavigationGoal, Pose2D, RiskEvent, RobotState, SemanticObject, WorldState
 from .map_registry import MapProfile, MapRegistry, RelocalizationAnchor, TopologyEdge, TopologyNode, UnitreePose
 from .llm_context import build_planner_context, plan_to_slam_command, simulate_local_llm_plan
+from .perception_fusion import DepthCameraSummary, depth_summary_is_usable, fuse_local_obstacle_summary
 from .safety import LinkQuality, SafetyDecision, SafetySupervisor, SupervisorAction
 from .slam_adapter import InMemorySlamAdapter, NavigationFeedback, NavigationStatus, ReplaySlamAdapter, SlamNavigationAdapter
 from .slam_state import CurrentPose, LocalObstacleSummary, LocalizationState, NavigationTaskState, SlamHealth
@@ -9,6 +10,7 @@ from .task_queue import validate_task_queue
 
 __all__ = [
     "CurrentPose",
+    "DepthCameraSummary",
     "InMemorySlamAdapter",
     "LinkQuality",
     "LidarStateSummary",
@@ -41,6 +43,8 @@ __all__ = [
     "UnitreePose",
     "WorldState",
     "build_planner_context",
+    "depth_summary_is_usable",
+    "fuse_local_obstacle_summary",
     "plan_to_slam_command",
     "simulate_local_llm_plan",
     "validate_task_queue",
