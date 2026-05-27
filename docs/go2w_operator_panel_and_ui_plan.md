@@ -86,3 +86,25 @@ Qt/RViz2 Panel
 - `slam_health_failed` 或 `localization:not_started` 时，禁止写入“当前位置标定点”。
 - 若 `current_pose` 为零点或 `pose_age_ms=-1`，说明没有有效地图坐标。
 - 删除旧点并创建新点，只能在 SLAM 有可信 live pose 后执行。
+
+## 多模态巡检 UI 方向
+
+后续 UI 可以逐步扩展为多模态边缘自主机器狗的操作台，但第一版仍应保持“显示和输入”的职责，不直接拼底层命令。建议五个稳定区域：
+
+1. **任务队列**：显示巡检目标、当前 step、下一步动作和是否需要人工确认。
+2. **世界状态**：显示 SLAM、定位、LiDAR、双目深度、TI 雷达/NX 节点、弱网模式。
+3. **安全策略**：显示 `allow/hold/slow/block/confirm/replan` 以及触发原因。
+4. **反馈显示屏**：显示 `operator_feedback` 和 `llm_feedback_results`，用于“现在去哪、到哪了、为什么停”的自然语言反馈。
+5. **巡检证据**：显示拍照关键帧、雷达告警、双目摘要和结束报告。
+
+语音、拍照、巡检、双目和雷达都应通过 action registry 或 perception summary bus 进入主链路：
+
+```text
+voice/asr -> text command -> TaskQueue IR
+capture_keyframe -> keyframe summary
+stereo depth -> DepthCameraSummary
+NX + TI radar -> RadarDetectionSummary
+inspection mission -> multi-step task queue
+```
+
+弱网模式下，UI 应明确显示 raw video、dense pointcloud、full log、high-rate images 被降级或丢弃，同时保留语义摘要、安全原因、到达事件、异常告警和关键帧索引。总路线见 `docs/multimodal_edge_autonomous_robot_plan.md`。
