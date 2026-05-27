@@ -22,6 +22,11 @@ class ExecutionFeedbackTests(unittest.TestCase):
                                         "llm_feedback_results": [
                                             {"text": "已到达701门口，任务完成。", "source": "local_llm"}
                                         ],
+                                        "performance": {
+                                            "poll_overruns": 1,
+                                            "max_loop_elapsed_s": 0.42,
+                                            "dropped_counts": {"arrival_samples": 2, "operator_feedback": 0, "llm_feedback": 0},
+                                        },
                                     }
                                 ],
                             },
@@ -40,6 +45,9 @@ class ExecutionFeedbackTests(unittest.TestCase):
         self.assertEqual(summary["llm_feedback_count"], 1)
         self.assertEqual(summary["llm_feedback_latest"], "已到达701门口，任务完成。")
         self.assertEqual(summary["llm_feedback_source"], "local_llm")
+        self.assertEqual(summary["runtime_poll_overruns"], 1)
+        self.assertEqual(summary["runtime_max_loop_elapsed_s"], 0.42)
+        self.assertEqual(summary["runtime_dropped_counts"]["arrival_samples"], 2)
 
 
 if __name__ == "__main__":

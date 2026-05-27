@@ -72,12 +72,15 @@ input text / UI command / scripted task
 
 `operator_feedback` 是 UI “显示屏区域”的稳定输入契约：字段包含 `phase`、`severity`、`channel=operator_display`、`llm_surface=true`、`text`、`target_node`、`target_name`、可选 `distance_to_target_m`。`llm_feedback_requests` 记录要交给 LLM 的上下文，`llm_feedback_results` 记录已经生成出来的文本；Python 原型支持 `--llm-feedback-mode template|live|off`，默认 template 保证不拖慢 SLAM 轮询，现场需要真 LLM 回馈时切到 live，失败时保留 deterministic fallback。
 
+为减少内部程序对实时链路的影响，执行器遵循三条工程约束：进度和 queued 阶段默认不调用真实 LLM，`live` 模式也只对阻塞/到达/超时等终态调用真实 LLM；`arrival_samples`、`operator_feedback`、`llm_feedback_*` 都有上限，超过后只保留最新窗口并记录 `dropped_counts`；等待循环按本轮耗时扣减 sleep，并记录 `poll_overruns` 与 `max_loop_elapsed_s`，用于判断 UI/日志/LLM 是否挤占了 SLAM 轮询预算。
+
 意外情况的默认处理：
 
 - 连续网关读取失败达到 `gateway_error_limit`：停止等待、阻塞后续队列、请求人工确认。
 - 运行中 SafetyGate 变为不允许导航：停止等待并记录阻断原因。
 - 到点超时：停止后续 step，反馈当前目标未确认到达。
 - dry-run：仍然生成完整 `operator_feedback` 和队列 JSON，但不访问运动下发路径。
+- 事件过多：保留最新窗口，摘要层暴露被丢弃数量，避免长任务把内存和 JSON 序列化时间拖大。
 
 ## 下一步优先级
 

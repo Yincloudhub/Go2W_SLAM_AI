@@ -53,6 +53,7 @@ Qt/RViz2 UI 或 C++ TUI
   - 区分 SLAM 轮询、UI 刷新、操作员反馈和 LLM 反馈频率
   - 每段导航输出 `operator_feedback`，供 UI 显示“正在去哪/到了哪里/为何阻塞”
   - 输出 `llm_feedback_requests` 和 template `llm_feedback_results`，后续可替换为 C++ LLM HTTP service
+  - 执行热循环使用 bounded event buffers，记录 `poll_overruns`、`max_loop_elapsed_s` 和 dropped counts，避免日志/反馈数组无限增长影响实时性
 - `task_queue` IR
   - 新增 `schemas/task_queue.schema.json`
   - C++ `TaskQueueValidator` 在执行前校验队列结构

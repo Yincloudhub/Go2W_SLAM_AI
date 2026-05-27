@@ -17,6 +17,9 @@ struct FeedbackPolicy {
     double operator_feedback_interval_s = 5.0;
     double llm_feedback_interval_s = 8.0;
     int max_consecutive_gateway_errors = 3;
+    int max_arrival_samples = 120;
+    int max_feedback_events = 120;
+    int max_llm_feedback_events = 40;
     bool runtime_safety_check = true;
 };
 

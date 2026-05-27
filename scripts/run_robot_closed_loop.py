@@ -324,6 +324,17 @@ def clean_llm_feedback_text(raw_text: str, fallback: str) -> str:
     return text[:120] if len(text) > 120 else text
 
 
+def append_limited(items: list[dict[str, Any]], item: dict[str, Any], max_items: int) -> int:
+    if max_items <= 0:
+        return 1
+    dropped = 0
+    while len(items) >= max_items:
+        del items[0]
+        dropped += 1
+    items.append(item)
+    return dropped
+
+
 def generate_llm_feedback_result(
     request: dict[str, Any],
     args: argparse.Namespace,
@@ -344,6 +355,10 @@ def generate_llm_feedback_result(
     }
     if mode != "live":
         return {**base, "source": "template", "text": fallback}
+    if request.get("phase") == "queued":
+        return {**base, "source": "template_queue_budget", "text": fallback, "live_deferred": True}
+    if request.get("phase") == "progress" and not bool(getattr(args, "llm_feedback_live_progress", False)):
+        return {**base, "source": "template_progress_budget", "text": fallback, "live_deferred": True}
 
     prompt = (
         "请根据这条机器人运行反馈请求，输出一句给现场操作者看的中文短句。\n"
@@ -373,6 +388,9 @@ def append_llm_feedback(
     requests: list[dict[str, Any]],
     results: list[dict[str, Any]],
     operator_feedback: list[dict[str, Any]],
+    max_feedback_events: int = 120,
+    max_llm_feedback_events: int = 40,
+    dropped_counts: dict[str, int] | None = None,
 ) -> None:
     request = build_llm_feedback_request(
         phase,
@@ -384,8 +402,8 @@ def append_llm_feedback(
     result = generate_llm_feedback_result(request, args)
     if result is None:
         return
-    requests.append(request)
-    results.append(result)
+    dropped_request = append_limited(requests, request, max_llm_feedback_events)
+    dropped_result = append_limited(results, result, max_llm_feedback_events)
     message = operator_feedback_message(
         "llm_feedback",
         str(result.get("text") or ""),
@@ -395,8 +413,11 @@ def append_llm_feedback(
         distance_m=distance_m,
     )
     message["source"] = result.get("source")
-    message["llm_request_index"] = len(requests) - 1
-    operator_feedback.append(message)
+    message["llm_request_index"] = max(0, len(requests) - 1)
+    dropped_feedback = append_limited(operator_feedback, message, max_feedback_events)
+    if dropped_counts is not None:
+        dropped_counts["llm_feedback"] = dropped_counts.get("llm_feedback", 0) + max(dropped_request, dropped_result)
+        dropped_counts["operator_feedback"] = dropped_counts.get("operator_feedback", 0) + dropped_feedback
 
 
 def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, target_name: str = "") -> dict[str, Any]:
@@ -417,11 +438,40 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
     ui_interval = max(0.1, float(getattr(args, "ui_refresh_interval_s", poll_interval)))
     feedback_interval = max(0.1, float(getattr(args, "operator_feedback_interval_s", 5.0)))
     llm_feedback_interval = max(0.1, float(getattr(args, "llm_feedback_interval_s", 8.0)))
-    last_ui = 0.0
-    last_feedback = 0.0
-    last_llm_feedback = 0.0
-    deadline = time.time() + args.arrival_monitor_s
-    while time.time() < deadline:
+    max_samples = max(1, int(getattr(args, "max_arrival_samples", 120)))
+    max_feedback_events = max(1, int(getattr(args, "max_feedback_events", 120)))
+    max_llm_feedback_events = max(1, int(getattr(args, "max_llm_feedback_events", 40)))
+    dropped_counts = {"arrival_samples": 0, "operator_feedback": 0, "llm_feedback": 0}
+    perf = {"poll_overruns": 0, "max_loop_elapsed_s": 0.0}
+    last_ui = time.monotonic() - ui_interval
+    last_feedback = time.monotonic() - feedback_interval
+    last_llm_feedback = time.monotonic() - llm_feedback_interval
+    deadline = time.monotonic() + args.arrival_monitor_s
+
+    def record_performance(loop_start: float) -> float:
+        elapsed = time.monotonic() - loop_start
+        perf["max_loop_elapsed_s"] = max(float(perf["max_loop_elapsed_s"]), elapsed)
+        if elapsed > poll_interval:
+            perf["poll_overruns"] = int(perf["poll_overruns"]) + 1
+            return 0.0
+        return poll_interval - elapsed
+
+    def performance_summary() -> dict[str, Any]:
+        return {
+            "poll_interval_s": poll_interval,
+            "ui_interval_s": ui_interval,
+            "operator_feedback_interval_s": feedback_interval,
+            "llm_feedback_interval_s": llm_feedback_interval,
+            "poll_overruns": perf["poll_overruns"],
+            "max_loop_elapsed_s": round(float(perf["max_loop_elapsed_s"]), 4),
+            "max_arrival_samples": max_samples,
+            "max_feedback_events": max_feedback_events,
+            "max_llm_feedback_events": max_llm_feedback_events,
+            "dropped_counts": dropped_counts,
+        }
+
+    while time.monotonic() < deadline:
+        loop_start = time.monotonic()
         try:
             state = run_gateway_command(
                 {"action": "get_world_state"},
@@ -433,17 +483,19 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             consecutive_errors = 0
         except Exception as exc:
             consecutive_errors += 1
-            samples.append({"error": str(exc), "consecutive_errors": consecutive_errors})
+            dropped_counts["arrival_samples"] += append_limited(samples, {"error": str(exc), "consecutive_errors": consecutive_errors}, max_samples)
             if consecutive_errors >= max_errors:
                 reason = f"gateway feedback failed repeatedly: {exc}"
-                operator_feedback.append(
+                dropped_counts["operator_feedback"] += append_limited(
+                    operator_feedback,
                     operator_feedback_message(
                         "blocked",
                         "连续读取 SLAM 状态失败，停止等待并请求人工确认。",
                         target_node=target_node,
                         target_name=target_label,
                         severity="error",
-                    )
+                    ),
+                    max_feedback_events,
                 )
                 append_llm_feedback(
                     phase="blocked",
@@ -455,6 +507,9 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     requests=llm_feedback_requests,
                     results=llm_feedback_results,
                     operator_feedback=operator_feedback,
+                    max_feedback_events=max_feedback_events,
+                    max_llm_feedback_events=max_llm_feedback_events,
+                    dropped_counts=dropped_counts,
                 )
                 return {
                     "arrived": False,
@@ -464,16 +519,20 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     "operator_feedback": operator_feedback,
                     "llm_feedback_requests": llm_feedback_requests,
                     "llm_feedback_results": llm_feedback_results,
+                    "performance": performance_summary(),
                     "reason": reason,
                 }
-            time.sleep(poll_interval)
+            sleep_s = record_performance(loop_start)
+            if sleep_s > 0:
+                time.sleep(sleep_s)
             continue
 
         distance_m = distance_to_pose(state, target_pose)
         world = state.get("world_state", {}) if isinstance(state, dict) else {}
         allowed, reason = gateway_allows_navigation(state)
         if not allowed:
-            operator_feedback.append(
+            dropped_counts["operator_feedback"] += append_limited(
+                operator_feedback,
                 operator_feedback_message(
                     "blocked",
                     f"运行中安全门阻断，已停止等待：{reason}",
@@ -481,7 +540,8 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     target_name=target_label,
                     severity="error",
                     distance_m=distance_m,
-                )
+                ),
+                max_feedback_events,
             )
             append_llm_feedback(
                 phase="blocked",
@@ -493,6 +553,9 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                 requests=llm_feedback_requests,
                 results=llm_feedback_results,
                 operator_feedback=operator_feedback,
+                max_feedback_events=max_feedback_events,
+                max_llm_feedback_events=max_llm_feedback_events,
+                dropped_counts=dropped_counts,
             )
             return {
                 "arrived": False,
@@ -503,6 +566,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                 "llm_feedback_requests": llm_feedback_requests,
                 "llm_feedback_results": llm_feedback_results,
                 "runtime_safety": {"allowed": False, "reason": reason},
+                "performance": performance_summary(),
                 "reason": reason,
             }
 
@@ -513,8 +577,8 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             "localization": world.get("localization") if isinstance(world, dict) else None,
             "safety": world.get("safety") if isinstance(world, dict) else None,
         }
-        samples.append(sample)
-        now = time.time()
+        dropped_counts["arrival_samples"] += append_limited(samples, sample, max_samples)
+        now = time.monotonic()
         if now - last_ui >= ui_interval:
             sample["ui_refresh"] = True
             last_ui = now
@@ -522,8 +586,10 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             text = f"正在前往{target_label}"
             if distance_m is not None:
                 text += f"，距离约{distance_m:.2f}米"
-            operator_feedback.append(
-                operator_feedback_message("progress", text, target_node=target_node, target_name=target_label, distance_m=distance_m)
+            dropped_counts["operator_feedback"] += append_limited(
+                operator_feedback,
+                operator_feedback_message("progress", text, target_node=target_node, target_name=target_label, distance_m=distance_m),
+                max_feedback_events,
             )
             last_feedback = now
         if now - last_llm_feedback >= llm_feedback_interval:
@@ -537,6 +603,9 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                 requests=llm_feedback_requests,
                 results=llm_feedback_results,
                 operator_feedback=operator_feedback,
+                max_feedback_events=max_feedback_events,
+                max_llm_feedback_events=max_llm_feedback_events,
+                dropped_counts=dropped_counts,
             )
             last_llm_feedback = now
         if distance_m is not None and distance_m <= args.arrival_distance_m:
@@ -549,7 +618,8 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     timeout_s=args.timeout_s,
                     startup_wait_s=args.gateway_startup_wait_s,
                 )
-                operator_feedback.append(
+                dropped_counts["operator_feedback"] += append_limited(
+                    operator_feedback,
                     operator_feedback_message(
                         "arrived",
                         f"已到达{target_label}，导航已暂停。",
@@ -557,7 +627,8 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                         target_name=target_label,
                         severity="ok",
                         distance_m=distance_m,
-                    )
+                    ),
+                    max_feedback_events,
                 )
                 append_llm_feedback(
                     phase="arrived",
@@ -569,6 +640,9 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     requests=llm_feedback_requests,
                     results=llm_feedback_results,
                     operator_feedback=operator_feedback,
+                    max_feedback_events=max_feedback_events,
+                    max_llm_feedback_events=max_llm_feedback_events,
+                    dropped_counts=dropped_counts,
                 )
                 return {
                     "arrived": True,
@@ -579,20 +653,25 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     "llm_feedback_requests": llm_feedback_requests,
                     "llm_feedback_results": llm_feedback_results,
                     "pause_result": pause_result,
+                    "performance": performance_summary(),
                 }
         else:
             entered_count = 0
-        time.sleep(poll_interval)
+        sleep_s = record_performance(loop_start)
+        if sleep_s > 0:
+            time.sleep(sleep_s)
 
     timeout_reason = "arrival threshold not reached before timeout"
-    operator_feedback.append(
+    dropped_counts["operator_feedback"] += append_limited(
+        operator_feedback,
         operator_feedback_message(
             "timeout",
             f"未在限定时间内确认到达{target_label}，停止后续队列。",
             target_node=target_node,
             target_name=target_label,
             severity="warning",
-        )
+        ),
+        max_feedback_events,
     )
     append_llm_feedback(
         phase="timeout",
@@ -604,6 +683,9 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
         requests=llm_feedback_requests,
         results=llm_feedback_results,
         operator_feedback=operator_feedback,
+        max_feedback_events=max_feedback_events,
+        max_llm_feedback_events=max_llm_feedback_events,
+        dropped_counts=dropped_counts,
     )
     return {
         "arrived": False,
@@ -613,6 +695,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
         "operator_feedback": operator_feedback,
         "llm_feedback_requests": llm_feedback_requests,
         "llm_feedback_results": llm_feedback_results,
+        "performance": performance_summary(),
         "reason": timeout_reason,
     }
 
@@ -663,6 +746,10 @@ def execute_task_queue(
         "operator_feedback_interval_s": getattr(args, "operator_feedback_interval_s", 5.0),
         "llm_feedback_interval_s": getattr(args, "llm_feedback_interval_s", 8.0),
         "llm_feedback_mode": getattr(args, "llm_feedback_mode", "template"),
+        "llm_feedback_live_progress": getattr(args, "llm_feedback_live_progress", False),
+        "max_arrival_samples": getattr(args, "max_arrival_samples", 120),
+        "max_feedback_events": getattr(args, "max_feedback_events", 120),
+        "max_llm_feedback_events": getattr(args, "max_llm_feedback_events", 40),
         "max_consecutive_gateway_errors": getattr(args, "gateway_error_limit", 3),
         "runtime_safety_check": True,
     }
@@ -943,9 +1030,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--operator-feedback-interval-s", type=float, default=5.0)
     parser.add_argument("--llm-feedback-interval-s", type=float, default=8.0)
     parser.add_argument("--llm-feedback-mode", choices=["off", "template", "live"], default="template")
+    parser.add_argument("--llm-feedback-live-progress", action="store_true", help="Allow live LLM calls for in-flight progress feedback. Default keeps the hot loop template-only.")
     parser.add_argument("--llm-feedback-max-tokens", type=int, default=48)
     parser.add_argument("--llm-feedback-timeout-s", type=int, default=6)
     parser.add_argument("--llm-feedback-system", default=FEEDBACK_SYSTEM_PROMPT)
+    parser.add_argument("--max-arrival-samples", type=int, default=120)
+    parser.add_argument("--max-feedback-events", type=int, default=120)
+    parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument("--capture-command", default="", help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")

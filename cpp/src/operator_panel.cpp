@@ -392,6 +392,9 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
     executor_config.feedback_policy.operator_feedback_interval_s = config_.operator_feedback_interval_s;
     executor_config.feedback_policy.llm_feedback_interval_s = config_.llm_feedback_interval_s;
     executor_config.feedback_policy.max_consecutive_gateway_errors = config_.max_consecutive_gateway_errors;
+    executor_config.feedback_policy.max_arrival_samples = config_.max_arrival_samples;
+    executor_config.feedback_policy.max_feedback_events = config_.max_feedback_events;
+    executor_config.feedback_policy.max_llm_feedback_events = config_.max_llm_feedback_events;
     executor_config.execute_enabled = config_.execute_enabled;
     const QueueExecutor executor(executor_config);
     const QueueExecutionResult execution = executor.execute(route);

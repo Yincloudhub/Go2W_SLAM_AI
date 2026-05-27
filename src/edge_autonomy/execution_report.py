@@ -35,6 +35,22 @@ def _llm_feedback_from_queue(queue_execution: dict[str, Any]) -> list[dict[str, 
     return feedback
 
 
+def _latest_queue_performance(queue_execution: dict[str, Any]) -> dict[str, Any]:
+    events = queue_execution.get("events", [])
+    if not isinstance(events, list):
+        return {}
+    for event in reversed(events):
+        if not isinstance(event, dict):
+            continue
+        performance = event.get("performance")
+        if isinstance(performance, dict):
+            return performance
+        arrival = event.get("arrival")
+        if isinstance(arrival, dict) and isinstance(arrival.get("performance"), dict):
+            return arrival["performance"]
+    return {}
+
+
 def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "command": output.get("command"),
@@ -76,6 +92,9 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
         "llm_feedback_latest": "",
         "llm_feedback_count": 0,
         "llm_feedback_source": "",
+        "runtime_poll_overruns": None,
+        "runtime_max_loop_elapsed_s": None,
+        "runtime_dropped_counts": None,
         "user_reply": "",
         "semantic_trace": None,
         "steps": [step.get("step") for step in output.get("steps", []) if isinstance(step, dict)],
@@ -165,6 +184,11 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
                     if llm_feedback:
                         summary["llm_feedback_latest"] = str(llm_feedback[-1].get("text") or "")
                         summary["llm_feedback_source"] = str(llm_feedback[-1].get("source") or "")
+                    performance = _latest_queue_performance(queue_execution)
+                    if performance:
+                        summary["runtime_poll_overruns"] = performance.get("poll_overruns")
+                        summary["runtime_max_loop_elapsed_s"] = performance.get("max_loop_elapsed_s")
+                        summary["runtime_dropped_counts"] = performance.get("dropped_counts")
         elif name == "auto_pause_on_arrival" and isinstance(result, dict):
             summary["arrived"] = result.get("arrived")
             summary["paused"] = result.get("paused")
@@ -224,6 +248,9 @@ def write_execution_log(output: dict[str, Any], log_dir: str | Path) -> dict[str
         "llm_feedback_latest",
         "llm_feedback_count",
         "llm_feedback_source",
+        "runtime_poll_overruns",
+        "runtime_max_loop_elapsed_s",
+        "runtime_dropped_counts",
         "user_reply",
     ]
     row = {"timestamp": ts, **{key: summary.get(key) for key in fieldnames if key != "timestamp"}}

@@ -18,6 +18,9 @@ void usage(const char* argv0)
               << "  --ui-refresh-interval-s SEC   Console/UI progress refresh interval\n"
               << "  --feedback-interval-s SEC     Operator feedback message interval\n"
               << "  --llm-feedback-interval-s SEC LLM/UI feedback request interval\n"
+              << "  --max-arrival-samples N       Max stored arrival samples, default 120\n"
+              << "  --max-feedback-events N       Max stored operator feedback events, default 120\n"
+              << "  --max-llm-feedback-events N   Max stored LLM feedback events, default 40\n"
               << "  --gateway-error-limit N        Consecutive world-state failures before blocking\n"
               << "  --python PATH                 Python executable, default python3\n"
               << "  --current-node NODE_ID        Known current anchor node\n"
@@ -51,6 +54,12 @@ int main(int argc, char** argv)
             config.operator_feedback_interval_s = std::atof(argv[++i]);
         } else if (arg == "--llm-feedback-interval-s" && i + 1 < argc) {
             config.llm_feedback_interval_s = std::atof(argv[++i]);
+        } else if (arg == "--max-arrival-samples" && i + 1 < argc) {
+            config.max_arrival_samples = std::atoi(argv[++i]);
+        } else if (arg == "--max-feedback-events" && i + 1 < argc) {
+            config.max_feedback_events = std::atoi(argv[++i]);
+        } else if (arg == "--max-llm-feedback-events" && i + 1 < argc) {
+            config.max_llm_feedback_events = std::atoi(argv[++i]);
         } else if (arg == "--gateway-error-limit" && i + 1 < argc) {
             config.max_consecutive_gateway_errors = std::atoi(argv[++i]);
         } else if (arg == "--python" && i + 1 < argc) {
