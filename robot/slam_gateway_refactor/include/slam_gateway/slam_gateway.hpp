@@ -54,7 +54,7 @@ public:
     ServiceResult resumeNavigation();
     ServiceResult stopNode();
 
-    void addCurrentPoseAsWaypoint();
+    void addCurrentPoseAsWaypoint(const std::string& name = "");
     void clearWaypoints();
     void printWaypoints() const;
     std::size_t waypointCount() const;

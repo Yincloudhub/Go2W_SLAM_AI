@@ -13,6 +13,7 @@ void usage(const char* argv0)
               << "  --repo-root PATH             Repo root, default ..\n"
               << "  --gateway-client PATH         slam_llm_command_client path\n"
               << "  --start-slam-script PATH      SLAM startup script relative to repo root or absolute\n"
+              << "  --start-rviz2-script PATH     RViz2 startup script relative to repo root or absolute\n"
               << "  --ensure-slam-on-start        Start/check LiDAR driver and SLAM before opening panel\n"
               << "  --interface IFACE             Network interface, default eth0\n"
               << "  --gateway-timeout-s SECONDS   Gateway command timeout, default 30\n"
@@ -50,6 +51,8 @@ int main(int argc, char** argv)
             config.gateway_client = argv[++i];
         } else if (arg == "--start-slam-script" && i + 1 < argc) {
             config.start_slam_script = argv[++i];
+        } else if (arg == "--start-rviz2-script" && i + 1 < argc) {
+            config.start_rviz2_script = argv[++i];
         } else if (arg == "--ensure-slam-on-start") {
             config.ensure_slam_on_start = true;
         } else if (arg == "--interface" && i + 1 < argc) {

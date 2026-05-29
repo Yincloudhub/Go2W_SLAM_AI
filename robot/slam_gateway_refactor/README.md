@@ -84,6 +84,7 @@ Allowed high-level actions:
 - `get_world_state`
 - `start_mapping`
 - `end_mapping`
+- `add_current_pose_waypoint`
 - `relocate`
 - `navigate_to_pose`
 - `pause_navigation`
@@ -98,6 +99,7 @@ The machine-readable path is intentionally stricter than the keyboard path:
 - `speed` must be in the safe range `(0, 0.8]` for navigation.
 - `mode` must be `0` or `1`.
 - `start_mapping`, `end_mapping`, and `stop_slam` require `operator_ack=true` or `confirm=true`.
+- `add_current_pose_waypoint` requires `operator_ack=true` or `confirm=true`, and it is rejected unless localization is fresh.
 
 ## Example LLM command
 

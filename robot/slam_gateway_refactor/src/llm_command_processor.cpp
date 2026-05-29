@@ -49,6 +49,13 @@ bool hasOperatorAck(const nlohmann::json& cmd)
     return confirm != cmd.end() && confirm->is_boolean() && confirm->get<bool>();
 }
 
+bool isFreshEnoughForWaypoint(const LocalizationState& loc)
+{
+    const bool status_ok =
+        loc.status == "localized" || loc.status == "degraded" || loc.status == "localized_or_tracking" || loc.status == "tracking";
+    return status_ok && loc.pose_age_ms >= 0 && loc.pose_age_ms <= 2000;
+}
+
 }  // namespace
 
 LlmCommandProcessor::LlmCommandProcessor(SlamGateway& gateway)
@@ -115,6 +122,28 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         if (!hasOperatorAck(cmd)) return reject("operator_ack_required_for_end_mapping");
         const std::string map_path = cmd.value("map_path", "/home/unitree/test.pcd");
         return ok(action, gateway_.endMapping(map_path));
+    }
+
+    if (action == "add_current_pose_waypoint") {
+        if (!hasOperatorAck(cmd)) return reject("operator_ack_required_for_add_current_pose_waypoint");
+        const auto loc = gateway_.getLocalizationState();
+        if (!isFreshEnoughForWaypoint(loc)) {
+            return {
+                {"accepted", false},
+                {"reason", "localization_not_fresh_enough_for_waypoint"},
+                {"required_pose_age_ms_lte", 2000},
+                {"localization", loc.toJson()},
+                {"world_state", gateway_.buildWorldStateJson()}
+            };
+        }
+        const std::string name = cmd.value("name", "");
+        gateway_.addCurrentPoseAsWaypoint(name);
+        return {
+            {"accepted", true},
+            {"action", action},
+            {"waypoint_count", gateway_.waypointCount()},
+            {"world_state", gateway_.buildWorldStateJson()}
+        };
     }
 
     if (action == "relocate") {

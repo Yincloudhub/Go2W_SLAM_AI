@@ -77,6 +77,18 @@ double jsonNumber(const nlohmann::json* value, double fallback = 0.0)
     return value->get<double>();
 }
 
+bool isTopologyPoseFresh(const nlohmann::json& gateway_state, double max_pose_age_ms = 2000.0)
+{
+    const auto* world_ptr = objectAt(gateway_state, {"world_state"});
+    const nlohmann::json& world = world_ptr && world_ptr->is_object() ? *world_ptr : gateway_state;
+    const std::string status = jsonString(objectAt(world, {"localization", "status"}), "");
+    const double pose_age_ms = jsonNumber(objectAt(world, {"localization", "pose_age_ms"}), -1.0);
+    const auto* pose = objectAt(world, {"current_pose", "pose"});
+    const bool status_ok =
+        status == "localized" || status == "degraded" || status == "localized_or_tracking" || status == "tracking";
+    return status_ok && pose_age_ms >= 0.0 && pose_age_ms <= max_pose_age_ms && pose && pose->is_object();
+}
+
 std::string nowTime()
 {
     const std::time_t now = std::time(nullptr);
@@ -481,6 +493,123 @@ CommandResult OperatorPanel::ensureSlam() const
     return runShellCommandWithInput(cmd.str(), "");
 }
 
+CommandResult OperatorPanel::startMapping(bool confirmed) const
+{
+    CommandResult result;
+    if (!confirmed) {
+        result.exit_code = 2;
+        result.stdout_text = "start_mapping requires explicit confirmation: /mapping start confirm\n";
+        return result;
+    }
+
+    const auto response = sendGatewayCommand({
+        {"action", "start_mapping"},
+        {"slam_type", "indoor"},
+        {"operator_ack", true},
+    });
+    result.exit_code = response.value("accepted", false) ? 0 : 3;
+    result.stdout_text = response.dump(2) + "\n";
+    return result;
+}
+
+CommandResult OperatorPanel::endMapping(const std::string& map_path, bool confirmed) const
+{
+    CommandResult result;
+    if (!confirmed) {
+        result.exit_code = 2;
+        result.stdout_text = "end_mapping requires explicit confirmation: /mapping end confirm [map_path]\n";
+        return result;
+    }
+
+    const std::string target_path = map_path.empty() ? "/home/unitree/test.pcd" : map_path;
+    const auto response = sendGatewayCommand({
+        {"action", "end_mapping"},
+        {"map_path", target_path},
+        {"operator_ack", true},
+    });
+    result.exit_code = response.value("accepted", false) ? 0 : 3;
+    result.stdout_text = response.dump(2) + "\n";
+    return result;
+}
+
+CommandResult OperatorPanel::previewTopologyWaypoint(const std::string& name) const
+{
+    CommandResult result;
+    const std::string waypoint_name = trimAscii(name);
+    if (waypoint_name.empty()) {
+        result.exit_code = 2;
+        result.stdout_text = "topology preview requires a waypoint name: /topology preview NAME\n";
+        return result;
+    }
+
+    const auto gateway_state = getWorldState();
+    const auto* gateway_world_ptr = objectAt(gateway_state, {"world_state"});
+    const nlohmann::json& gateway_world =
+        gateway_world_ptr && gateway_world_ptr->is_object() ? *gateway_world_ptr : gateway_state;
+    const auto world = buildPanelWorldState(gateway_state);
+    const auto display = buildOperatorDisplayState(world);
+    const auto* pose = objectAt(world, {"current_pose"});
+
+    std::ostringstream out;
+    out << "topology_preview_name=" << waypoint_name << "\n";
+    out << formatOperatorDisplayLine(display, false) << "\n";
+    out << "localization_status=" << jsonString(objectAt(gateway_world, {"localization", "status"}), "unknown")
+        << " pose_age_ms=" << fmtDouble(jsonNumber(objectAt(gateway_world, {"localization", "pose_age_ms"}), -1.0), 0)
+        << " slam_status=" << jsonString(objectAt(gateway_world, {"slam_health", "status"}), "unknown") << "\n";
+    if (pose && pose->is_object()) {
+        out << "candidate_pose=" << pose->dump(2) << "\n";
+    } else {
+        out << "candidate_pose=null\n";
+    }
+
+    if (!isTopologyPoseFresh(gateway_state)) {
+        result.exit_code = 2;
+        out << "blocked: localization is not fresh enough for topology write; require pose_age_ms<=2000.\n";
+    }
+    result.stdout_text = out.str();
+    return result;
+}
+
+CommandResult OperatorPanel::addTopologyWaypoint(const std::string& name, bool confirmed) const
+{
+    CommandResult result;
+    const std::string waypoint_name = trimAscii(name);
+    if (waypoint_name.empty()) {
+        result.exit_code = 2;
+        result.stdout_text = "topology add requires a waypoint name: /topology add NAME confirm\n";
+        return result;
+    }
+    if (!confirmed) {
+        result.exit_code = 2;
+        result.stdout_text = "topology add requires explicit confirmation: /topology add NAME confirm\n";
+        return result;
+    }
+
+    const auto response = sendGatewayCommand({
+        {"action", "add_current_pose_waypoint"},
+        {"name", waypoint_name},
+        {"operator_ack", true},
+    });
+    result.exit_code = response.value("accepted", false) ? 0 : 3;
+    result.stdout_text = response.dump(2) + "\n";
+    return result;
+}
+
+CommandResult OperatorPanel::startRviz2(bool confirmed) const
+{
+    CommandResult result;
+    if (!confirmed) {
+        result.exit_code = 2;
+        result.stdout_text = "rviz2 start requires explicit confirmation: /rviz2 start confirm\n";
+        return result;
+    }
+
+    std::ostringstream cmd;
+    cmd << "cd " << shellQuote(config_.repo_root)
+        << " && bash " << shellQuote(config_.start_rviz2_script);
+    return runShellCommandWithInput(cmd.str(), "");
+}
+
 CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) const
 {
     CommandResult result;
@@ -528,6 +657,11 @@ void OperatorPanel::printHelp() const
     std::cout << "命令:\n"
               << "  /status              刷新一次世界状态\n"
               << "  /start-slam          启动/确认雷达 driver 和 SLAM\n"
+              << "  /mapping start confirm        显式确认后开启建图\n"
+              << "  /mapping end confirm [pcd]    显式确认后结束建图并保存地图\n"
+              << "  /topology preview NAME        只读预览当前位置拓扑点候选\n"
+              << "  /topology add NAME confirm    显式确认后记录当前位置拓扑点\n"
+              << "  /rviz2 start confirm          显式确认后打开 RViz2 可视化\n"
               << "  /watch [秒]          连续显示世界状态；0 表示一直显示\n"
               << "  /weak on|off         切换弱网摘要显示\n"
               << "  /execute on|off      是否允许真实下发运动；默认 off\n"
@@ -549,6 +683,107 @@ void OperatorPanel::setExecute(bool enabled)
     std::cout << "真实执行: " << (enabled ? "on" : "off") << "\n";
 }
 
+bool OperatorPanel::handleSlashCommand(const std::string& line)
+{
+    auto printResult = [](const std::string& label, const CommandResult& result) {
+        if (!result.stdout_text.empty()) std::cout << result.stdout_text;
+        if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
+        std::cout << label << "_exit_code=" << result.exit_code << "\n";
+    };
+
+    if (line.empty() || line == "/status") {
+        printStatusOnce();
+        return true;
+    }
+    if (line == "/help") {
+        printHelp();
+        return true;
+    }
+    if (line == "/start-slam") {
+        const auto result = ensureSlam();
+        printResult("start_slam", result);
+        printStatusOnce();
+        return true;
+    }
+    if (line.rfind("/watch", 0) == 0) {
+        std::istringstream ss(line);
+        std::string token;
+        int seconds = 10;
+        ss >> token >> seconds;
+        watchWorld(seconds);
+        return true;
+    }
+    if (line == "/weak on") {
+        setWeakMode(true);
+        return true;
+    }
+    if (line == "/weak off") {
+        setWeakMode(false);
+        return true;
+    }
+    if (line == "/execute on") {
+        setExecute(true);
+        return true;
+    }
+    if (line == "/execute off") {
+        setExecute(false);
+        return true;
+    }
+    if (line.rfind("/current ", 0) == 0) {
+        config_.current_node = trimAscii(line.substr(9));
+        std::cout << "当前位置锚点: " << config_.current_node << "\n";
+        return true;
+    }
+
+    std::vector<std::string> tokens;
+    std::istringstream ss(line);
+    for (std::string token; ss >> token;) tokens.push_back(token);
+    if (tokens.empty()) return true;
+
+    try {
+        if (tokens[0] == "/mapping") {
+            if (tokens.size() >= 3 && tokens[1] == "start") {
+                printResult("mapping_start", startMapping(tokens[2] == "confirm"));
+                return true;
+            }
+            if (tokens.size() >= 3 && tokens[1] == "end") {
+                const std::string map_path = tokens.size() >= 4 ? tokens[3] : "";
+                printResult("mapping_end", endMapping(map_path, tokens[2] == "confirm"));
+                return true;
+            }
+            std::cout << "usage: /mapping start confirm | /mapping end confirm [map_path]\n";
+            return true;
+        }
+
+        if (tokens[0] == "/topology") {
+            if (tokens.size() >= 3 && tokens[1] == "preview") {
+                printResult("topology_preview", previewTopologyWaypoint(tokens[2]));
+                return true;
+            }
+            if (tokens.size() >= 4 && tokens[1] == "add") {
+                printResult("topology_add", addTopologyWaypoint(tokens[2], tokens[3] == "confirm"));
+                return true;
+            }
+            std::cout << "usage: /topology preview NAME | /topology add NAME confirm\n";
+            return true;
+        }
+
+        if (tokens[0] == "/rviz2") {
+            if (tokens.size() >= 3 && tokens[1] == "start") {
+                printResult("rviz2_start", startRviz2(tokens[2] == "confirm"));
+                return true;
+            }
+            std::cout << "usage: /rviz2 start confirm\n";
+            return true;
+        }
+    } catch (const std::exception& exc) {
+        std::cerr << "command failed: " << exc.what() << "\n";
+        return true;
+    }
+
+    return false;
+}
+
 int OperatorPanel::runInteractive()
 {
     std::cout << "GO2W operator panel. 输入 /help 查看命令。\n";
@@ -565,41 +800,20 @@ int OperatorPanel::runInteractive()
         std::cout << (config_.execute_enabled ? "go2w[EXEC]> " : "go2w[dry]> ") << std::flush;
         if (!std::getline(std::cin, line)) break;
         line = trimAscii(line);
-        if (line.empty() || line == "/status") {
-            printStatusOnce();
-        } else if (line == "/help") {
-            printHelp();
-        } else if (line == "/start-slam") {
-            const auto result = ensureSlam();
-            if (!result.stdout_text.empty()) std::cout << result.stdout_text;
-            if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
-            std::cout << "start_slam_exit_code=" << result.exit_code << "\n";
-            printStatusOnce();
-        } else if (line == "/quit" || line == "/exit") {
+        if (line == "/quit" || line == "/exit") {
             break;
-        } else if (line.rfind("/watch", 0) == 0) {
-            std::istringstream ss(line);
-            std::string token;
-            int seconds = 10;
-            ss >> token >> seconds;
-            watchWorld(seconds);
-        } else if (line == "/weak on") {
-            setWeakMode(true);
-        } else if (line == "/weak off") {
-            setWeakMode(false);
-        } else if (line == "/execute on") {
-            setExecute(true);
-        } else if (line == "/execute off") {
-            setExecute(false);
-        } else if (line.rfind("/current ", 0) == 0) {
-            config_.current_node = line.substr(9);
-            std::cout << "当前位置锚点: " << config_.current_node << "\n";
-        } else {
-            const auto result = submitUserCommand(line);
-            if (!result.stdout_text.empty()) std::cout << result.stdout_text;
-            if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
-            std::cout << "exit_code=" << result.exit_code << "\n";
         }
+        if (line.empty() || line.rfind("/", 0) == 0) {
+            if (!handleSlashCommand(line)) {
+                std::cout << "unknown panel command. 输入 /help 查看命令。\n";
+            }
+            continue;
+        }
+
+        const auto result = submitUserCommand(line);
+        if (!result.stdout_text.empty()) std::cout << result.stdout_text;
+        if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
+        std::cout << "exit_code=" << result.exit_code << "\n";
     }
     return 0;
 }

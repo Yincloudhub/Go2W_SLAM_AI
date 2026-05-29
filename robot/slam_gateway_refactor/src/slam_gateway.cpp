@@ -151,7 +151,7 @@ ServiceResult SlamGateway::stopNode()
     return callApi(ROBOT_API_ID_STOP_NODE, j.dump());
 }
 
-void SlamGateway::addCurrentPoseAsWaypoint()
+void SlamGateway::addCurrentPoseAsWaypoint(const std::string& name)
 {
     PoseData pose;
     {
@@ -160,7 +160,7 @@ void SlamGateway::addCurrentPoseAsWaypoint()
         pose.mode = 0;  // Default obstacle-avoidance mode: 0=avoid, 1=stop.
     }
 
-    topology_.addPose(pose);
+    topology_.addPose(pose, name);
     std::cout << "Add pose to task list: " << pose.summary() << std::endl;
     if (saveWaypoints(topology_.topology_points_path)) {
         std::cout << "Saved task list to " << topology_.topology_points_path << std::endl;

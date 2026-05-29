@@ -17,6 +17,7 @@ struct OperatorPanelConfig {
     std::string network_interface = "eth0";
     std::string python = "python3";
     std::string start_slam_script = "scripts/start_go2w_slam_stack.sh";
+    std::string start_rviz2_script = "scripts/start_go2w_rviz2.sh";
     std::string llm_http_url = "";
     std::string llm_http_model = "local";
     std::string current_node = "";
@@ -56,6 +57,11 @@ public:
     void watchWorld(int seconds) const;
     CommandResult submitUserCommand(const std::string& text) const;
     CommandResult ensureSlam() const;
+    CommandResult startMapping(bool confirmed) const;
+    CommandResult endMapping(const std::string& map_path, bool confirmed) const;
+    CommandResult previewTopologyWaypoint(const std::string& name) const;
+    CommandResult addTopologyWaypoint(const std::string& name, bool confirmed) const;
+    CommandResult startRviz2(bool confirmed) const;
 
 private:
     nlohmann::json sendGatewayCommand(const nlohmann::json& command) const;
@@ -71,6 +77,7 @@ private:
     std::string nearestNodeText(const nlohmann::json& result) const;
     nlohmann::json loadRegistry() const;
     void printHelp() const;
+    bool handleSlashCommand(const std::string& line);
     void setWeakMode(bool enabled);
     void setExecute(bool enabled);
 

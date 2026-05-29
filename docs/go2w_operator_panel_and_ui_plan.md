@@ -22,6 +22,8 @@
 - `scripts/go2w_agent_entry.py`：默认 SLAM 启动脚本改为仓库内脚本。
 - `cpp/go2w_operator_panel`：新增 C++ 操作者面板原型。
 - `src/edge_autonomy/world_state_v1.py` 与 `src/edge_autonomy/operator_display.py`：新增 UI/LLM 共用的低频状态和任务显示屏数据契约。
+- `cpp/go2w_operator_panel`：补齐 C++ 面板内的建图、拓扑点预览/写入、RViz2 打开入口；所有会改变机器人/SLAM 状态的命令都要求显式 `confirm`。
+- `scripts/start_go2w_rviz2.sh`：新增 RViz2 诊断启动脚本，只负责可视化进程，不发布运动命令。
 
 ## C++ 操作者面板职责
 
@@ -32,6 +34,8 @@
 - 支持弱网摘要模式，只显示定位、SLAM、最近点、导航、安全。
 - 提供 LLM 中文输入口，内部转 UTF-8 base64 后调用 `go2w_agent_entry.py --go-b64 ... --human`。
 - 默认不执行运动，必须 `/execute on` 后才会真实下发。
+- 支持现场流程入口：`/mapping start confirm`、`/mapping end confirm [pcd]`、`/topology preview NAME`、`/topology add NAME confirm`、`/rviz2 start confirm`。
+- `topology preview` 只读当前世界状态，不落盘；`topology add` 通过 gateway 的 `add_current_pose_waypoint` 写入 `/home/unitree/topology_points.json`，且 gateway 会拒绝非 fresh localization。
 
 ## 编译
 
@@ -65,9 +69,22 @@ cd ~/go2w_slam_agent/cpp
 /status
 /watch 30
 /weak on
+/topology preview wp_station_01
+/topology add wp_station_01 confirm
+/rviz2 start confirm
 /execute on
 去赵博办公室门口拍照，然后回尹思园工位
 ```
+
+## UI 操作策略
+
+UI 的第一目标是“一打开就能看见系统是否可用”，不是“一打开就改变机器人状态”。建议保持以下策略：
+
+1. 打开 `scripts/run_go2w_operator_ui.sh` 后自动启动/检查雷达 driver、SLAM 和 gateway 世界状态，但不自动建图、不自动重定位、不自动记录拓扑点。
+2. 建图作为现场显式流程：需要新地图时输入 `/mapping start confirm`，结束时 `/mapping end confirm /home/unitree/test_xxx.pcd`；平时打开 UI 只看定位和已有地图。
+3. 拓扑点分两步：先 `/topology preview NAME` 看当前 pose、SLAM/localization 状态，再 `/topology add NAME confirm` 写入。这样能避免 `x=0,y=0` 或 pose 过期时污染拓扑。考虑不同 SLAM 回调频率，写入门槛按 pose_age 策略判断：`localized/degraded/tracking` 且 `pose_age_ms<=2000`。
+4. RViz2 是可视化诊断，不应成为主链路依赖。Mobaxterm/SSH 终端可直接看 C++ 面板；RViz2 需要 X11 forwarding 或机器狗/NX 本地图形桌面，启动失败时只提示，不阻塞 UI。
+5. 后续如果做浏览器/Qt UI，应复用同一套 C++ core 和 WorldState v1，不新造另一套实时轮询逻辑。
 
 ## 后续 Qt/RViz2 形态
 
@@ -98,7 +115,7 @@ gateway world_state / SSH runtime snapshot
 
 ## 现场注意
 
-- `slam_health_failed` 或 `localization:not_started` 时，禁止写入“当前位置标定点”。
+- `slam_health_failed`、`localization:not_started` 或 `pose_age_ms>2000` 时，禁止写入“当前位置标定点”。
 - 若 `current_pose` 为零点或 `pose_age_ms=-1`，说明没有有效地图坐标。
 - 删除旧点并创建新点，只能在 SLAM 有可信 live pose 后执行。
 
