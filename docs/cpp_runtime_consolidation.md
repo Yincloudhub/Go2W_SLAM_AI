@@ -111,6 +111,20 @@ fresh localization before writing the live pose. The freshness rule is based on
 pose age rather than UI refresh rate: `localized/degraded/tracking` and
 `pose_age_ms<=2000`.
 
+The browser UI is now a thin shell around that C++ panel:
+
+```text
+run_go2w_operator_web.sh
+  -> go2w_operator_web.py
+      -> short-lived go2w_operator_panel stdin sessions
+          -> C++ GatewayClient / SemanticRouter / SafetyGate / QueueExecutor
+```
+
+The web layer owns only browser/session state: dry-run vs execute toggle,
+weak-link display mode, current-node hint, and a short command history. It does
+not subscribe to raw ROS2 topics, run dense perception, or duplicate the
+robot-facing control policy.
+
 ## Robot-side non-motion verification
 
 2026-05-27 verified on `unitree@192.168.123.18` without sending motion commands:
@@ -163,13 +177,34 @@ Result:
 - `/mapping`, `/topology add`, `/rviz2 start`, navigation, relocation,
   stop-SLAM, and chassis motion commands were not executed.
 
+2026-05-29 verified the thin browser UI on `unitree@192.168.123.18` without
+sending motion or state-changing SLAM commands:
+
+```text
+cd /home/unitree/go2w_slam_agent
+bash -n scripts/run_go2w_operator_web.sh
+python3 -m py_compile scripts/go2w_operator_web.py
+python3 scripts/go2w_operator_web.py --self-test
+curl http://127.0.0.1:8765/api/state
+curl http://127.0.0.1:8765/api/status
+```
+
+Result:
+
+- Web UI process started on `127.0.0.1:8765` with PID recorded in
+  `artifacts/operator_web/operator_web.pid`.
+- `/api/state` returned dry-run session state.
+- `/api/status` returned a C++ panel summary with `phase=idle`,
+  `motion=false`, and current safety status `slam_health_failed`.
+- No `/start-slam`, `/mapping`, `/topology add`, `/rviz2 start`, navigation,
+  relocation, stop-SLAM, or chassis motion command was executed.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,
    keeping the existing shell wrapper only as a compatibility entry.
-2. Add a thin browser/Qt operator surface over the C++ core: task queue,
-   world-state screen, LLM/operator feedback display, confirmation dialogs,
-   and optional RViz2 launch status.
+2. Replace the browser UI's short-lived process bridge with a persistent C++
+   local IPC/HTTP adapter after the panel contract is stable.
 3. Move runtime log writing from Python into `QueueExecutor`.
 4. Add C++ sensor-summary adapters for stereo depth and TI radar/NX, with stale
    data ignored rather than blocking the robot loop.

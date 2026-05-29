@@ -24,6 +24,7 @@
 - `src/edge_autonomy/world_state_v1.py` 与 `src/edge_autonomy/operator_display.py`：新增 UI/LLM 共用的低频状态和任务显示屏数据契约。
 - `cpp/go2w_operator_panel`：补齐 C++ 面板内的建图、拓扑点预览/写入、RViz2 打开入口；所有会改变机器人/SLAM 状态的命令都要求显式 `confirm`。
 - `scripts/start_go2w_rviz2.sh`：新增 RViz2 诊断启动脚本，只负责可视化进程，不发布运动命令。
+- `scripts/go2w_operator_web.py` 与 `scripts/run_go2w_operator_web.sh`：新增薄 Web UI。浏览器只负责显示、按钮、确认弹窗和 LLM 输入，实际命令仍委托给 `go2w_operator_panel`。
 
 ## C++ 操作者面板职责
 
@@ -76,6 +77,25 @@ cd ~/go2w_slam_agent/cpp
 去赵博办公室门口拍照，然后回尹思园工位
 ```
 
+浏览器 UI：
+
+```bash
+cd ~/go2w_slam_agent
+./scripts/run_go2w_operator_web.sh
+```
+
+默认监听 `127.0.0.1:8765`，适合通过 MobaXterm/SSH tunnel 打开本机浏览器访问：
+
+```bash
+ssh -L 8765:127.0.0.1:8765 unitree@192.168.123.18
+```
+
+如果需要在直连网段直接访问，可显式设置：
+
+```bash
+GO2W_WEB_HOST=0.0.0.0 ./scripts/run_go2w_operator_web.sh
+```
+
 ## UI 操作策略
 
 UI 的第一目标是“一打开就能看见系统是否可用”，不是“一打开就改变机器人状态”。建议保持以下策略：
@@ -84,14 +104,15 @@ UI 的第一目标是“一打开就能看见系统是否可用”，不是“�
 2. 建图作为现场显式流程：需要新地图时输入 `/mapping start confirm`，结束时 `/mapping end confirm /home/unitree/test_xxx.pcd`；平时打开 UI 只看定位和已有地图。
 3. 拓扑点分两步：先 `/topology preview NAME` 看当前 pose、SLAM/localization 状态，再 `/topology add NAME confirm` 写入。这样能避免 `x=0,y=0` 或 pose 过期时污染拓扑。考虑不同 SLAM 回调频率，写入门槛按 pose_age 策略判断：`localized/degraded/tracking` 且 `pose_age_ms<=2000`。
 4. RViz2 是可视化诊断，不应成为主链路依赖。Mobaxterm/SSH 终端可直接看 C++ 面板；RViz2 需要 X11 forwarding 或机器狗/NX 本地图形桌面，启动失败时只提示，不阻塞 UI。
-5. 后续如果做浏览器/Qt UI，应复用同一套 C++ core 和 WorldState v1，不新造另一套实时轮询逻辑。
+5. 浏览器 UI 默认 dry-run、默认 2 秒刷新一次状态。它通过短生命周期 C++ panel 会话读取状态和执行按钮命令，不直接打开新的高频 ROS2/SLAM 订阅。
+6. 后续如果做 Qt UI，应复用同一套 C++ core 和 WorldState v1，不新造另一套实时轮询逻辑。
 
 ## 后续 Qt/RViz2 形态
 
 建议沿用这套分层，不要直接把 LLM 写死进 RViz2：
 
 ```text
-Qt/RViz2 Panel
+Browser/Qt/RViz2 Panel
   -> C++ Operator Core
       -> slam_llm_command_client / ROS2 world_state
       -> go2w_agent_entry.py 或本地 LLM HTTP service

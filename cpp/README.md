@@ -74,6 +74,18 @@ cd ~/go2w_slam_agent
 ./scripts/run_go2w_operator_ui.sh
 ```
 
+Browser UI launch:
+
+```bash
+cd ~/go2w_slam_agent
+./scripts/run_go2w_operator_web.sh
+```
+
+The web UI defaults to `127.0.0.1:8765` for safer SSH/MobaXterm tunneling. It
+does not own robot control logic; every status refresh and button action is
+delegated back to short-lived `go2w_operator_panel` sessions. Set
+`GO2W_WEB_HOST=0.0.0.0` only when direct LAN access is needed.
+
 The current UI is a robot-side terminal panel. Open it from MobaXterm by SSHing
 to the robot/NX and running the launcher above; X11 forwarding is not required.
 A later Qt/RViz2 panel can reuse the same operator-core boundary, but the safer

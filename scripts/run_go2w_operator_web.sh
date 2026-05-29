@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Robot-side browser UI launcher. It builds the C++ operator panel if needed and
+# starts a thin Web UI that delegates commands back to that panel.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BUILD_DIR="${GO2W_CPP_BUILD_DIR:-${REPO_ROOT}/cpp/build}"
+PANEL_BIN="${GO2W_OPERATOR_PANEL_BIN:-${BUILD_DIR}/go2w_operator_panel}"
+CURRENT_NODE="${GO2W_CURRENT_NODE:-initial_point}"
+GATEWAY_CLIENT="${GO2W_GATEWAY_CLIENT:-/home/unitree/slam_gateway_refactor/build/slam_llm_command_client}"
+NETWORK_INTERFACE="${GO2W_NETWORK_INTERFACE:-eth0}"
+START_SLAM_SCRIPT="${GO2W_START_SLAM_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_slam_stack.sh}"
+START_RVIZ2_SCRIPT="${GO2W_START_RVIZ2_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_rviz2.sh}"
+WEB_HOST="${GO2W_WEB_HOST:-127.0.0.1}"
+WEB_PORT="${GO2W_WEB_PORT:-8765}"
+
+if [[ ! -x "${PANEL_BIN}" ]]; then
+  if ! command -v cmake >/dev/null 2>&1; then
+    echo "missing cmake and ${PANEL_BIN} is not built" >&2
+    exit 2
+  fi
+  cmake -S "${REPO_ROOT}/cpp" -B "${BUILD_DIR}"
+  cmake --build "${BUILD_DIR}" -j"$(nproc 2>/dev/null || echo 2)"
+fi
+
+LLM_HTTP_ARGS=()
+if [[ -n "${GO2W_LLM_HTTP_URL:-}" ]]; then
+  LLM_HTTP_ARGS+=(--llm-http-url "${GO2W_LLM_HTTP_URL}")
+  LLM_HTTP_ARGS+=(--llm-http-model "${GO2W_LLM_HTTP_MODEL:-local}")
+fi
+
+exec "${PYTHON:-python3}" "${REPO_ROOT}/scripts/go2w_operator_web.py" \
+  --repo-root "${REPO_ROOT}" \
+  --panel-bin "${PANEL_BIN}" \
+  --gateway-client "${GATEWAY_CLIENT}" \
+  --start-slam-script "${START_SLAM_SCRIPT}" \
+  --start-rviz2-script "${START_RVIZ2_SCRIPT}" \
+  --interface "${NETWORK_INTERFACE}" \
+  --current-node "${CURRENT_NODE}" \
+  --host "${WEB_HOST}" \
+  --port "${WEB_PORT}" \
+  "${LLM_HTTP_ARGS[@]}" \
+  "$@"
