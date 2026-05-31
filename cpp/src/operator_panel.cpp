@@ -117,6 +117,94 @@ std::string joinStrings(const std::vector<std::string>& values, const std::strin
     return ss.str();
 }
 
+const nlohmann::json* findRegistryMap(const nlohmann::json& registry, const std::string& map_id)
+{
+    const auto* maps = objectAt(registry, {"maps"});
+    if (!maps || !maps->is_array()) return nullptr;
+    for (const auto& map : *maps) {
+        if (map.is_object() && map.value("map_id", "") == map_id) return &map;
+    }
+    return nullptr;
+}
+
+const nlohmann::json* findRelocalizationAnchor(const nlohmann::json& map, const std::string& anchor_id)
+{
+    const auto* anchors = objectAt(map, {"relocalization_anchors"});
+    if (!anchors || !anchors->is_array()) return nullptr;
+    for (const auto& anchor : *anchors) {
+        if (!anchor.is_object()) continue;
+        if (anchor.value("anchor_id", "") == anchor_id || anchor.value("name", "") == anchor_id) return &anchor;
+    }
+    return nullptr;
+}
+
+double yawFromQuaternionLocal(double qx, double qy, double qz, double qw)
+{
+    const double siny_cosp = 2.0 * (qw * qz + qx * qy);
+    const double cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz);
+    return std::atan2(siny_cosp, cosy_cosp);
+}
+
+nlohmann::json anchorRelocatePose(const nlohmann::json& anchor)
+{
+    const std::string anchor_id = anchor.value("anchor_id", "anchor");
+    const auto* pose_ptr = objectAt(anchor, {"pose"});
+    nlohmann::json pose = pose_ptr && pose_ptr->is_object() ? *pose_ptr : nlohmann::json::object();
+    const double qx = jsonNumber(objectAt(pose, {"q_x"}), 0.0);
+    const double qy = jsonNumber(objectAt(pose, {"q_y"}), 0.0);
+    const double qz = jsonNumber(objectAt(pose, {"q_z"}), 0.0);
+    const double qw = jsonNumber(objectAt(pose, {"q_w"}), 1.0);
+    pose["name"] = anchor_id;
+    pose["q_x"] = qx;
+    pose["q_y"] = qy;
+    pose["q_z"] = qz;
+    pose["q_w"] = qw;
+    if (!pose.contains("yaw") || !pose.at("yaw").is_number()) {
+        pose["yaw"] = yawFromQuaternionLocal(qx, qy, qz, qw);
+    }
+    pose["speed"] = 0.0;
+    pose["mode"] = 0;
+    return pose;
+}
+
+std::string relocationSummary(const nlohmann::json& response)
+{
+    if (response.value("accepted", false)) return "relocation accepted by gateway";
+
+    const auto* data = objectAt(response, {"data"});
+    nlohmann::json parsed;
+    const nlohmann::json* payload = &response;
+    if (data && data->is_string()) {
+        try {
+            parsed = nlohmann::json::parse(data->get<std::string>());
+            payload = &parsed;
+        } catch (...) {
+        }
+    } else if (data && data->is_object()) {
+        payload = data;
+    }
+
+    std::ostringstream out;
+    out << "relocation rejected";
+    if (payload->contains("statusCode")) out << " statusCode=" << payload->at("statusCode");
+    if (payload->contains("errorCode")) out << " errorCode=" << payload->at("errorCode");
+    if (payload->contains("info") && payload->at("info").is_string()) out << " info=" << payload->at("info").get<std::string>();
+    if (payload->contains("message") && payload->at("message").is_string()) out << " message=" << payload->at("message").get<std::string>();
+    return out.str();
+}
+
+std::vector<std::string> unverifiedRouteTargets(const SemanticRoute& route)
+{
+    std::vector<std::string> targets;
+    for (const auto& target : route.targets) {
+        if (!target.needs_calibration) continue;
+        std::string label = target.name + "(" + target.node_id + ")";
+        label += target.requires_standing_verification ? ":needs_standing_verification" : ":needs_calibration";
+        targets.push_back(label);
+    }
+    return targets;
+}
+
 }  // namespace
 
 std::string shellQuote(const std::string& value)
@@ -537,6 +625,55 @@ CommandResult OperatorPanel::endMapping(const std::string& map_path, bool confir
     return result;
 }
 
+CommandResult OperatorPanel::relocateAnchor(const std::string& anchor_id, bool confirmed) const
+{
+    CommandResult result;
+    const std::string target_anchor = trimAscii(anchor_id);
+    if (target_anchor.empty()) {
+        result.exit_code = 2;
+        result.stdout_text = "relocate requires an anchor id: /relocate ANCHOR_ID confirm\n";
+        return result;
+    }
+    if (!confirmed) {
+        result.exit_code = 2;
+        result.stdout_text = "relocate requires explicit confirmation: /relocate ANCHOR_ID confirm\n";
+        return result;
+    }
+
+    const std::string map_id = "go2w_real_site";
+    const nlohmann::json registry = loadRegistry();
+    const auto* map = findRegistryMap(registry, map_id);
+    if (!map) {
+        result.exit_code = 2;
+        result.stderr_text = "map not found in registry: " + map_id + "\n";
+        return result;
+    }
+    const auto* anchor = findRelocalizationAnchor(*map, target_anchor);
+    if (!anchor) {
+        result.exit_code = 2;
+        result.stderr_text = "anchor not found in registry: " + target_anchor + "\n";
+        return result;
+    }
+    const auto* pose = objectAt(*anchor, {"pose"});
+    if (!pose || !pose->is_object() || !pose->contains("x") || !pose->contains("y")) {
+        result.exit_code = 2;
+        result.stderr_text = "anchor pose is incomplete: " + target_anchor + "\n";
+        return result;
+    }
+
+    const auto command = nlohmann::json{
+        {"action", "relocate"},
+        {"map_id", map_id},
+        {"map_path", map->value("pcd_path", "/home/unitree/test.pcd")},
+        {"anchor_id", anchor->value("anchor_id", target_anchor)},
+        {"initial_pose", anchorRelocatePose(*anchor)},
+    };
+    const auto response = sendGatewayCommand(command);
+    result.exit_code = response.value("accepted", false) ? 0 : 3;
+    result.stdout_text = relocationSummary(response) + "\n" + response.dump(2) + "\n";
+    return result;
+}
+
 CommandResult OperatorPanel::previewTopologyWaypoint(const std::string& name) const
 {
     CommandResult result;
@@ -627,6 +764,17 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
     }
     out << "\n";
 
+    const auto unverified_targets = unverifiedRouteTargets(route);
+    if (!unverified_targets.empty()) {
+        out << "verification_guard: target requires standing verification/calibration before motion: "
+            << joinStrings(unverified_targets, ", ") << "\n";
+        if (config_.execute_enabled) {
+            result.exit_code = 3;
+            result.stdout_text = out.str();
+            return result;
+        }
+    }
+
     if (!config_.execute_enabled) {
         out << "执行状态：干跑/未下发运动。输入 /execute on 后才允许真实执行。\n";
         out << "任务队列JSON：" << route.task_queue.dump(2) << "\n";
@@ -636,6 +784,7 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
     executor_config.gateway_client = config_.gateway_client;
     executor_config.network_interface = config_.network_interface;
     executor_config.gateway_timeout_s = config_.gateway_timeout_s;
+    executor_config.gateway_startup_wait_s = config_.gateway_startup_wait_s;
     executor_config.arrival_distance_m = config_.arrival_distance_m;
     executor_config.arrival_monitor_s = config_.arrival_monitor_s;
     executor_config.safety_limits.arrival_distance_m = config_.arrival_distance_m;
@@ -659,6 +808,8 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
 
 void OperatorPanel::printHelp() const
 {
+    std::cout << "Extra safe commands:\n"
+              << "  /relocate ANCHOR_ID confirm   Relocalize against a registry anchor; no chassis motion\n";
     std::cout << "命令:\n"
               << "  /status              刷新一次世界状态\n"
               << "  /start-slam          启动/确认雷达 driver 和 SLAM\n"
@@ -751,6 +902,16 @@ bool OperatorPanel::handleSlashCommand(const std::string& line)
     if (tokens.empty()) return markOk();
 
     try {
+        if (tokens[0] == "/relocate") {
+            if (tokens.size() >= 3) {
+                printResult("relocate", relocateAnchor(tokens[1], tokens[2] == "confirm"));
+                return true;
+            }
+            std::cout << "usage: /relocate ANCHOR_ID confirm\n";
+            last_command_exit_code_ = 2;
+            return true;
+        }
+
         if (tokens[0] == "/mapping") {
             if (tokens.size() >= 3 && tokens[1] == "start") {
                 printResult("mapping_start", startMapping(tokens[2] == "confirm"));

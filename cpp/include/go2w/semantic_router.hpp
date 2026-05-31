@@ -14,6 +14,7 @@ struct ResolvedTarget {
     std::size_t first_index = 0;
     bool photo_required = false;
     bool needs_calibration = false;
+    bool requires_standing_verification = false;
 };
 
 struct SemanticRoute {

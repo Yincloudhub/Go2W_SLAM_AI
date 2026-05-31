@@ -109,7 +109,8 @@ std::vector<ResolvedTarget> SemanticRouter::resolveTargets(const std::string& te
         target.node_id = node.value("node_id", "");
         target.name = node.value("name", target.node_id);
         target.photo_required = nodeHasTag(node, "photo_required");
-        target.needs_calibration = nodeHasTag(node, "needs_calibration");
+        target.requires_standing_verification = nodeHasTag(node, "needs_standing_verification");
+        target.needs_calibration = nodeHasTag(node, "needs_calibration") || target.requires_standing_verification;
         std::size_t first = std::string::npos;
         for (const auto& term : uniqueTerms(node)) {
             const auto pos = text.find(term);
@@ -209,6 +210,8 @@ SemanticRoute SemanticRouter::planText(const std::string& text, double speed_mps
             {"target_name", target.name},
             {"status", "pending"},
             {"requires_preflight", true},
+            {"needs_calibration", target.needs_calibration},
+            {"requires_standing_verification", target.requires_standing_verification},
             {"semantic_reason", "matched target from user command"},
         });
         const bool should_capture = target.photo_required || (route.capture_requested && !explicit_capture_used && (i == 0 || route.targets.size() > 1));

@@ -27,6 +27,7 @@ struct QueueExecutorConfig {
     std::string gateway_client = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client";
     std::string network_interface = "eth0";
     int gateway_timeout_s = 30;
+    double gateway_startup_wait_s = 1.0;
     double arrival_distance_m = 0.7;
     double arrival_monitor_s = 75.0;
     SafetyLimits safety_limits = {};

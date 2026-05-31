@@ -59,6 +59,7 @@ public:
     CommandResult ensureSlam() const;
     CommandResult startMapping(bool confirmed) const;
     CommandResult endMapping(const std::string& map_path, bool confirmed) const;
+    CommandResult relocateAnchor(const std::string& anchor_id, bool confirmed) const;
     CommandResult previewTopologyWaypoint(const std::string& name) const;
     CommandResult addTopologyWaypoint(const std::string& name, bool confirmed) const;
     CommandResult startRviz2(bool confirmed) const;

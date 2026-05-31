@@ -310,6 +310,27 @@ Result:
   path now carries `gateway_startup_wait_s` into `GatewayClient` so UI status
   polls do not race DDS discovery.
 
+2026-05-31 prone workstation recovery hardening:
+
+- The C++ panel now exposes `/relocate ANCHOR_ID confirm`. This sends only a
+  SLAM relocalization command built from the registry anchor pose and does not
+  command chassis motion.
+- The browser UI adds a thin `Relocalize` quick control that delegates to the
+  same C++ panel command instead of duplicating robot-facing policy in Python.
+- `QueueExecutor` now passes `gateway_startup_wait_s` through every gateway
+  call, so execution-time world-state polling uses the same DDS warm-up policy
+  as panel status polling.
+- Targets tagged `needs_calibration` or `needs_standing_verification` are now
+  visible in the planned task queue and are blocked before real motion when
+  execution mode is enabled. Dry-run still prints the route and the guard so
+  the operator can inspect what would have happened.
+- The current `chen_jiayu_station` anchor was sampled while the robot was
+  prone near the workstation. A relocation attempt from that anchor returned
+  Unitree `errorCode=509` with low ICP match (`ICP Score:0.082658`), while the
+  earlier `mapping_origin` relocation succeeded (`ICP Score:0.011119`). Treat
+  this as a standing-verification/recovery workflow issue, not as a navigation
+  target that should be executed.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,

@@ -181,7 +181,12 @@ QueueExecutor::QueueExecutor(QueueExecutorConfig config)
 
 nlohmann::json QueueExecutor::sendGatewayCommand(const nlohmann::json& command) const
 {
-    GatewayClient client({config_.gateway_client, config_.network_interface, config_.gateway_timeout_s});
+    GatewayClient client({
+        config_.gateway_client,
+        config_.network_interface,
+        config_.gateway_timeout_s,
+        config_.gateway_startup_wait_s,
+    });
     return client.send(command).response;
 }
 
@@ -349,6 +354,7 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
         {"failed_step", nullptr},
         {"blocked_reason", ""},
         {"feedback_policy", {
+            {"gateway_startup_wait_s", config_.gateway_startup_wait_s},
             {"slam_poll_interval_s", config_.feedback_policy.slam_poll_interval_s},
             {"ui_refresh_interval_s", config_.feedback_policy.ui_refresh_interval_s},
             {"operator_feedback_interval_s", config_.feedback_policy.operator_feedback_interval_s},

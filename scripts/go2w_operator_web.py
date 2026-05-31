@@ -704,6 +704,20 @@ INDEX_HTML = r"""<!doctype html>
       if (ms > 0) timer = setInterval(refreshStatus, ms);
     }
 
+    function installRelocateControl() {
+      const current = $("current-node");
+      if (!current || $("relocate-anchor")) return;
+      const row = document.createElement("div");
+      row.className = "row";
+      row.style.marginTop = "10px";
+      row.innerHTML = '<input id="relocate-anchor" value="initial_point" placeholder="relocalization anchor id"><button id="relocate-anchor-btn">Relocalize</button>';
+      current.parentElement.insertAdjacentElement("afterend", row);
+      $("relocate-anchor-btn").onclick = () => {
+        const anchor = $("relocate-anchor").value.trim() || "initial_point";
+        runCommand(`/relocate ${anchor} confirm`, "Confirm SLAM relocalization against this registry anchor? This does not move the chassis.", true);
+      };
+    }
+
     $("refresh").onclick = () => refreshStatus(true);
     $("start-slam").onclick = () => runCommand("/start-slam", "确认启动/检查 SLAM 与雷达 driver？", true);
     $("exec-on").onclick = () => runCommand("/execute on", "确认允许真实执行？机器狗趴着时不要开启。", true);
@@ -724,6 +738,7 @@ INDEX_HTML = r"""<!doctype html>
     };
     $("refresh-interval").onchange = resetTimer;
 
+    installRelocateControl();
     refreshStatus();
     resetTimer();
   </script>
@@ -881,6 +896,7 @@ def run_startup_script(config: WebConfig) -> None:
 def self_test(config: WebConfig) -> None:
     assert "GO2W Operator Panel" in INDEX_HTML
     assert "/api/status" in INDEX_HTML
+    assert "/relocate" in INDEX_HTML
     parsed = parse_panel_summary("phase=idle | target=none | loc=true | map=true | motion=false")
     assert parsed["phase"] == "idle"
     assert parsed["loc"] == "true"
