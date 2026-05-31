@@ -205,6 +205,17 @@ std::vector<std::string> unverifiedRouteTargets(const SemanticRoute& route)
     return targets;
 }
 
+nlohmann::json loadJsonFileOrNull(const std::string& path)
+{
+    std::ifstream file(path);
+    if (!file) return nullptr;
+    try {
+        return nlohmann::json::parse(readAll(file));
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 }  // namespace
 
 std::string shellQuote(const std::string& value)
@@ -485,11 +496,17 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
         "{\"reply\":\"short Chinese operator reply\",\"targets\":[\"node_id\"],\"capture_keyframe\":false}. "
         "Do not output coordinates, speeds, Unitree API ids, markdown, or extra text. "
         "If the command is unclear, return targets as an empty array.";
-    const nlohmann::json user_payload = {
+    nlohmann::json perception = {
+        {"stereo_depth", loadJsonFileOrNull(config_.repo_root + "/artifacts/stereo_depth_summary.json")},
+        {"deepyolo_semantics", loadJsonFileOrNull(config_.repo_root + "/artifacts/vision_semantic_summary.json")},
+    };
+
+    nlohmann::json user_payload = {
         {"command", text},
         {"current_node", config_.current_node},
         {"execute_enabled", config_.execute_enabled},
         {"candidates", candidates},
+        {"perception", perception},
     };
     return {
         {{"role", "system"}, {"content", system_prompt}},

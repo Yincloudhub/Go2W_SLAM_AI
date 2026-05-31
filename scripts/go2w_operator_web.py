@@ -95,6 +95,8 @@ class WebConfig:
     llm_http_model: str = "local"
     stereo_summary_path: Path = Path("artifacts/stereo_depth_summary.json")
     stereo_stale_ms: int = 5000
+    semantic_summary_path: Path = Path("artifacts/vision_semantic_summary.json")
+    semantic_stale_ms: int = 3000
     status_cache_ms: int = 1500
     ensure_slam_on_start: bool = False
 
@@ -289,6 +291,7 @@ class OperatorWebApp:
     def _fresh_status(self) -> Dict[str, Any]:
         result = self.run_panel_session(["/quit"])
         result["stereo_summary"] = self.stereo_summary()
+        result["semantic_summary"] = self.semantic_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
         return result
@@ -309,6 +312,7 @@ class OperatorWebApp:
             if local is not None:
                 local["summary"] = {}
                 local["stereo_summary"] = self.stereo_summary()
+                local["semantic_summary"] = self.semantic_summary()
                 local["state"] = self.state.snapshot()
                 self.state.remember(line, local)
         if local is not None:
@@ -317,6 +321,7 @@ class OperatorWebApp:
 
         result = self.run_panel_session([line, "/quit"])
         result["stereo_summary"] = self.stereo_summary()
+        result["semantic_summary"] = self.semantic_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
             self.state.remember(line, result)
@@ -343,6 +348,28 @@ class OperatorWebApp:
                 "age_ms": age_ms,
                 "stale_ms": self.config.stereo_stale_ms,
                 "stale_by_age": bool(age_ms is not None and age_ms > self.config.stereo_stale_ms),
+                "data": data,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "path": str(path), "error": str(exc)}
+
+    def semantic_summary(self) -> Dict[str, Any]:
+        path = self.config.semantic_summary_path
+        if not path.is_absolute():
+            path = self.config.repo_root / path
+        if not path.exists():
+            return {"available": False, "path": str(path)}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            ts = int(data.get("timestamp_ms") or 0)
+            age_ms = max(0, int(time.time() * 1000) - ts) if ts else None
+            stale_ms = int(data.get("stale_ms") or self.config.semantic_stale_ms)
+            return {
+                "available": bool(data.get("available", True)),
+                "path": str(path),
+                "age_ms": age_ms,
+                "stale_ms": stale_ms,
+                "stale_by_age": bool(age_ms is not None and age_ms > stale_ms),
                 "data": data,
             }
         except Exception as exc:  # noqa: BLE001
@@ -652,6 +679,37 @@ INDEX_HTML = r"""<!doctype html>
       $("m-stereo-health").textContent = `${confidence}, ${frontConfidence} / ${age}${stereo.stale_by_age ? " stale" : ""}`;
     }
 
+    function installSemanticMetrics() {
+      if ($("m-semantic-scene")) return;
+      const grid = document.querySelector(".grid");
+      if (!grid) return;
+      const scene = document.createElement("div");
+      scene.className = "metric";
+      scene.innerHTML = '<label>DeepYOLO scene</label><strong id="m-semantic-scene">unavailable</strong>';
+      const action = document.createElement("div");
+      action.className = "metric";
+      action.innerHTML = '<label>DeepYOLO action</label><strong id="m-semantic-action">unavailable</strong>';
+      grid.appendChild(scene);
+      grid.appendChild(action);
+    }
+
+    function updateSemantic(semantic) {
+      installSemanticMetrics();
+      if (!semantic || !semantic.available || !semantic.data) {
+        $("m-semantic-scene").textContent = "unavailable";
+        $("m-semantic-action").textContent = "unavailable";
+        return;
+      }
+      const data = semantic.data;
+      const age = semantic.age_ms === null || semantic.age_ms === undefined ? "unknown" : `${Math.round(semantic.age_ms)}ms`;
+      const scene = data.scene_state || "unknown";
+      const dominant = data.dominant_class || "none";
+      const count = data.object_count ?? 0;
+      const risk = data.high_risk_count ?? 0;
+      $("m-semantic-scene").textContent = `${scene}, ${dominant}, obj ${count}, risk ${risk}`;
+      $("m-semantic-action").textContent = `${data.recommended_action || "normal"} / ${age}${semantic.stale_by_age || data.stale ? " stale" : ""}`;
+    }
+
     async function api(path, options = {}) {
       const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -668,6 +726,7 @@ INDEX_HTML = r"""<!doctype html>
         updateMetrics(summary);
         updateState(result.state);
         updateStereo(result.stereo_summary);
+        updateSemantic(result.semantic_summary);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
         $("conn").textContent = "UI 服务异常";
@@ -690,6 +749,7 @@ INDEX_HTML = r"""<!doctype html>
         updateMetrics(summary);
         updateState(result.state);
         updateStereo(result.stereo_summary);
+        updateSemantic(result.semantic_summary);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
         $("output").textContent = String(err);
@@ -739,6 +799,7 @@ INDEX_HTML = r"""<!doctype html>
     $("refresh-interval").onchange = resetTimer;
 
     installRelocateControl();
+    installSemanticMetrics();
     refreshStatus();
     resetTimer();
   </script>
@@ -765,6 +826,9 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
             return
         if parsed_path.path == "/api/stereo-summary":
             self.send_json({"stereo_summary": self.app.stereo_summary()})
+            return
+        if parsed_path.path == "/api/semantic-summary":
+            self.send_json({"semantic_summary": self.app.semantic_summary()})
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -839,6 +903,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--llm-http-model", default=env.get("GO2W_LLM_HTTP_MODEL", "local"))
     parser.add_argument("--stereo-summary-path", default=env.get("GO2W_STEREO_SUMMARY_PATH", "artifacts/stereo_depth_summary.json"))
     parser.add_argument("--stereo-stale-ms", type=int, default=int(env.get("GO2W_STEREO_STALE_MS", "5000")))
+    parser.add_argument("--semantic-summary-path", default=env.get("GO2W_SEMANTIC_SUMMARY_PATH", "artifacts/vision_semantic_summary.json"))
+    parser.add_argument("--semantic-stale-ms", type=int, default=int(env.get("GO2W_SEMANTIC_STALE_MS", "3000")))
     parser.add_argument("--status-cache-ms", type=int, default=int(env.get("GO2W_STATUS_CACHE_MS", "1500")))
     parser.add_argument("--ensure-slam-on-start", action="store_true", default=truthy(env.get("GO2W_WEB_ENSURE_SLAM_ON_START", "0")))
     parser.add_argument("--self-test", action="store_true")
@@ -865,6 +931,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         llm_http_model=args.llm_http_model,
         stereo_summary_path=Path(args.stereo_summary_path).expanduser(),
         stereo_stale_ms=max(1, args.stereo_stale_ms),
+        semantic_summary_path=Path(args.semantic_summary_path).expanduser(),
+        semantic_stale_ms=max(1, args.semantic_stale_ms),
         status_cache_ms=max(0, args.status_cache_ms),
         ensure_slam_on_start=args.ensure_slam_on_start,
     )
@@ -897,6 +965,7 @@ def self_test(config: WebConfig) -> None:
     assert "GO2W Operator Panel" in INDEX_HTML
     assert "/api/status" in INDEX_HTML
     assert "/relocate" in INDEX_HTML
+    assert "DeepYOLO scene" in INDEX_HTML
     parsed = parse_panel_summary("phase=idle | target=none | loc=true | map=true | motion=false")
     assert parsed["phase"] == "idle"
     assert parsed["loc"] == "true"

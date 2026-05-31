@@ -109,6 +109,38 @@ class OperatorWebTests(unittest.TestCase):
             loaded = web.OperatorWebApp(config).stereo_summary()
             self.assertFalse(loaded["stale_by_age"])
 
+    def test_semantic_summary_file_is_bounded_diagnostic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "artifacts" / "vision_semantic_summary.json"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "timestamp_ms": 1,
+                        "available": True,
+                        "source": "deepyolo_realsense",
+                        "object_count": 1,
+                        "recommended_action": "slow_and_watch",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                semantic_summary_path=Path("artifacts/vision_semantic_summary.json"),
+                semantic_stale_ms=2345,
+            )
+            loaded = web.OperatorWebApp(config).semantic_summary()
+            self.assertTrue(loaded["available"])
+            self.assertEqual(loaded["data"]["source"], "deepyolo_realsense")
+            self.assertEqual(loaded["stale_ms"], 2345)
+            self.assertTrue(loaded["stale_by_age"])
+
     def test_status_uses_short_cache_to_bound_panel_spawns(self):
         class FakeApp(web.OperatorWebApp):
             def __init__(self, config):

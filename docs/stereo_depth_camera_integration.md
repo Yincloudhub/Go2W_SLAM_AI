@@ -131,6 +131,91 @@ The operator Web UI reads this file through `--stereo-summary-path` and marks it
 stale by `--stereo-stale-ms` / `GO2W_STEREO_STALE_MS` without subscribing to raw
 camera streams. This keeps camera display decoupled from the real-time loop.
 
+## DeepYOLO Semantic Bridge
+
+The robot currently also has a TensorRT YOLO + RealSense prototype under:
+
+```text
+/home/unitree/librealsense/examples/DeepYolo_test
+/home/unitree/DeepYolo
+```
+
+That prototype should stay an optional perception side process. The GO2W runtime
+must not depend on its window display, TensorRT loop, raw color frames, raw depth
+frames, or unbounded JSONL logs.
+
+The repo-owned bridge is:
+
+```bash
+cd ~/Go2W_SLAM_AI
+python3 scripts/deepyolo_semantic_bridge.py \
+  --input-dir /home/unitree/librealsense/examples/DeepYolo_test/output \
+  --output artifacts/vision_semantic_summary.json \
+  --loop-interval-s 0.5 \
+  --max-samples 0
+```
+
+or, as a wrapper:
+
+```bash
+bash scripts/start_go2w_deepyolo_bridge.sh
+```
+
+The bridge reads the latest `semantic_stream_*.jsonl` packet and writes only a
+bounded summary:
+
+```json
+{
+  "source": "deepyolo_realsense",
+  "scene_state": "alert",
+  "dominant_class": "person",
+  "object_count": 1,
+  "high_risk_count": 1,
+  "recommended_action": "slow_and_watch",
+  "objects": [
+    {
+      "class_name": "person",
+      "risk_level": "high",
+      "region": "right",
+      "distance_m": 1.89
+    }
+  ]
+}
+```
+
+The operator Web UI reads this file through
+`--semantic-summary-path` / `GO2W_SEMANTIC_SUMMARY_PATH` and marks it stale with
+`--semantic-stale-ms` / `GO2W_SEMANTIC_STALE_MS`.
+
+Current routing policy:
+
+- UI and LLM may see the semantic summary as scene context. The C++ operator
+  panel includes `artifacts/stereo_depth_summary.json` and
+  `artifacts/vision_semantic_summary.json` in the LLM HTTP payload when those
+  files exist.
+- `QueueExecutor` and `SafetyGate` do not block on DeepYOLO.
+- Future C++ fusion may use high-confidence, fresh semantic objects only to
+  increase caution, such as slow/pause when a high-risk center object has valid
+  depth. It must never relax LiDAR/SLAM safety.
+- If DeepYOLO is absent, stale, slow, or crashes, the main SLAM/LiDAR flow
+  continues in LiDAR-only mode.
+
+## Long-Running Subagent Ownership
+
+The project can keep a dedicated StereoDepth/DeepYOLO subagent for this
+subsystem. Its ownership boundary should remain narrow:
+
+- maintain the RealSense depth summary and DeepYOLO semantic bridge contracts;
+- audit camera latency, stale-data behavior, confidence thresholds, and failure
+  modes;
+- propose C++ fusion changes only after the summary contract is stable;
+- avoid touching SLAM startup, navigation, topology writes, vendor librealsense
+  trees, or Unitree `/unitree` configs unless explicitly assigned.
+
+The subagent's normal output should be a short audit report plus a patch plan.
+Code changes should use disjoint files from the main operator path to avoid
+blocking the real-time runtime work.
+
 2026-05-31 prone-safe check on `unitree@192.168.123.18`:
 
 - `rs-enumerate-devices -s` detected `Intel RealSense D435I`, serial
