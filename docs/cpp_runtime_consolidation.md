@@ -258,6 +258,37 @@ Result:
   safety fusion should be shown as separate values instead of collapsing them
   into one "valid/invalid" score.
 
+2026-05-31 Unitree SLAM drift evidence:
+
+- The current `/unitree` tree was overwritten by Unitree's upgrade service, not
+  by this git repository. `/etc/systemd/system/unitree-upgrade.service` runs
+  `/usr/bin/python3 /upgradePythonServer/server.py`; the `upgrade/run` path
+  unzips an uploaded package, executes `rm -rf /unitree`, copies `unitree/` to
+  `/`, then runs `/unitree/services/install.sh`.
+- The uploaded package still present on the robot is
+  `/upgradePythonServer/uploads/733c1dd4422147f184be6cda92db5b4f.zip`
+  (`sha256=f682f8d289f5bd6ad0a744153a07d33c297d45cd1c08d3bae5b85f9fd9c4e0d5`).
+  `/upgradePythonServer/recover/backup.zip` has the same hash, so "recover"
+  would reapply the same current package rather than restore the 2026-05-26
+  known-good SLAM version.
+- The package contents match the current failing runtime exactly:
+  `unitree_slam` hash
+  `1d06d424b3e942931b44cab24e7542c1430038c4310debafeb2b89d72e39e88c`,
+  `xt16_driver` hash
+  `7d260a8311899e3d7c6606893d2995b8d424f9575020a864d8a4cdf5140afa97`, and
+  `slam_interfaces_server_config/param.yaml` hash
+  `727316783aa91fa14782a98767bdc31cdb6e20a1f026f8f8b44e3ed81233e0dd`.
+- The preserved 2026-05-26 log proves an older runtime reached
+  `xt16 lidar ysn check success!` and started `slam_operate`. The old
+  `/unitree/module/graph_pid_ws`, `/unitreebk`, old `unitree_slam`, old
+  `xt16_driver`, and old zip were not found in the robot filesystem, local
+  `artifacts/recovered*` snapshots, `F:\browser`, or `E:\codexprofile`.
+  The recovered local snapshots only include `/home/unitree/unitree/Odometer_service`.
+- Next recovery path: locate the pre-2026-05-29 `/unitree` package from another
+  robot, a disk image, the machine that uploaded the zip (previous auth logs
+  point to `192.168.123.162` around the upgrade window), or vendor support. Do
+  not rely on `unitree-upgrade` recover for this issue.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,
