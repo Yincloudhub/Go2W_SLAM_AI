@@ -21,6 +21,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import parse_qs, urlparse
 
 
 DEFAULT_PORT = 8765
@@ -93,6 +94,7 @@ class WebConfig:
     llm_http_model: str = "local"
     stereo_summary_path: Path = Path("artifacts/stereo_depth_summary.json")
     stereo_stale_ms: int = 5000
+    status_cache_ms: int = 1500
     ensure_slam_on_start: bool = False
 
     def panel_argv(self, execute_enabled: bool, weak_link_mode: bool, current_node: str) -> List[str]:
@@ -201,6 +203,10 @@ class OperatorWebApp:
         self.config = config
         self.state = WebState(current_node=config.current_node)
         self.lock = threading.Lock()
+        self.panel_lock = threading.Lock()
+        self.status_lock = threading.Lock()
+        self._status_cache: Optional[Dict[str, Any]] = None
+        self._status_cache_ts_ms = 0
 
     def run_panel_session(self, lines: Iterable[str]) -> Dict[str, Any]:
         input_text = "\n".join(lines) + "\n"
@@ -221,17 +227,18 @@ class OperatorWebApp:
             }
 
         try:
-            completed = subprocess.run(
-                argv,
-                input=input_text,
-                cwd=str(self.config.repo_root),
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                capture_output=True,
-                timeout=self.config.panel_timeout_s,
-                check=False,
-            )
+            with self.panel_lock:
+                completed = subprocess.run(
+                    argv,
+                    input=input_text,
+                    cwd=str(self.config.repo_root),
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    capture_output=True,
+                    timeout=self.config.panel_timeout_s,
+                    check=False,
+                )
             stdout = strip_ansi(completed.stdout)
             stderr = strip_ansi(completed.stderr)
             return {
@@ -252,18 +259,48 @@ class OperatorWebApp:
                 "summary": parse_panel_summary(stdout),
             }
 
-    def status(self) -> Dict[str, Any]:
+    def status(self, *, force: bool = False) -> Dict[str, Any]:
+        now = int(time.time() * 1000)
+        with self.status_lock:
+            if not force and self._status_cache is not None:
+                age_ms = max(0, now - self._status_cache_ts_ms)
+                if age_ms <= self.config.status_cache_ms:
+                    cached = dict(self._status_cache)
+                    cached["cache"] = {
+                        "hit": True,
+                        "age_ms": age_ms,
+                        "ttl_ms": self.config.status_cache_ms,
+                    }
+                    return cached
+
+            result = self._fresh_status()
+            self._status_cache_ts_ms = int(time.time() * 1000)
+            result["cache"] = {
+                "hit": False,
+                "age_ms": 0,
+                "ttl_ms": self.config.status_cache_ms,
+            }
+            self._status_cache = dict(result)
+            return result
+
+    def _fresh_status(self) -> Dict[str, Any]:
         result = self.run_panel_session(["/quit"])
         result["stereo_summary"] = self.stereo_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
         return result
 
+    def invalidate_status_cache(self) -> None:
+        with self.status_lock:
+            self._status_cache = None
+            self._status_cache_ts_ms = 0
+
     def command(self, line: str, confirmed: bool = False) -> Dict[str, Any]:
         line = trim_line(line)
         if not line:
             return self.status()
 
+        local: Optional[Dict[str, Any]] = None
         with self.lock:
             local = self.state.apply_local_setting(line, confirmed=confirmed)
             if local is not None:
@@ -271,13 +308,16 @@ class OperatorWebApp:
                 local["stereo_summary"] = self.stereo_summary()
                 local["state"] = self.state.snapshot()
                 self.state.remember(line, local)
-                return local
+        if local is not None:
+            self.invalidate_status_cache()
+            return local
 
         result = self.run_panel_session([line, "/quit"])
         result["stereo_summary"] = self.stereo_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
             self.state.remember(line, result)
+        self.invalidate_status_cache()
         return result
 
     def state_snapshot(self) -> Dict[str, Any]:
@@ -615,10 +655,10 @@ INDEX_HTML = r"""<!doctype html>
       return res.json();
     }
 
-    async function refreshStatus() {
+    async function refreshStatus(force = false) {
       setBusy(true);
       try {
-        const result = await api("/api/status");
+        const result = await api(force ? "/api/status?force=1" : "/api/status");
         $("conn").textContent = result.exit_code === 0 ? "已连接" : "状态异常";
         $("conn").className = result.exit_code === 0 ? "pill ok" : "pill danger";
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
@@ -661,7 +701,7 @@ INDEX_HTML = r"""<!doctype html>
       if (ms > 0) timer = setInterval(refreshStatus, ms);
     }
 
-    $("refresh").onclick = refreshStatus;
+    $("refresh").onclick = () => refreshStatus(true);
     $("start-slam").onclick = () => runCommand("/start-slam", "确认启动/检查 SLAM 与雷达 driver？", true);
     $("exec-on").onclick = () => runCommand("/execute on", "确认允许真实执行？机器狗趴着时不要开启。", true);
     $("exec-off").onclick = () => runCommand("/execute off");
@@ -693,16 +733,19 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
     server_version = "GO2WOperatorWeb/0.1"
 
     def do_GET(self) -> None:
-        if self.path == "/" or self.path.startswith("/?"):
+        parsed_path = urlparse(self.path)
+        if parsed_path.path == "/":
             self.send_html(INDEX_HTML)
             return
-        if self.path == "/api/status":
-            self.send_json(self.app.status())
+        if parsed_path.path == "/api/status":
+            query = parse_qs(parsed_path.query)
+            force = truthy(query.get("force", ["0"])[0]) or truthy(query.get("refresh", ["0"])[0])
+            self.send_json(self.app.status(force=force))
             return
-        if self.path == "/api/state":
+        if parsed_path.path == "/api/state":
             self.send_json({"state": self.app.state_snapshot()})
             return
-        if self.path == "/api/stereo-summary":
+        if parsed_path.path == "/api/stereo-summary":
             self.send_json({"stereo_summary": self.app.stereo_summary()})
             return
         self.send_error(HTTPStatus.NOT_FOUND)
@@ -777,6 +820,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--llm-http-model", default=env.get("GO2W_LLM_HTTP_MODEL", "local"))
     parser.add_argument("--stereo-summary-path", default=env.get("GO2W_STEREO_SUMMARY_PATH", "artifacts/stereo_depth_summary.json"))
     parser.add_argument("--stereo-stale-ms", type=int, default=int(env.get("GO2W_STEREO_STALE_MS", "5000")))
+    parser.add_argument("--status-cache-ms", type=int, default=int(env.get("GO2W_STATUS_CACHE_MS", "1500")))
     parser.add_argument("--ensure-slam-on-start", action="store_true", default=truthy(env.get("GO2W_WEB_ENSURE_SLAM_ON_START", "0")))
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
@@ -801,6 +845,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         llm_http_model=args.llm_http_model,
         stereo_summary_path=Path(args.stereo_summary_path).expanduser(),
         stereo_stale_ms=max(1, args.stereo_stale_ms),
+        status_cache_ms=max(0, args.status_cache_ms),
         ensure_slam_on_start=args.ensure_slam_on_start,
     )
 

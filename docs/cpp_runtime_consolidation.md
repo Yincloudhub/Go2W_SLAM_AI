@@ -244,6 +244,11 @@ Result:
 - `go2w_operator_panel` now propagates the last command's exit code, so the Web
   UI reports `/start-slam` as `accepted=false` when the SLAM startup script
   detects the current fatal condition.
+- `scripts/go2w_operator_web.py` now bounds display refresh load with a
+  short `/api/status` cache (`GO2W_STATUS_CACHE_MS`, default 1500 ms) and a
+  panel subprocess mutex. Automatic browser refresh no longer spawns a new C++
+  panel session every request; manual refresh can still force a fresh read with
+  `/api/status?force=1`.
 - RealSense D435I was detected and short depth captures were converted into
   `artifacts/stereo_depth_summary.json`. The low-rate loop mode keeps the
   camera pipeline open and atomically replaces the summary file; the latest

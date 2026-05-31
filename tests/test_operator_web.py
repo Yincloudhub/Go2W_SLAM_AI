@@ -106,6 +106,75 @@ class OperatorWebTests(unittest.TestCase):
             loaded = web.OperatorWebApp(config).stereo_summary()
             self.assertFalse(loaded["stale_by_age"])
 
+    def test_status_uses_short_cache_to_bound_panel_spawns(self):
+        class FakeApp(web.OperatorWebApp):
+            def __init__(self, config):
+                super().__init__(config)
+                self.calls = 0
+
+            def run_panel_session(self, lines):
+                self.calls += 1
+                return {
+                    "accepted": True,
+                    "exit_code": 0,
+                    "stdout": f"call={self.calls}\n",
+                    "stderr": "",
+                    "summary": {"phase": "idle"},
+                }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                status_cache_ms=10000,
+            )
+            app = FakeApp(config)
+            first = app.status()
+            second = app.status()
+            forced = app.status(force=True)
+
+            self.assertEqual(app.calls, 2)
+            self.assertFalse(first["cache"]["hit"])
+            self.assertTrue(second["cache"]["hit"])
+            self.assertFalse(forced["cache"]["hit"])
+
+    def test_command_invalidates_status_cache(self):
+        class FakeApp(web.OperatorWebApp):
+            def __init__(self, config):
+                super().__init__(config)
+                self.calls = 0
+
+            def run_panel_session(self, lines):
+                self.calls += 1
+                return {
+                    "accepted": True,
+                    "exit_code": 0,
+                    "stdout": "phase=idle | loc=false\n",
+                    "stderr": "",
+                    "summary": {"phase": "idle"},
+                }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                status_cache_ms=10000,
+            )
+            app = FakeApp(config)
+            app.status()
+            app.command("/weak on")
+            app.status()
+
+            self.assertEqual(app.calls, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
