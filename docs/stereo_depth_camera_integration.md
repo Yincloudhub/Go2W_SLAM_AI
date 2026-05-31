@@ -48,7 +48,7 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
 | Camera driver | Native or 15-30 Hz | Hardware/driver thread only. |
 | Depth ROI summary | 5-10 Hz | Crop to front/side regions, downsample, compute min/percentile clearance. |
 | Safety fusion | Same as SLAM poll, usually 1 Hz now | Consume latest valid summary only. |
-| UI display | 1-2 Hz | Show source/confidence/latency, not frames. |
+| UI display | 1-2 Hz | Show source/confidence/latency, not frames. The Web panel treats camera summaries older than `GO2W_STEREO_STALE_MS` as stale; default is 5000 ms so a 1-2 Hz UI does not falsely flap on one missed refresh. |
 | LLM feedback | Terminal events or <= 0.2 Hz | Summarize state changes, never stream images. |
 
 ## Performance Rules
@@ -57,7 +57,7 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
 2. Use hardware depth from the stereo camera when available. Avoid neural depth in the control loop.
 3. Downsample depth and compute region-of-interest clearances instead of processing full frames in Python.
 4. Use a bounded queue or latest-value cache between camera perception and the main runtime.
-5. If `latency_ms` or sample age exceeds 300-500 ms, mark the camera summary stale.
+5. If `latency_ms` or sample age exceeds 300-500 ms, the safety-fusion layer should mark the camera summary stale; the UI may use a looser display-only threshold such as 5000 ms.
 6. If confidence is below threshold, ignore the camera summary for blocking decisions.
 7. Camera absence must not prevent SLAM startup, localization, dry-run planning, or LiDAR-only navigation.
 8. Do not log raw frames by default; keep only short ring buffers for debugging.
@@ -73,3 +73,57 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
 ## Next Wiring Step
 
 The next implementation step is to add a small robot-side publisher that turns the chosen camera topic into `DepthCameraSummary` JSON, then let the operator core read the latest summary before each `SafetyGate` runtime check. The C++ hot loop should read the latest compact value only; it should never wait for camera processing to finish.
+
+## Robot-Side Summary Exporter
+
+`scripts/realsense_depth_summary.py` is the first repo-owned bridge for the D435I
+depth camera. It captures only a small number of depth frames, computes
+left/front/right ROI clearances, and writes a compact JSON summary:
+
+```bash
+cd ~/go2w_slam_agent
+python3 scripts/realsense_depth_summary.py \
+  --output artifacts/stereo_depth_summary.json \
+  --frames 3 \
+  --fps 15 \
+  --pretty
+```
+
+For recording/debug sessions, keep the camera publisher deliberately low-rate:
+
+```bash
+python3 scripts/realsense_depth_summary.py \
+  --output artifacts/stereo_depth_summary.json \
+  --loop-interval-s 1.0 \
+  --max-samples 0
+```
+
+The loop keeps the RealSense pipeline open and atomically replaces the compact
+JSON file on each update. It still does not send raw frames to the UI or LLM.
+
+The script can also read a saved `depth_raw.npy` for offline validation:
+
+```bash
+python3 scripts/realsense_depth_summary.py \
+  --from-npy /home/unitree/depthcamera/output/depth_raw.npy \
+  --output artifacts/stereo_depth_summary.json \
+  --pretty
+```
+
+The summary is diagnostic until C++ consumes it. A low confidence value should
+be shown in the UI but ignored by safety fusion; it must not block the robot by
+itself.
+
+The operator Web UI reads this file through `--stereo-summary-path` and marks it
+stale by `--stereo-stale-ms` / `GO2W_STEREO_STALE_MS` without subscribing to raw
+camera streams. This keeps camera display decoupled from the real-time loop.
+
+2026-05-31 prone-safe check on `unitree@192.168.123.18`:
+
+- `rs-enumerate-devices -s` detected `Intel RealSense D435I`, serial
+  `346222072418`, firmware `5.17.0.10`.
+- `/home/unitree/depthcamera/capture_rs_safe.py` captured one color and depth
+  frame at 640x480.
+- The generated ROI summary had low valid-depth confidence (`0.337`), so it is
+  useful as a diagnostic signal but should remain below the safety-fusion
+  confidence threshold for now.

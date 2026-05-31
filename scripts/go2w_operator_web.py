@@ -91,6 +91,8 @@ class WebConfig:
     panel_timeout_s: int = 90
     llm_http_url: str = ""
     llm_http_model: str = "local"
+    stereo_summary_path: Path = Path("artifacts/stereo_depth_summary.json")
+    stereo_stale_ms: int = 5000
     ensure_slam_on_start: bool = False
 
     def panel_argv(self, execute_enabled: bool, weak_link_mode: bool, current_node: str) -> List[str]:
@@ -252,6 +254,7 @@ class OperatorWebApp:
 
     def status(self) -> Dict[str, Any]:
         result = self.run_panel_session(["/quit"])
+        result["stereo_summary"] = self.stereo_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
         return result
@@ -265,11 +268,13 @@ class OperatorWebApp:
             local = self.state.apply_local_setting(line, confirmed=confirmed)
             if local is not None:
                 local["summary"] = {}
+                local["stereo_summary"] = self.stereo_summary()
                 local["state"] = self.state.snapshot()
                 self.state.remember(line, local)
                 return local
 
         result = self.run_panel_session([line, "/quit"])
+        result["stereo_summary"] = self.stereo_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
             self.state.remember(line, result)
@@ -278,6 +283,27 @@ class OperatorWebApp:
     def state_snapshot(self) -> Dict[str, Any]:
         with self.lock:
             return self.state.snapshot()
+
+    def stereo_summary(self) -> Dict[str, Any]:
+        path = self.config.stereo_summary_path
+        if not path.is_absolute():
+            path = self.config.repo_root / path
+        if not path.exists():
+            return {"available": False, "path": str(path)}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            ts = int(data.get("timestamp_ms") or 0)
+            age_ms = max(0, int(time.time() * 1000) - ts) if ts else None
+            return {
+                "available": True,
+                "path": str(path),
+                "age_ms": age_ms,
+                "stale_ms": self.config.stereo_stale_ms,
+                "stale_by_age": bool(age_ms is not None and age_ms > self.config.stereo_stale_ms),
+                "data": data,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {"available": False, "path": str(path), "error": str(exc)}
 
 
 INDEX_HTML = r"""<!doctype html>
@@ -443,6 +469,8 @@ INDEX_HTML = r"""<!doctype html>
           <div class="metric"><label>障碍状态</label><strong id="m-obstacle">unknown</strong></div>
           <div class="metric"><label>网络模式</label><strong id="m-net">normal</strong></div>
           <div class="metric"><label>安全原因</label><strong id="m-safety">-</strong></div>
+          <div class="metric"><label>双目前方</label><strong id="m-stereo-front">unavailable</strong></div>
+          <div class="metric"><label>双目置信/年龄</label><strong id="m-stereo-health">unavailable</strong></div>
         </div>
       </section>
 
@@ -563,6 +591,20 @@ INDEX_HTML = r"""<!doctype html>
       $("history").innerHTML = items.join("") || "<div>暂无任务历史</div>";
     }
 
+    function updateStereo(stereo) {
+      if (!stereo || !stereo.available || !stereo.data) {
+        $("m-stereo-front").textContent = "unavailable";
+        $("m-stereo-health").textContent = "unavailable";
+        return;
+      }
+      const data = stereo.data;
+      const front = data.front_clearance_m;
+      $("m-stereo-front").textContent = (front === null || front === undefined) ? "unknown" : `${Number(front).toFixed(2)}m`;
+      const confidence = data.confidence === null || data.confidence === undefined ? "unknown" : Number(data.confidence).toFixed(3);
+      const age = stereo.age_ms === null || stereo.age_ms === undefined ? "unknown" : `${Math.round(stereo.age_ms)}ms`;
+      $("m-stereo-health").textContent = `${confidence} / ${age}${stereo.stale_by_age ? " stale" : ""}`;
+    }
+
     async function api(path, options = {}) {
       const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -578,6 +620,7 @@ INDEX_HTML = r"""<!doctype html>
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
+        updateStereo(result.stereo_summary);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
         $("conn").textContent = "UI 服务异常";
@@ -599,6 +642,7 @@ INDEX_HTML = r"""<!doctype html>
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
+        updateStereo(result.stereo_summary);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
         $("output").textContent = String(err);
@@ -653,6 +697,9 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/state":
             self.send_json({"state": self.app.state_snapshot()})
+            return
+        if self.path == "/api/stereo-summary":
+            self.send_json({"stereo_summary": self.app.stereo_summary()})
             return
         self.send_error(HTTPStatus.NOT_FOUND)
 
@@ -724,6 +771,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--panel-timeout-s", type=int, default=int(env.get("GO2W_PANEL_TIMEOUT_S", "90")))
     parser.add_argument("--llm-http-url", default=env.get("GO2W_LLM_HTTP_URL", ""))
     parser.add_argument("--llm-http-model", default=env.get("GO2W_LLM_HTTP_MODEL", "local"))
+    parser.add_argument("--stereo-summary-path", default=env.get("GO2W_STEREO_SUMMARY_PATH", "artifacts/stereo_depth_summary.json"))
+    parser.add_argument("--stereo-stale-ms", type=int, default=int(env.get("GO2W_STEREO_STALE_MS", "5000")))
     parser.add_argument("--ensure-slam-on-start", action="store_true", default=truthy(env.get("GO2W_WEB_ENSURE_SLAM_ON_START", "0")))
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
@@ -746,6 +795,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         panel_timeout_s=args.panel_timeout_s,
         llm_http_url=args.llm_http_url,
         llm_http_model=args.llm_http_model,
+        stereo_summary_path=Path(args.stereo_summary_path).expanduser(),
+        stereo_stale_ms=max(1, args.stereo_stale_ms),
         ensure_slam_on_start=args.ensure_slam_on_start,
     )
 

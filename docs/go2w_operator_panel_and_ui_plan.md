@@ -25,6 +25,8 @@
 - `cpp/go2w_operator_panel`：补齐 C++ 面板内的建图、拓扑点预览/写入、RViz2 打开入口；所有会改变机器人/SLAM 状态的命令都要求显式 `confirm`。
 - `scripts/start_go2w_rviz2.sh`：新增 RViz2 诊断启动脚本，只负责可视化进程，不发布运动命令。
 - `scripts/go2w_operator_web.py` 与 `scripts/run_go2w_operator_web.sh`：新增薄 Web UI。浏览器只负责显示、按钮、确认弹窗和 LLM 输入，实际命令仍委托给 `go2w_operator_panel`。
+- `scripts/go2w_web_tunnel.py`：新增本地 SSH TCP tunnel，方便把机器人侧 `127.0.0.1:8765` 映射成本机浏览器的 `127.0.0.1:8765`。
+- `scripts/realsense_depth_summary.py`：新增 D435I/RealSense 低频 ROI 深度摘要导出脚本，Web UI 可只读显示，不传原始帧。UI stale 阈值通过 `GO2W_STEREO_STALE_MS`/`--stereo-stale-ms` 配置，默认 5000 ms，避免 1-2 Hz 展示层因为一次刷新抖动就误报失效。
 
 ## C++ 操作者面板职责
 
@@ -90,6 +92,12 @@ cd ~/go2w_slam_agent
 ssh -L 8765:127.0.0.1:8765 unitree@192.168.123.18
 ```
 
+也可以用仓库脚本启动本地 tunnel：
+
+```powershell
+python .\scripts\go2w_web_tunnel.py
+```
+
 如果需要在直连网段直接访问，可显式设置：
 
 ```bash
@@ -105,7 +113,8 @@ UI 的第一目标是“一打开就能看见系统是否可用”，不是“�
 3. 拓扑点分两步：先 `/topology preview NAME` 看当前 pose、SLAM/localization 状态，再 `/topology add NAME confirm` 写入。这样能避免 `x=0,y=0` 或 pose 过期时污染拓扑。考虑不同 SLAM 回调频率，写入门槛按 pose_age 策略判断：`localized/degraded/tracking` 且 `pose_age_ms<=2000`。
 4. RViz2 是可视化诊断，不应成为主链路依赖。Mobaxterm/SSH 终端可直接看 C++ 面板；RViz2 需要 X11 forwarding 或机器狗/NX 本地图形桌面，启动失败时只提示，不阻塞 UI。
 5. 浏览器 UI 默认 dry-run、默认 2 秒刷新一次状态。它通过短生命周期 C++ panel 会话读取状态和执行按钮命令，不直接打开新的高频 ROS2/SLAM 订阅。
-6. 后续如果做 Qt UI，应复用同一套 C++ core 和 WorldState v1，不新造另一套实时轮询逻辑。
+6. 双目/深度相机只通过 `artifacts/stereo_depth_summary.json` 这类低频摘要进入 UI。原始彩色图、深度图和点云不进入 LLM/UI 边界。安全融合层可以用 300-500 ms 的严格 freshness，UI/LLM 反馈层用 `GO2W_STEREO_STALE_MS` 这类较宽松阈值，只表达“展示是否新鲜”，不直接影响运动许可。
+7. 后续如果做 Qt UI，应复用同一套 C++ core 和 WorldState v1，不新造另一套实时轮询逻辑。
 
 ## 后续 Qt/RViz2 形态
 

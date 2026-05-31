@@ -685,19 +685,24 @@ void OperatorPanel::setExecute(bool enabled)
 
 bool OperatorPanel::handleSlashCommand(const std::string& line)
 {
-    auto printResult = [](const std::string& label, const CommandResult& result) {
+    auto markOk = [this]() {
+        last_command_exit_code_ = 0;
+        return true;
+    };
+    auto printResult = [this](const std::string& label, const CommandResult& result) {
         if (!result.stdout_text.empty()) std::cout << result.stdout_text;
         if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
         std::cout << label << "_exit_code=" << result.exit_code << "\n";
+        last_command_exit_code_ = result.exit_code;
     };
 
     if (line.empty() || line == "/status") {
         printStatusOnce();
-        return true;
+        return markOk();
     }
     if (line == "/help") {
         printHelp();
-        return true;
+        return markOk();
     }
     if (line == "/start-slam") {
         const auto result = ensureSlam();
@@ -711,34 +716,34 @@ bool OperatorPanel::handleSlashCommand(const std::string& line)
         int seconds = 10;
         ss >> token >> seconds;
         watchWorld(seconds);
-        return true;
+        return markOk();
     }
     if (line == "/weak on") {
         setWeakMode(true);
-        return true;
+        return markOk();
     }
     if (line == "/weak off") {
         setWeakMode(false);
-        return true;
+        return markOk();
     }
     if (line == "/execute on") {
         setExecute(true);
-        return true;
+        return markOk();
     }
     if (line == "/execute off") {
         setExecute(false);
-        return true;
+        return markOk();
     }
     if (line.rfind("/current ", 0) == 0) {
         config_.current_node = trimAscii(line.substr(9));
         std::cout << "当前位置锚点: " << config_.current_node << "\n";
-        return true;
+        return markOk();
     }
 
     std::vector<std::string> tokens;
     std::istringstream ss(line);
     for (std::string token; ss >> token;) tokens.push_back(token);
-    if (tokens.empty()) return true;
+    if (tokens.empty()) return markOk();
 
     try {
         if (tokens[0] == "/mapping") {
@@ -752,6 +757,7 @@ bool OperatorPanel::handleSlashCommand(const std::string& line)
                 return true;
             }
             std::cout << "usage: /mapping start confirm | /mapping end confirm [map_path]\n";
+            last_command_exit_code_ = 2;
             return true;
         }
 
@@ -765,6 +771,7 @@ bool OperatorPanel::handleSlashCommand(const std::string& line)
                 return true;
             }
             std::cout << "usage: /topology preview NAME | /topology add NAME confirm\n";
+            last_command_exit_code_ = 2;
             return true;
         }
 
@@ -774,10 +781,12 @@ bool OperatorPanel::handleSlashCommand(const std::string& line)
                 return true;
             }
             std::cout << "usage: /rviz2 start confirm\n";
+            last_command_exit_code_ = 2;
             return true;
         }
     } catch (const std::exception& exc) {
         std::cerr << "command failed: " << exc.what() << "\n";
+        last_command_exit_code_ = 1;
         return true;
     }
 
@@ -793,6 +802,7 @@ int OperatorPanel::runInteractive()
         if (!result.stdout_text.empty()) std::cout << result.stdout_text;
         if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
         std::cout << "start_slam_exit_code=" << result.exit_code << "\n";
+        last_command_exit_code_ = result.exit_code;
     }
     printStatusOnce();
     std::string line;
@@ -806,6 +816,7 @@ int OperatorPanel::runInteractive()
         if (line.empty() || line.rfind("/", 0) == 0) {
             if (!handleSlashCommand(line)) {
                 std::cout << "unknown panel command. 输入 /help 查看命令。\n";
+                last_command_exit_code_ = 2;
             }
             continue;
         }
@@ -814,8 +825,9 @@ int OperatorPanel::runInteractive()
         if (!result.stdout_text.empty()) std::cout << result.stdout_text;
         if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
         std::cout << "exit_code=" << result.exit_code << "\n";
+        last_command_exit_code_ = result.exit_code;
     }
-    return 0;
+    return last_command_exit_code_;
 }
 
 }  // namespace go2w

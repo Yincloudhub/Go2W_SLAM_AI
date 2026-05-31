@@ -199,6 +199,39 @@ Result:
 - No `/start-slam`, `/mapping`, `/topology add`, `/rviz2 start`, navigation,
   relocation, stop-SLAM, or chassis motion command was executed.
 
+2026-05-31 prone-safe stabilization notes:
+
+- Local `127.0.0.1:8765` browser access was restored through
+  `scripts/go2w_web_tunnel.py`, forwarding to the robot-side Web UI over SSH.
+- `scripts/start_go2w_slam_stack.sh` now preflights the Unitree SLAM log
+  directory and prints the exact `sudo mkdir/chown` repair command if the
+  root-owned install path is not writable. It also waits through a short
+  stability window and returns non-zero when `unitree_slam` exits early or logs
+  fatal startup errors such as `lidar ysn check failed`.
+- On the robot, `unitree_slam` originally exited because
+  `/unitree/module/unitree_slam/bin/logs/slam_server` was missing/not writable.
+  Creating the log directory and assigning it to `unitree` allowed
+  `unitree_slam` to pass log initialization.
+- A second blocker remains before point recording: `unitree_slam` exits with
+  `mid360 lidar ysn check failed`, reporting current ysn `47PGO440010032` and
+  current IP `192.168.123.20`. The config file
+  `/unitree/module/unitree_slam/config/slam_interfaces_server_config/param.yaml`
+  contains those values under the `Go2`/`Go2_W` sections, so the next repair
+  should verify the binary's selected robot/lidar profile instead of blindly
+  editing official SLAM config.
+- `xt16_driver` and `unitree_slam` were started for diagnostics only. Mapping,
+  relocation, navigation, topology writing, RViz2 launch, stop-SLAM, and chassis
+  motion commands were not executed.
+- `go2w_operator_panel` now propagates the last command's exit code, so the Web
+  UI reports `/start-slam` as `accepted=false` when the SLAM startup script
+  detects the current fatal condition.
+- RealSense D435I was detected and short depth captures were converted into
+  `artifacts/stereo_depth_summary.json`. The low-rate loop mode keeps the
+  camera pipeline open and atomically replaces the summary file; the latest
+  prone-safe 3-sample test produced about 135-141 ms latency after warm-up and
+  confidence around 0.52. The front clearance is about 0.24 m while prone, so
+  this signal should stay diagnostic until placement/calibration improves.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,

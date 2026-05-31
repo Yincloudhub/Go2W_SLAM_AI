@@ -1,5 +1,8 @@
 import importlib.util
+import json
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -57,6 +60,51 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("--weak", argv)
         self.assertIn("wp_a", argv)
         self.assertIn("/tmp/slam_llm_command_client", argv)
+
+    def test_stereo_summary_file_is_bounded_diagnostic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "artifacts" / "stereo_depth_summary.json"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text(
+                json.dumps({"timestamp_ms": 1, "source": "stereo_depth", "front_clearance_m": 1.2, "confidence": 0.8}),
+                encoding="utf-8",
+            )
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                stereo_summary_path=Path("artifacts/stereo_depth_summary.json"),
+                stereo_stale_ms=12345,
+            )
+            app = web.OperatorWebApp(config)
+            loaded = app.stereo_summary()
+            self.assertTrue(loaded["available"])
+            self.assertEqual(loaded["data"]["source"], "stereo_depth")
+            self.assertEqual(loaded["stale_ms"], 12345)
+            self.assertTrue(loaded["stale_by_age"])
+
+    def test_stereo_summary_stale_threshold_is_configurable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "stereo.json"
+            summary_path.write_text(
+                json.dumps({"timestamp_ms": int(time.time() * 1000) - 2000, "source": "stereo_depth"}),
+                encoding="utf-8",
+            )
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                stereo_summary_path=summary_path,
+                stereo_stale_ms=5000,
+            )
+            loaded = web.OperatorWebApp(config).stereo_summary()
+            self.assertFalse(loaded["stale_by_age"])
 
 
 if __name__ == "__main__":

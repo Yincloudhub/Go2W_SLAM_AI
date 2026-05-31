@@ -1,0 +1,63 @@
+import importlib.util
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+def load_module():
+    path = Path(__file__).resolve().parents[1] / "scripts" / "realsense_depth_summary.py"
+    spec = importlib.util.spec_from_file_location("realsense_depth_summary", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+depth_summary = load_module()
+
+
+class RealsenseDepthSummaryTests(unittest.TestCase):
+    def test_percentile_interpolates(self):
+        self.assertAlmostEqual(depth_summary.percentile([1, 2, 3, 4], 50), 2.5)
+        self.assertEqual(depth_summary.percentile([], 10), None)
+
+    def test_build_depth_summary_uses_middle_band_rois(self):
+        depth = [[2000 for _ in range(6)] for _ in range(6)]
+        for y in range(2, 4):
+            depth[y][0] = 1200
+            depth[y][1] = 1300
+            depth[y][2] = 500
+            depth[y][3] = 700
+            depth[y][4] = 1600
+            depth[y][5] = 1700
+
+        summary = depth_summary.build_depth_summary(depth, timestamp_ms=123, q=10)
+
+        self.assertEqual(summary["timestamp_ms"], 123)
+        self.assertLess(summary["front_clearance_m"], 0.8)
+        self.assertGreater(summary["left_clearance_m"], 1.1)
+        self.assertGreater(summary["right_clearance_m"], 1.5)
+        self.assertEqual(summary["summary"]["shape"], [6, 6])
+
+    def test_invalid_depth_reduces_confidence_and_ignores_roi(self):
+        depth = [[0 for _ in range(6)] for _ in range(6)]
+        summary = depth_summary.build_depth_summary(depth, timestamp_ms=123)
+
+        self.assertEqual(summary["confidence"], 0.0)
+        self.assertIsNone(summary["front_clearance_m"])
+
+    def test_write_summary_replaces_output_atomically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "stereo_depth_summary.json"
+            text = depth_summary.write_summary({"source": "stereo_depth"}, output)
+
+            self.assertEqual(json.loads(text)["source"], "stereo_depth")
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["source"], "stereo_depth")
+            self.assertFalse((Path(tmp) / "stereo_depth_summary.json.tmp").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

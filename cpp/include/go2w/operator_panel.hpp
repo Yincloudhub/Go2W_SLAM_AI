@@ -83,6 +83,7 @@ private:
 
 private:
     OperatorPanelConfig config_;
+    int last_command_exit_code_ = 0;
 };
 
 std::string base64Encode(const std::string& bytes);
