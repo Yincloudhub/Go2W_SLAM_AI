@@ -113,7 +113,7 @@ UI 的第一目标是“一打开就能看见系统是否可用”，不是“�
 3. 拓扑点分两步：先 `/topology preview NAME` 看当前 pose、SLAM/localization 状态，再 `/topology add NAME confirm` 写入。这样能避免 `x=0,y=0` 或 pose 过期时污染拓扑。考虑不同 SLAM 回调频率，写入门槛按 pose_age 策略判断：`localized/degraded/tracking` 且 `pose_age_ms<=2000`。
 4. RViz2 是可视化诊断，不应成为主链路依赖。Mobaxterm/SSH 终端可直接看 C++ 面板；RViz2 需要 X11 forwarding 或机器狗/NX 本地图形桌面，启动失败时只提示，不阻塞 UI。
 5. 浏览器 UI 默认 dry-run、默认 2 秒刷新一次状态。它通过短生命周期 C++ panel 会话读取状态和执行按钮命令，不直接打开新的高频 ROS2/SLAM 订阅。
-6. 双目/深度相机只通过 `artifacts/stereo_depth_summary.json` 这类低频摘要进入 UI。原始彩色图、深度图和点云不进入 LLM/UI 边界。安全融合层可以用 300-500 ms 的严格 freshness，UI/LLM 反馈层用 `GO2W_STEREO_STALE_MS` 这类较宽松阈值，只表达“展示是否新鲜”，不直接影响运动许可。
+6. 双目/深度相机只通过 `artifacts/stereo_depth_summary.json` 这类低频摘要进入 UI。原始彩色图、深度图和点云不进入 LLM/UI 边界。安全融合层可以用 300-500 ms 的严格 freshness，UI/LLM 反馈层用 `GO2W_STEREO_STALE_MS` 这类较宽松阈值，只表达“展示是否新鲜”，不直接影响运动许可。UI 应同时显示 `center_distance_m`/`center_window_m` 和 `front_clearance_m`，避免把整图有效率低误读成中心距离不可用。
 7. 后续如果做 Qt UI，应复用同一套 C++ core 和 WorldState v1，不新造另一套实时轮询逻辑。
 
 ## 后续 Qt/RViz2 形态

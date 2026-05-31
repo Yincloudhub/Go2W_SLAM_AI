@@ -469,7 +469,7 @@ INDEX_HTML = r"""<!doctype html>
           <div class="metric"><label>障碍状态</label><strong id="m-obstacle">unknown</strong></div>
           <div class="metric"><label>网络模式</label><strong id="m-net">normal</strong></div>
           <div class="metric"><label>安全原因</label><strong id="m-safety">-</strong></div>
-          <div class="metric"><label>双目前方</label><strong id="m-stereo-front">unavailable</strong></div>
+          <div class="metric"><label>双目前方/中心</label><strong id="m-stereo-front">unavailable</strong></div>
           <div class="metric"><label>双目置信/年龄</label><strong id="m-stereo-health">unavailable</strong></div>
         </div>
       </section>
@@ -599,10 +599,14 @@ INDEX_HTML = r"""<!doctype html>
       }
       const data = stereo.data;
       const front = data.front_clearance_m;
-      $("m-stereo-front").textContent = (front === null || front === undefined) ? "unknown" : `${Number(front).toFixed(2)}m`;
-      const confidence = data.confidence === null || data.confidence === undefined ? "unknown" : Number(data.confidence).toFixed(3);
+      const center = data.center_distance_m ?? data.center_window_m;
+      const frontText = (front === null || front === undefined) ? "front ?" : `front ${Number(front).toFixed(2)}m`;
+      const centerText = (center === null || center === undefined) ? "center ?" : `center ${Number(center).toFixed(2)}m`;
+      $("m-stereo-front").textContent = `${frontText} / ${centerText}`;
+      const confidence = data.confidence === null || data.confidence === undefined ? "whole ?" : `whole ${Number(data.confidence).toFixed(3)}`;
+      const frontConfidence = data.roi_confidence && data.roi_confidence.front !== undefined ? `front ${Number(data.roi_confidence.front).toFixed(3)}` : "front ?";
       const age = stereo.age_ms === null || stereo.age_ms === undefined ? "unknown" : `${Math.round(stereo.age_ms)}ms`;
-      $("m-stereo-health").textContent = `${confidence} / ${age}${stereo.stale_by_age ? " stale" : ""}`;
+      $("m-stereo-health").textContent = `${confidence}, ${frontConfidence} / ${age}${stereo.stale_by_age ? " stale" : ""}`;
     }
 
     async function api(path, options = {}) {

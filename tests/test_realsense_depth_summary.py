@@ -41,6 +41,8 @@ class RealsenseDepthSummaryTests(unittest.TestCase):
         self.assertGreater(summary["left_clearance_m"], 1.1)
         self.assertGreater(summary["right_clearance_m"], 1.5)
         self.assertEqual(summary["summary"]["shape"], [6, 6])
+        self.assertAlmostEqual(summary["center_distance_m"], 0.7)
+        self.assertGreater(summary["roi_confidence"]["left"], 0.0)
 
     def test_invalid_depth_reduces_confidence_and_ignores_roi(self):
         depth = [[0 for _ in range(6)] for _ in range(6)]
@@ -48,6 +50,8 @@ class RealsenseDepthSummaryTests(unittest.TestCase):
 
         self.assertEqual(summary["confidence"], 0.0)
         self.assertIsNone(summary["front_clearance_m"])
+        self.assertIsNone(summary["center_distance_m"])
+        self.assertEqual(summary["roi_confidence"]["front"], 0.0)
 
     def test_write_summary_replaces_output_atomically(self):
         with tempfile.TemporaryDirectory() as tmp:

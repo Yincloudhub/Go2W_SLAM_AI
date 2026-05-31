@@ -29,11 +29,19 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
   "source": "stereo_depth",
   "timestamp_ms": 0,
   "frame_id": "camera_depth_optical_frame",
+  "center_distance_m": 1.1,
+  "center_window_m": 1.0,
   "front_clearance_m": 1.2,
   "left_clearance_m": 1.8,
   "right_clearance_m": 1.4,
   "rear_clearance_m": null,
   "confidence": 0.82,
+  "roi_confidence": {
+    "front": 0.76,
+    "left": 0.91,
+    "right": 0.88,
+    "center_window": 0.8
+  },
   "latency_ms": 70,
   "stale": false
 }
@@ -58,9 +66,14 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
 3. Downsample depth and compute region-of-interest clearances instead of processing full frames in Python.
 4. Use a bounded queue or latest-value cache between camera perception and the main runtime.
 5. If `latency_ms` or sample age exceeds 300-500 ms, the safety-fusion layer should mark the camera summary stale; the UI may use a looser display-only threshold such as 5000 ms.
-6. If confidence is below threshold, ignore the camera summary for blocking decisions.
-7. Camera absence must not prevent SLAM startup, localization, dry-run planning, or LiDAR-only navigation.
-8. Do not log raw frames by default; keep only short ring buffers for debugging.
+6. Treat `confidence` as whole-image valid-depth ratio, not as a center-distance
+   validity flag. Use `center_distance_m`/`center_window_m` for center-point UI
+   feedback, and `roi_confidence.front` with `front_clearance_m` for conservative
+   safety fusion.
+7. If the relevant ROI confidence is below threshold, ignore that ROI for
+   blocking decisions.
+8. Camera absence must not prevent SLAM startup, localization, dry-run planning, or LiDAR-only navigation.
+9. Do not log raw frames by default; keep only short ring buffers for debugging.
 
 ## Failure Strategy
 
@@ -124,6 +137,9 @@ camera streams. This keeps camera display decoupled from the real-time loop.
   `346222072418`, firmware `5.17.0.10`.
 - `/home/unitree/depthcamera/capture_rs_safe.py` captured one color and depth
   frame at 640x480.
-- The generated ROI summary had low valid-depth confidence (`0.337`), so it is
-  useful as a diagnostic signal but should remain below the safety-fusion
-  confidence threshold for now.
+- The saved depth frame had whole-image valid-depth confidence around `0.337`.
+  This does not mean the camera is unusable. It means many pixels are invalid in
+  the current prone pose. The exact center pixel was invalid (`0 m`), while the
+  wider center/front region still produced nearby valid depth around `0.24 m`.
+  UI should display these values separately; safety fusion should use ROI
+  confidence rather than the whole-image score alone.

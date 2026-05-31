@@ -6,11 +6,55 @@ set -euo pipefail
 
 UNITREE_SLAM_DIR="${UNITREE_SLAM_DIR:-/unitree/module/unitree_slam/bin}"
 CYCLONEDDS_CONFIG="${CYCLONEDDS_CONFIG:-/unitree/module/unitree_slam/config/cyclonedds.xml}"
+SLAM_PARAM_FILE="${SLAM_PARAM_FILE:-/unitree/module/unitree_slam/config/slam_interfaces_server_config/param.yaml}"
 LOG_DIR="${GO2W_SLAM_LOG_DIR:-${HOME}/go2w_slam_agent/artifacts/slam_stack}"
 STARTUP_WAIT_S="${GO2W_SLAM_STARTUP_WAIT_S:-8}"
 STABILITY_WAIT_S="${GO2W_SLAM_STABILITY_WAIT_S:-4}"
 
 mkdir -p "${LOG_DIR}"
+
+print_file_identity() {
+  local label="$1"
+  local path="$2"
+
+  if [[ ! -e "${path}" ]]; then
+    echo "warning: missing ${label}: ${path}" >&2
+    return 0
+  fi
+
+  echo "${label}: ${path}"
+  stat -c "${label}_stat: mtime=%y size=%s owner=%U:%G mode=%a" "${path}" 2>/dev/null || true
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${path}" | awk -v label="${label}" '{print label "_sha256: " $1}'
+  fi
+}
+
+print_slam_runtime_identity() {
+  echo "runtime_identity:"
+  print_file_identity "unitree_slam_binary" "${UNITREE_SLAM_DIR}/unitree_slam"
+  print_file_identity "xt16_driver_binary" "${UNITREE_SLAM_DIR}/xt16_driver"
+  print_file_identity "slam_param_file" "${SLAM_PARAM_FILE}"
+
+  if [[ -f "${SLAM_PARAM_FILE}" ]]; then
+    awk '
+      /^[^[:space:]].*:/ {
+        profile = "";
+        key = $1;
+        sub(":", "", key);
+        if (key == "B2" || key == "B2_W" || key == "Go2" || key == "Go2_W") {
+          profile = key;
+          print "profile=" profile;
+        }
+        next;
+      }
+      profile != "" && /^[[:space:]]+(lidar_type|lidar_ysn|lidar_ip):/ {
+        line = $0;
+        sub(/^[[:space:]]+/, "", line);
+        print "  " line;
+      }
+    ' "${SLAM_PARAM_FILE}"
+  fi
+}
 
 ensure_unitree_slam_log_dirs() {
   local logs_dir="${UNITREE_SLAM_DIR}/logs"
@@ -121,7 +165,9 @@ check_topic_once() {
 echo "GO2W SLAM stack startup"
 echo "unitree_slam_dir: ${UNITREE_SLAM_DIR}"
 echo "cyclonedds_config: ${CYCLONEDDS_CONFIG}"
+echo "slam_param_file: ${SLAM_PARAM_FILE}"
 echo "log_dir: ${LOG_DIR}"
+print_slam_runtime_identity
 
 ensure_unitree_slam_log_dirs
 

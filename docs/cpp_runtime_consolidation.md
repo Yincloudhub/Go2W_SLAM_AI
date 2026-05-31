@@ -219,9 +219,28 @@ Result:
   contains those values under the `Go2`/`Go2_W` sections, so the next repair
   should verify the binary's selected robot/lidar profile instead of blindly
   editing official SLAM config.
-- `xt16_driver` and `unitree_slam` were started for diagnostics only. Mapping,
+- The head-mounted LiDAR path should be treated as the XT16 path in this
+  project. `xt16_driver` can connect to the LiDAR at `192.168.123.20` and load
+  correction data. The official Unitree `Go2`/`Go2_W` SLAM profile was restored
+  to its pre-test value after a failed A/B check, so the next fix should compare
+  the known-good launch method/environment before changing vendor configs.
+  `xt16_driver` and `unitree_slam` were started for diagnostics only. Mapping,
   relocation, navigation, topology writing, RViz2 launch, stop-SLAM, and chassis
   motion commands were not executed.
+- Follow-up evidence after comparing the robot history: the old workspace log
+  `/home/unitree/go2w_slam/go2w_edge_autonomy/logs/slam_stack/unitree_slam.log`
+  recorded `xt16 lidar ysn check success!` on 2026-05-26, but
+  `/unitree/module/unitree_slam/bin/unitree_slam`,
+  `/unitree/module/unitree_slam/bin/xt16_driver`, and the related SLAM libs and
+  configs all have 2026-05-29 20:08 mtimes. The current restored `param.yaml`
+  is only known to match the 2026-05-31 14:59 pre-test backup, not necessarily
+  the 2026-05-26 known-good state. Treat this as a module-version/config drift
+  investigation before changing the vendor profile again.
+- `scripts/start_go2w_slam_stack.sh` now prints the `unitree_slam` binary,
+  `xt16_driver` binary, and `slam_interfaces_server_config/param.yaml` mtimes
+  and sha256 hashes, plus the B2/B2_W/Go2/Go2_W lidar profile summary, before
+  starting anything. This makes future UI one-click startup failures easier to
+  separate into config drift, binary drift, or runtime health.
 - `go2w_operator_panel` now propagates the last command's exit code, so the Web
   UI reports `/start-slam` as `accepted=false` when the SLAM startup script
   detects the current fatal condition.
@@ -229,8 +248,10 @@ Result:
   `artifacts/stereo_depth_summary.json`. The low-rate loop mode keeps the
   camera pipeline open and atomically replaces the summary file; the latest
   prone-safe 3-sample test produced about 135-141 ms latency after warm-up and
-  confidence around 0.52. The front clearance is about 0.24 m while prone, so
-  this signal should stay diagnostic until placement/calibration improves.
+  confidence around 0.52 in the front ROI after warm-up. The exact center pixel
+  can still be invalid while prone, so center-distance UI feedback and ROI
+  safety fusion should be shown as separate values instead of collapsing them
+  into one "valid/invalid" score.
 
 ## Next consolidation targets
 

@@ -87,6 +87,17 @@ def valid_fraction(depth_mm: Sequence[Sequence[float]], *, min_m: float, max_m: 
     return 0.0 if total == 0 else valid / total
 
 
+def valid_depth_m(raw: float, *, min_m: float, max_m: float) -> Optional[float]:
+    value_m = float(raw) * 0.001
+    if min_m <= value_m <= max_m:
+        return value_m
+    return None
+
+
+def clipped_window(h: int, w: int, cx: int, cy: int, radius: int) -> tuple[int, int, int, int]:
+    return max(0, cx - radius), min(w, cx + radius + 1), max(0, cy - radius), min(h, cy + radius + 1)
+
+
 def build_depth_summary(
     depth_mm: Sequence[Sequence[float]],
     *,
@@ -107,22 +118,50 @@ def build_depth_summary(
     left = (0, w // 3)
     front = (w // 3, (2 * w) // 3)
     right = ((2 * w) // 3, w)
+    cx, cy = w // 2, h // 2
+    center_x0, center_x1, center_y0, center_y1 = clipped_window(h, w, cx, cy, 40)
+    front_values = roi_values_m(depth_mm, x0=front[0], x1=front[1], y0=y0, y1=y1, min_m=min_m, max_m=max_m)
+    left_values = roi_values_m(depth_mm, x0=left[0], x1=left[1], y0=y0, y1=y1, min_m=min_m, max_m=max_m)
+    right_values = roi_values_m(depth_mm, x0=right[0], x1=right[1], y0=y0, y1=y1, min_m=min_m, max_m=max_m)
+    center_values = roi_values_m(
+        depth_mm,
+        x0=center_x0,
+        x1=center_x1,
+        y0=center_y0,
+        y1=center_y1,
+        min_m=min_m,
+        max_m=max_m,
+    )
+    front_total = max(1, (front[1] - front[0]) * (y1 - y0))
+    left_total = max(1, (left[1] - left[0]) * (y1 - y0))
+    right_total = max(1, (right[1] - right[0]) * (y1 - y0))
+    center_total = max(1, (center_x1 - center_x0) * (center_y1 - center_y0))
 
     return {
         "source": source,
         "timestamp_ms": int(timestamp_ms or now_ms()),
         "frame_id": frame_id,
-        "front_clearance_m": roi_percentile_m(depth_mm, x0=front[0], x1=front[1], y0=y0, y1=y1, min_m=min_m, max_m=max_m, q=q),
-        "left_clearance_m": roi_percentile_m(depth_mm, x0=left[0], x1=left[1], y0=y0, y1=y1, min_m=min_m, max_m=max_m, q=q),
-        "right_clearance_m": roi_percentile_m(depth_mm, x0=right[0], x1=right[1], y0=y0, y1=y1, min_m=min_m, max_m=max_m, q=q),
+        "center_distance_m": valid_depth_m(depth_mm[cy][cx], min_m=min_m, max_m=max_m),
+        "center_window_m": percentile(center_values, 50.0),
+        "front_clearance_m": percentile(front_values, q),
+        "left_clearance_m": percentile(left_values, q),
+        "right_clearance_m": percentile(right_values, q),
         "rear_clearance_m": None,
         "confidence": round(valid_fraction(depth_mm, min_m=min_m, max_m=max_m), 3),
+        "roi_confidence": {
+            "front": round(len(front_values) / front_total, 3),
+            "left": round(len(left_values) / left_total, 3),
+            "right": round(len(right_values) / right_total, 3),
+            "center_window": round(len(center_values) / center_total, 3),
+        },
         "latency_ms": latency_ms,
         "stale": bool(stale),
         "summary": {
             "shape": [h, w],
             "percentile": q,
             "valid_range_m": [min_m, max_m],
+            "confidence_scope": "whole_image_valid_fraction",
+            "center_window_px": [center_x1 - center_x0, center_y1 - center_y0],
         },
     }
 
