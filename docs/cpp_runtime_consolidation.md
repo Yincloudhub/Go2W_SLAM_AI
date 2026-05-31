@@ -289,6 +289,27 @@ Result:
   point to `192.168.123.162` around the upgrade window), or vendor support. Do
   not rely on `unitree-upgrade` recover for this issue.
 
+2026-05-31 relocation status after serial-number repair:
+
+- After correcting the XT16 serial profile and rebooting the robot, the
+  prone-safe `scripts/start_go2w_slam_stack.sh` path started `xt16_driver` and
+  `unitree_slam` successfully. The log showed `xt16 lidar ysn check success!`
+  and `server started. name:slam_operate`.
+- A `relocate` command for `/home/unitree/test.pcd` at the `mapping_origin`
+  anchor was accepted by `slam_operate` (`apiId:1804`) and returned
+  `Successfully started relocation.` The SLAM log recorded `ICP Score:0.011119`.
+- Runtime verification should read `/slam_info` and
+  `/unitree/slam_relocation/odom`. The older `/uslam/localization/odom` path had
+  no publisher in this run, while `/unitree/slam_relocation/odom`,
+  `/unitree/slam_relocation/global_map`, `/unitree/slam_lidar/points`, and
+  `/slam_info` did have publishers and produced live samples.
+- The short-lived `slam_llm_command_client` needs a small DDS warm-up window
+  before stdin commands. Immediate `get_world_state` can report
+  `localization=not_started`, but delaying stdin by about 1.5 s yielded
+  `localization=localized`, `slam_health=ok`, and a live pose. The C++ operator
+  path now carries `gateway_startup_wait_s` into `GatewayClient` so UI status
+  polls do not race DDS discovery.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,

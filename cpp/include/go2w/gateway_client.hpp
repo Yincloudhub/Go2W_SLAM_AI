@@ -18,6 +18,7 @@ struct GatewayClientConfig {
     std::string client_path = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client";
     std::string network_interface = "eth0";
     int timeout_s = 30;
+    double startup_wait_s = 0.0;
 };
 
 struct GatewayClientResult {
@@ -35,6 +36,10 @@ private:
     GatewayClientConfig config_;
 };
 
-ProcessResult runProcessWithInput(const std::vector<std::string>& argv, const std::string& input, int timeout_s);
+ProcessResult runProcessWithInput(
+    const std::vector<std::string>& argv,
+    const std::string& input,
+    int timeout_s,
+    double startup_wait_s = 0.0);
 
 }  // namespace go2w

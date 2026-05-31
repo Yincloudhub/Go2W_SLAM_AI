@@ -89,6 +89,7 @@ class WebConfig:
     host: str = "127.0.0.1"
     port: int = DEFAULT_PORT
     gateway_timeout_s: int = 30
+    gateway_startup_wait_s: float = 1.0
     panel_timeout_s: int = 90
     llm_http_url: str = ""
     llm_http_model: str = "local"
@@ -112,6 +113,8 @@ class WebConfig:
             self.network_interface,
             "--gateway-timeout-s",
             str(self.gateway_timeout_s),
+            "--gateway-startup-wait-s",
+            str(self.gateway_startup_wait_s),
             "--current-node",
             current_node,
         ]
@@ -815,6 +818,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--host", default=env.get("GO2W_WEB_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(env.get("GO2W_WEB_PORT", str(DEFAULT_PORT))))
     parser.add_argument("--gateway-timeout-s", type=int, default=int(env.get("GO2W_GATEWAY_TIMEOUT_S", "30")))
+    parser.add_argument("--gateway-startup-wait-s", type=float, default=float(env.get("GO2W_GATEWAY_STARTUP_WAIT_S", "1.0")))
     parser.add_argument("--panel-timeout-s", type=int, default=int(env.get("GO2W_PANEL_TIMEOUT_S", "90")))
     parser.add_argument("--llm-http-url", default=env.get("GO2W_LLM_HTTP_URL", ""))
     parser.add_argument("--llm-http-model", default=env.get("GO2W_LLM_HTTP_MODEL", "local"))
@@ -840,6 +844,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         host=args.host,
         port=args.port,
         gateway_timeout_s=args.gateway_timeout_s,
+        gateway_startup_wait_s=args.gateway_startup_wait_s,
         panel_timeout_s=args.panel_timeout_s,
         llm_http_url=args.llm_http_url,
         llm_http_model=args.llm_http_model,

@@ -249,7 +249,12 @@ nlohmann::json OperatorPanel::getWorldState() const
 
 nlohmann::json OperatorPanel::sendGatewayCommand(const nlohmann::json& command_json) const
 {
-    GatewayClient client({config_.gateway_client, config_.network_interface, config_.gateway_timeout_s});
+    GatewayClient client({
+        config_.gateway_client,
+        config_.network_interface,
+        config_.gateway_timeout_s,
+        config_.gateway_startup_wait_s,
+    });
     return client.send(command_json).response;
 }
 

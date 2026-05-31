@@ -54,12 +54,15 @@ class OperatorWebTests(unittest.TestCase):
             "--gateway-client", "/tmp/slam_llm_command_client",
             "--interface", "eth0",
             "--current-node", "initial_point",
+            "--gateway-startup-wait-s", "1.25",
         ])
         argv = config.panel_argv(execute_enabled=True, weak_link_mode=True, current_node="wp_a")
         self.assertIn("--execute", argv)
         self.assertIn("--weak", argv)
         self.assertIn("wp_a", argv)
         self.assertIn("/tmp/slam_llm_command_client", argv)
+        self.assertIn("--gateway-startup-wait-s", argv)
+        self.assertIn("1.25", argv)
 
     def test_stereo_summary_file_is_bounded_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:

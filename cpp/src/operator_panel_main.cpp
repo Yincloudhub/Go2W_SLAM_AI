@@ -17,6 +17,7 @@ void usage(const char* argv0)
               << "  --ensure-slam-on-start        Start/check LiDAR driver and SLAM before opening panel\n"
               << "  --interface IFACE             Network interface, default eth0\n"
               << "  --gateway-timeout-s SECONDS   Gateway command timeout, default 30\n"
+              << "  --gateway-startup-wait-s SEC  Delay stdin to short-lived gateway client, default 1\n"
               << "  --llm-http-url URL            OpenAI-compatible local HTTP endpoint, disabled by default\n"
               << "  --llm-http-model MODEL        HTTP LLM model name, default local\n"
               << "  --llm-http-timeout-s SECONDS  HTTP LLM timeout, default 20\n"
@@ -59,6 +60,8 @@ int main(int argc, char** argv)
             config.network_interface = argv[++i];
         } else if (arg == "--gateway-timeout-s" && i + 1 < argc) {
             config.gateway_timeout_s = std::atoi(argv[++i]);
+        } else if (arg == "--gateway-startup-wait-s" && i + 1 < argc) {
+            config.gateway_startup_wait_s = std::atof(argv[++i]);
         } else if (arg == "--llm-http-url" && i + 1 < argc) {
             config.llm_http_url = argv[++i];
         } else if (arg == "--llm-http-model" && i + 1 < argc) {

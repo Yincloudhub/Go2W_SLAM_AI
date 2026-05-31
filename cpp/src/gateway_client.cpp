@@ -108,7 +108,11 @@ std::vector<nlohmann::json> extractJsonObjectsLocal(const std::string& text)
 
 }  // namespace
 
-ProcessResult runProcessWithInput(const std::vector<std::string>& argv, const std::string& input, int timeout_s)
+ProcessResult runProcessWithInput(
+    const std::vector<std::string>& argv,
+    const std::string& input,
+    int timeout_s,
+    double startup_wait_s)
 {
     if (argv.empty()) throw std::runtime_error("empty argv");
 
@@ -148,6 +152,9 @@ ProcessResult runProcessWithInput(const std::vector<std::string>& argv, const st
     closeFd(stderr_pipe[1]);
 
     ProcessResult result;
+    if (startup_wait_s > 0.0) {
+        std::this_thread::sleep_for(std::chrono::duration<double>(startup_wait_s));
+    }
     try {
         writeAll(stdin_pipe[1], input);
     } catch (...) {
@@ -223,7 +230,11 @@ GatewayClient::GatewayClient(GatewayClientConfig config)
 GatewayClientResult GatewayClient::send(const nlohmann::json& command) const
 {
     const std::string payload = command.dump() + "\n";
-    ProcessResult process = runProcessWithInput({config_.client_path, config_.network_interface}, payload, config_.timeout_s);
+    ProcessResult process = runProcessWithInput(
+        {config_.client_path, config_.network_interface},
+        payload,
+        config_.timeout_s,
+        config_.startup_wait_s);
     if (process.timed_out) {
         throw std::runtime_error("gateway client timed out");
     }
