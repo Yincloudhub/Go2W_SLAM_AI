@@ -260,6 +260,71 @@ class OperatorWebTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 0)
         self.assertTrue(state.execute_enabled)
 
+    def test_execute_on_is_blocked_when_live_localization_is_not_ready(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "false", "safety": "slam_health_failed"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                )
+            )
+            result = app.command("/execute on", confirmed=True)
+            self.assertFalse(result["accepted"])
+            self.assertFalse(app.state.execute_enabled)
+            self.assertIn("localization", result["stderr"])
+
+    def test_relocate_is_blocked_when_localization_is_already_healthy(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "true", "safety": "ok"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                )
+            )
+            result = app.command("/relocate mapping_origin confirm", confirmed=True)
+            self.assertFalse(result["accepted"])
+            self.assertIn("already healthy", result["stderr"])
+
+    def test_relocate_has_retry_cooldown(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "false", "safety": "slam_health_failed"}}
+
+            def run_panel_session(self, lines):
+                return {"accepted": True, "exit_code": 0, "stdout": "", "stderr": "", "summary": {}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                )
+            )
+            self.assertTrue(app.command("/relocate mapping_origin confirm", confirmed=True)["accepted"])
+            result = app.command("/relocate mapping_origin confirm", confirmed=True)
+            self.assertFalse(result["accepted"])
+            self.assertIn("wait", result["stderr"])
+
     def test_local_state_commands(self):
         state = web.WebState(current_node="initial_point")
         self.assertEqual(state.apply_local_setting("/weak on")["exit_code"], 0)

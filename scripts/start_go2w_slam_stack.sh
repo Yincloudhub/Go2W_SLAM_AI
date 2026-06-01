@@ -13,6 +13,35 @@ STABILITY_WAIT_S="${GO2W_SLAM_STABILITY_WAIT_S:-4}"
 
 mkdir -p "${LOG_DIR}"
 
+prepare_cyclonedds_config() {
+  local configured_interface=""
+  local fallback_interface="${GO2W_DDS_INTERFACE:-}"
+  local runtime_config="${LOG_DIR}/cyclonedds.runtime.xml"
+
+  [[ -f "${CYCLONEDDS_CONFIG}" ]] || return 0
+  configured_interface="$(sed -n 's/.*<NetworkInterface name="\([^"]*\)".*/\1/p' "${CYCLONEDDS_CONFIG}" | head -n 1)"
+  if [[ -z "${configured_interface}" ]] || ip link show "${configured_interface}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ -z "${fallback_interface}" ]]; then
+    for candidate in wlan0 eth0; do
+      if ip link show "${candidate}" >/dev/null 2>&1; then
+        fallback_interface="${candidate}"
+        break
+      fi
+    done
+  fi
+  if [[ -z "${fallback_interface}" ]]; then
+    echo "error: CycloneDDS interface ${configured_interface} is missing and no fallback interface is available" >&2
+    return 1
+  fi
+
+  sed "s/name=\"${configured_interface}\"/name=\"${fallback_interface}\"/" "${CYCLONEDDS_CONFIG}" >"${runtime_config}"
+  echo "warning: CycloneDDS interface ${configured_interface} is missing; using runtime copy with ${fallback_interface}" >&2
+  CYCLONEDDS_CONFIG="${runtime_config}"
+}
+
 print_file_identity() {
   local label="$1"
   local path="$2"
@@ -163,6 +192,7 @@ check_topic_once() {
 }
 
 echo "GO2W SLAM stack startup"
+prepare_cyclonedds_config
 echo "unitree_slam_dir: ${UNITREE_SLAM_DIR}"
 echo "cyclonedds_config: ${CYCLONEDDS_CONFIG}"
 echo "slam_param_file: ${SLAM_PARAM_FILE}"

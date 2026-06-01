@@ -33,6 +33,7 @@ DISABLED_NODE_TAGS = {"disabled", "ui_disabled", "deleted"}
 VERIFICATION_TAGS = {"needs_calibration", "needs_standing_verification"}
 PROTECTED_TOPOLOGY_NODE_IDS = {"initial_point"}
 NODE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
+RELOCATE_COOLDOWN_S = 15.0
 
 
 def truthy(value: str) -> bool:
@@ -309,6 +310,7 @@ class OperatorWebApp:
         self.status_lock = threading.Lock()
         self._status_cache: Optional[Dict[str, Any]] = None
         self._status_cache_ts_ms = 0
+        self._last_relocate_ts = 0.0
 
     def run_panel_session(self, lines: Iterable[str]) -> Dict[str, Any]:
         input_text = "\n".join(lines) + "\n"
@@ -402,6 +404,51 @@ class OperatorWebApp:
         line = trim_line(line)
         if not line:
             return self.status()
+
+        if line == "/execute on":
+            status = self.status(force=True)
+            summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
+            if summary.get("loc") != "true" or summary.get("safety") != "ok":
+                return {
+                    "handled": True,
+                    "accepted": False,
+                    "exit_code": 3,
+                    "stdout": "",
+                    "stderr": "execute on blocked: localization and safety gate must be ready.\n",
+                    "summary": summary,
+                    "stereo_summary": self.stereo_summary(),
+                    "semantic_summary": self.semantic_summary(),
+                    "state": self.state.snapshot(),
+                }
+
+        if line.startswith("/relocate "):
+            now = time.monotonic()
+            status = self.status(force=True)
+            summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
+            if summary.get("loc") == "true" and summary.get("safety") == "ok":
+                return {
+                    "accepted": False,
+                    "exit_code": 3,
+                    "stdout": "",
+                    "stderr": "relocate blocked: localization is already healthy; restart SLAM before a recovery relocation.\n",
+                    "summary": summary,
+                    "stereo_summary": self.stereo_summary(),
+                    "semantic_summary": self.semantic_summary(),
+                    "state": self.state.snapshot(),
+                }
+            remaining = RELOCATE_COOLDOWN_S - (now - self._last_relocate_ts)
+            if remaining > 0:
+                return {
+                    "accepted": False,
+                    "exit_code": 3,
+                    "stdout": "",
+                    "stderr": f"relocate blocked: wait {remaining:.1f}s before retrying.\n",
+                    "summary": summary,
+                    "stereo_summary": self.stereo_summary(),
+                    "semantic_summary": self.semantic_summary(),
+                    "state": self.state.snapshot(),
+                }
+            self._last_relocate_ts = now
 
         local: Optional[Dict[str, Any]] = None
         with self.lock:
