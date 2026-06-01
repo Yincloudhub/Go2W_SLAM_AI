@@ -67,7 +67,7 @@ def read_process(pid: int) -> dict:
     }
 
 
-def read_thread_ticks(pid: int) -> dict[int, tuple[str, int]]:
+def read_thread_ticks(pid: int):
     rows = {}
     for task in Path(f"/proc/{pid}/task").iterdir():
         try:

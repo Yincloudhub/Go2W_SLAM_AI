@@ -19,6 +19,8 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         text = (REPO_ROOT / "scripts" / "snapshot_go2w_runtime_resources.sh").read_text(encoding="utf-8")
         self.assertIn("Read-only resource snapshot", text)
         self.assertIn('labels = ["xt16_driver", "unitree_slam", "deepyolo_detector", "deepyolo_bridge", "operator_web"]', text)
+        self.assertNotIn(" -> int | None", text)
+        self.assertNotIn(" -> dict[", text)
         for forbidden in ("kill ", "pkill", "systemctl", "subprocess", "os.system"):
             self.assertNotIn(forbidden, text)
 
