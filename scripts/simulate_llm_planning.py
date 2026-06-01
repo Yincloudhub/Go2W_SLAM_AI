@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--map-id", default="test_current_main")
     parser.add_argument("--map-path", default="/home/unitree/test.pcd")
     parser.add_argument("--snapshot-json", help="Use an existing snapshot JSON instead of collecting live state.")
-    parser.add_argument("--host", default="192.168.123.18")
+    parser.add_argument("--host", default=os.environ.get("GO2W_SSH_HOST", "192.168.123.18"))
     parser.add_argument("--username", default="unitree")
     parser.add_argument("--password", default=os.environ.get("GO2W_SSH_PASSWORD", ""))
     parser.add_argument("--timeout-s", type=int, default=40)

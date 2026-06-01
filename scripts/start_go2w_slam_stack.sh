@@ -13,33 +13,126 @@ STABILITY_WAIT_S="${GO2W_SLAM_STABILITY_WAIT_S:-4}"
 
 mkdir -p "${LOG_DIR}"
 
+link_exists() {
+  [[ -n "${1:-}" ]] && ip link show "$1" >/dev/null 2>&1
+}
+
+interface_kind() {
+  case "${1:-}" in
+    wl*|wlan*)
+      echo "wireless"
+      ;;
+    eth*|en*)
+      echo "wired"
+      ;;
+    *)
+      echo "other"
+      ;;
+  esac
+}
+
+is_runtime_interface() {
+  case "${1:-}" in
+    ""|lo|docker*|veth*|br-*|virbr*|l4tbr*|tailscale*|tun*|tap*)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+list_runtime_interfaces() {
+  ip -o link show |
+    awk -F': ' '{print $2}' |
+    sed 's/@.*//' |
+    while IFS= read -r candidate; do
+      if is_runtime_interface "${candidate}"; then
+        echo "${candidate}"
+      fi
+    done
+}
+
+default_route_interface() {
+  ip route show default 2>/dev/null |
+    awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }'
+}
+
+select_fallback_interface() {
+  local configured_interface="$1"
+  local configured_kind=""
+  local candidate=""
+  local route_interface=""
+
+  configured_kind="$(interface_kind "${configured_interface}")"
+  if [[ "${configured_kind}" != "other" ]]; then
+    while IFS= read -r candidate; do
+      if [[ "$(interface_kind "${candidate}")" == "${configured_kind}" ]] && link_exists "${candidate}"; then
+        echo "${candidate}"
+        return 0
+      fi
+    done < <(list_runtime_interfaces)
+  fi
+
+  route_interface="$(default_route_interface)"
+  if is_runtime_interface "${route_interface}" && link_exists "${route_interface}"; then
+    echo "${route_interface}"
+    return 0
+  fi
+
+  while IFS= read -r candidate; do
+    if link_exists "${candidate}"; then
+      echo "${candidate}"
+      return 0
+    fi
+  done < <(list_runtime_interfaces)
+}
+
+write_runtime_cyclonedds_config() {
+  local configured_interface="$1"
+  local selected_interface="$2"
+  local runtime_config="$3"
+
+  sed "s/name=\"${configured_interface}\"/name=\"${selected_interface}\"/" "${CYCLONEDDS_CONFIG}" >"${runtime_config}"
+  CYCLONEDDS_CONFIG="${runtime_config}"
+}
+
 prepare_cyclonedds_config() {
   local configured_interface=""
-  local fallback_interface="${GO2W_DDS_INTERFACE:-}"
+  local selected_interface="${GO2W_DDS_INTERFACE:-}"
   local runtime_config="${LOG_DIR}/cyclonedds.runtime.xml"
 
   [[ -f "${CYCLONEDDS_CONFIG}" ]] || return 0
   configured_interface="$(sed -n 's/.*<NetworkInterface name="\([^"]*\)".*/\1/p' "${CYCLONEDDS_CONFIG}" | head -n 1)"
-  if [[ -z "${configured_interface}" ]] || ip link show "${configured_interface}" >/dev/null 2>&1; then
+  if [[ -z "${configured_interface}" ]]; then
     return 0
   fi
 
-  if [[ -z "${fallback_interface}" ]]; then
-    for candidate in wlan0 eth0; do
-      if ip link show "${candidate}" >/dev/null 2>&1; then
-        fallback_interface="${candidate}"
-        break
-      fi
-    done
+  if [[ -n "${selected_interface}" ]]; then
+    if ! link_exists "${selected_interface}"; then
+      echo "error: requested GO2W_DDS_INTERFACE ${selected_interface} is not available" >&2
+      return 1
+    fi
+    if [[ "${selected_interface}" == "${configured_interface}" ]]; then
+      return 0
+    fi
+    write_runtime_cyclonedds_config "${configured_interface}" "${selected_interface}" "${runtime_config}"
+    echo "warning: overriding CycloneDDS interface ${configured_interface} with ${selected_interface}" >&2
+    return 0
   fi
-  if [[ -z "${fallback_interface}" ]]; then
+
+  if link_exists "${configured_interface}"; then
+    return 0
+  fi
+
+  selected_interface="$(select_fallback_interface "${configured_interface}")"
+  if [[ -z "${selected_interface}" ]]; then
     echo "error: CycloneDDS interface ${configured_interface} is missing and no fallback interface is available" >&2
     return 1
   fi
 
-  sed "s/name=\"${configured_interface}\"/name=\"${fallback_interface}\"/" "${CYCLONEDDS_CONFIG}" >"${runtime_config}"
-  echo "warning: CycloneDDS interface ${configured_interface} is missing; using runtime copy with ${fallback_interface}" >&2
-  CYCLONEDDS_CONFIG="${runtime_config}"
+  write_runtime_cyclonedds_config "${configured_interface}" "${selected_interface}" "${runtime_config}"
+  echo "warning: CycloneDDS interface ${configured_interface} is missing; using runtime copy with ${selected_interface}" >&2
 }
 
 print_file_identity() {
@@ -198,6 +291,11 @@ echo "cyclonedds_config: ${CYCLONEDDS_CONFIG}"
 echo "slam_param_file: ${SLAM_PARAM_FILE}"
 echo "log_dir: ${LOG_DIR}"
 print_slam_runtime_identity
+
+if [[ "${GO2W_SLAM_CONFIG_ONLY:-0}" == "1" ]]; then
+  echo "config-only preflight finished"
+  exit 0
+fi
 
 ensure_unitree_slam_log_dirs
 

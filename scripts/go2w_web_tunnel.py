@@ -21,11 +21,16 @@ from typing import Optional
 import paramiko
 
 
+DEFAULT_SSH_HOSTS = ("192.168.123.18", "192.168.3.17")
+
+
 @dataclass(frozen=True)
 class TunnelConfig:
-    ssh_host: str = "192.168.123.18"
+    ssh_host: str = "auto"
+    ssh_hosts: tuple[str, ...] = DEFAULT_SSH_HOSTS
     ssh_user: str = "unitree"
     ssh_password: str = "123"
+    ssh_connect_timeout_s: float = 3.0
     local_host: str = "127.0.0.1"
     local_port: int = 8765
     remote_host: str = "127.0.0.1"
@@ -73,11 +78,35 @@ class ForwardHandler(socketserver.BaseRequestHandler):
             self.request.close()
 
 
+def split_hosts(value: str) -> tuple[str, ...]:
+    return tuple(host.strip() for host in value.split(",") if host.strip())
+
+
+def ssh_host_candidates(config: TunnelConfig) -> tuple[str, ...]:
+    if config.ssh_host.strip().lower() not in ("", "auto"):
+        return (config.ssh_host.strip(),)
+    return tuple(dict.fromkeys(config.ssh_hosts))
+
+
 def make_config(argv: Optional[list[str]] = None) -> TunnelConfig:
     parser = argparse.ArgumentParser(description="Forward local browser traffic to GO2W robot Web UI")
-    parser.add_argument("--ssh-host", default=os.environ.get("GO2W_SSH_HOST", "192.168.123.18"))
+    parser.add_argument(
+        "--ssh-host",
+        default=os.environ.get("GO2W_SSH_HOST", "auto"),
+        help="Explicit robot management address, or 'auto' to probe --ssh-hosts in order.",
+    )
+    parser.add_argument(
+        "--ssh-hosts",
+        default=os.environ.get("GO2W_SSH_HOSTS", ",".join(DEFAULT_SSH_HOSTS)),
+        help="Comma-separated management addresses probed when --ssh-host=auto.",
+    )
     parser.add_argument("--ssh-user", default=os.environ.get("GO2W_SSH_USER", "unitree"))
     parser.add_argument("--ssh-password", default=os.environ.get("GO2W_SSH_PASSWORD", "123"))
+    parser.add_argument(
+        "--ssh-connect-timeout-s",
+        type=float,
+        default=float(os.environ.get("GO2W_SSH_CONNECT_TIMEOUT_S", "3")),
+    )
     parser.add_argument("--local-host", default=os.environ.get("GO2W_TUNNEL_LOCAL_HOST", "127.0.0.1"))
     parser.add_argument("--local-port", type=int, default=int(os.environ.get("GO2W_TUNNEL_LOCAL_PORT", "8765")))
     parser.add_argument("--remote-host", default=os.environ.get("GO2W_TUNNEL_REMOTE_HOST", "127.0.0.1"))
@@ -85,8 +114,10 @@ def make_config(argv: Optional[list[str]] = None) -> TunnelConfig:
     args = parser.parse_args(argv)
     return TunnelConfig(
         ssh_host=args.ssh_host,
+        ssh_hosts=split_hosts(args.ssh_hosts),
         ssh_user=args.ssh_user,
         ssh_password=args.ssh_password,
+        ssh_connect_timeout_s=args.ssh_connect_timeout_s,
         local_host=args.local_host,
         local_port=args.local_port,
         remote_host=args.remote_host,
@@ -94,24 +125,38 @@ def make_config(argv: Optional[list[str]] = None) -> TunnelConfig:
     )
 
 
-def open_ssh(config: TunnelConfig) -> paramiko.SSHClient:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(
-        config.ssh_host,
-        username=config.ssh_user,
-        password=config.ssh_password,
-        timeout=8,
-        banner_timeout=8,
-        auth_timeout=8,
-        look_for_keys=False,
-        allow_agent=False,
-    )
-    return client
+def open_ssh(config: TunnelConfig) -> tuple[paramiko.SSHClient, str]:
+    candidates = ssh_host_candidates(config)
+    if not candidates:
+        raise RuntimeError("no SSH management address candidates configured")
+
+    errors: list[str] = []
+    for ssh_host in candidates:
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                ssh_host,
+                username=config.ssh_user,
+                password=config.ssh_password,
+                timeout=config.ssh_connect_timeout_s,
+                banner_timeout=config.ssh_connect_timeout_s,
+                auth_timeout=config.ssh_connect_timeout_s,
+                look_for_keys=False,
+                allow_agent=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            client.close()
+            errors.append(f"{ssh_host}: {exc}")
+            print(f"ssh_candidate_failed={ssh_host} error={exc}", file=sys.stderr)
+            continue
+        return client, ssh_host
+
+    raise RuntimeError(f"unable to connect to GO2W SSH candidates: {'; '.join(errors)}")
 
 
 def run_tunnel(config: TunnelConfig) -> None:
-    ssh = open_ssh(config)
+    ssh, selected_ssh_host = open_ssh(config)
     transport = ssh.get_transport()
     if transport is None:
         raise RuntimeError("ssh transport unavailable")
@@ -124,7 +169,7 @@ def run_tunnel(config: TunnelConfig) -> None:
     server = ForwardServer((config.local_host, config.local_port), Handler)
     print(
         f"forwarding http://{config.local_host}:{config.local_port} "
-        f"-> {config.ssh_user}@{config.ssh_host}:{config.remote_host}:{config.remote_port}",
+        f"-> {config.ssh_user}@{selected_ssh_host}:{config.remote_host}:{config.remote_port}",
         flush=True,
     )
     try:

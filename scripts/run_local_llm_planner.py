@@ -86,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mock-y", type=float, default=-0.147)
     parser.add_argument("--mock-yaw", type=float, default=-0.03)
 
-    parser.add_argument("--robot-host", default="192.168.123.18")
+    parser.add_argument("--robot-host", default=os.environ.get("GO2W_SSH_HOST", "192.168.123.18"))
     parser.add_argument("--robot-username", default="unitree")
     parser.add_argument("--robot-password", default=os.environ.get("GO2W_SSH_PASSWORD", ""))
 

@@ -39,6 +39,41 @@ python scripts\go2w_web_tunnel.py
 http://127.0.0.1:8765/
 ```
 
+## 网络角色和换网方式
+
+不要把 SSH 地址、gateway 网卡和 SLAM DDS 网卡混为一个配置：
+
+- `GO2W_SSH_HOST`：Windows/MobaXterm 到机器人 NX 的管理地址。它会随 Wi-Fi、有线直连或现场路由变化。
+- `GO2W_SSH_HOSTS`：本地 tunnel 自动探测的候选管理地址，按逗号分隔。默认依次尝试 `192.168.123.18,192.168.3.17`。
+- `GO2W_NETWORK_INTERFACE`：机器人内部 Unitree gateway 使用的接口，默认 `eth0`。本地改用 Wi-Fi 或有线 SSH 不应自动改动它。
+- `GO2W_DDS_INTERFACE`：仅用于 Unitree SLAM 的 CycloneDDS 绑定。通常保持自动；需要现场强制指定时再设置。
+
+日常打开 UI 直接运行自动探测：
+
+```powershell
+python scripts\go2w_web_tunnel.py
+```
+
+有线直连时也可以显式指定，避免等待其他候选地址超时：
+
+```powershell
+python scripts\go2w_web_tunnel.py --ssh-host 192.168.123.18
+```
+
+现场地址变化时，优先临时设置环境变量，不需要修改代码：
+
+```powershell
+$env:GO2W_SSH_HOST='192.168.3.17'
+$env:GO2W_SSH_HOSTS='192.168.3.17,192.168.123.18'
+python scripts\go2w_web_tunnel.py
+```
+
+系统升级导致 CycloneDDS XML 中旧网卡名消失时，`scripts/start_go2w_slam_stack.sh` 会生成运行时副本，并优先选择同类型网卡、默认路由网卡和其他可用物理网卡。只做预检、不启动进程：
+
+```bash
+GO2W_SLAM_CONFIG_ONLY=1 bash scripts/start_go2w_slam_stack.sh
+```
+
 UI 默认使用自适应刷新：待机时每 5 秒更新，任务规划或导航时每 2 秒更新。手动点击“刷新状态”会立即强制读取一次。
 
 ## 静止调试命令

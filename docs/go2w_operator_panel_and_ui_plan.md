@@ -98,6 +98,16 @@ ssh -L 8765:127.0.0.1:8765 unitree@192.168.123.18
 python .\scripts\go2w_web_tunnel.py
 ```
 
+本地 tunnel 默认自动尝试有线和 Wi-Fi 管理地址。需要锁定当前链路时使用：
+
+```powershell
+python .\scripts\go2w_web_tunnel.py --ssh-host 192.168.123.18
+$env:GO2W_SSH_HOSTS='192.168.3.17,192.168.123.18'
+python .\scripts\go2w_web_tunnel.py
+```
+
+这里的 SSH 管理地址只影响 Windows 到 NX 的浏览器隧道。机器人内部 gateway 默认仍使用 `GO2W_NETWORK_INTERFACE=eth0`，Unitree SLAM 的 CycloneDDS 绑定由 `GO2W_DDS_INTERFACE` 单独控制。三者必须分层配置，避免换用有线直连后误改 SLAM 或运动链路。
+
 如果需要在直连网段直接访问，可显式设置：
 
 ```bash

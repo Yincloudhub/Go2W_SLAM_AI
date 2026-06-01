@@ -78,7 +78,7 @@ def run_remote_snapshot(host: str, username: str, password: str, *, timeout_s: i
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Collect a read-only GO2W SLAM/LiDAR runtime snapshot over SSH.")
-    parser.add_argument("--host", default="192.168.123.18")
+    parser.add_argument("--host", default=os.environ.get("GO2W_SSH_HOST", "192.168.123.18"))
     parser.add_argument("--username", default="unitree")
     parser.add_argument("--password", default=os.environ.get("GO2W_SSH_PASSWORD", ""))
     parser.add_argument("--map-id", default="unknown")
