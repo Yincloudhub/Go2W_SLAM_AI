@@ -302,6 +302,8 @@
     let appState = { execute_enabled: false, weak_link_mode: false, current_node: "initial_point", history: [] };
     let timer = null;
     let latestPhase = "idle";
+    let statusInFlight = false;
+    let commandInFlight = false;
 
     const zh = {
       idle: "待命", queued: "已排队", planning: "规划中", navigating: "前往目标", arrived: "已到达",
@@ -450,7 +452,8 @@
       return res.json();
     }
     async function refreshStatus(force = false) {
-      setBusy(true);
+      if (statusInFlight || (commandInFlight && !force)) return;
+      statusInFlight = true;
       try {
         const result = await api(force ? "/api/status?force=1" : "/api/status");
         $("conn").textContent = result.exit_code === 0 ? "机器人已连接" : "状态异常";
@@ -471,11 +474,13 @@
         $("screen-detail").textContent = String(err);
         $("output").textContent = String(err);
       } finally {
-        setBusy(false);
+        statusInFlight = false;
       }
     }
     async function runCommand(line, confirmText = "", confirmed = false) {
+      if (commandInFlight) return;
       if (confirmText && !window.confirm(confirmText)) return;
+      commandInFlight = true;
       setBusy(true);
       try {
         const result = await api("/api/command", { method: "POST", body: JSON.stringify({ line, confirm: confirmed || Boolean(confirmText) }) });
@@ -489,6 +494,7 @@
       } catch (err) {
         $("output").textContent = String(err);
       } finally {
+        commandInFlight = false;
         setBusy(false);
       }
     }
@@ -497,7 +503,7 @@
       const requestedMs = Number($("refresh-interval").value || 0);
       const active = new Set(["queued", "planning", "navigating"]);
       const ms = requestedMs === -1 ? (active.has(latestPhase) ? 2000 : 5000) : requestedMs;
-      if (ms > 0) timer = setInterval(refreshStatus, ms);
+      if (ms > 0) timer = setInterval(() => refreshStatus(false), ms);
     }
 
     $("refresh").onclick = () => refreshStatus(true);

@@ -27,6 +27,8 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("机器狗回复", web.INDEX_HTML)
         self.assertIn("自适应：任务 2 秒 / 待机 5 秒", web.INDEX_HTML)
         self.assertIn('requestedMs === -1 ? (active.has(latestPhase) ? 2000 : 5000)', web.INDEX_HTML)
+        self.assertIn("statusInFlight", web.INDEX_HTML)
+        self.assertIn("commandInFlight", web.INDEX_HTML)
         self.assertIn("视觉数据过期，不参与决策", web.INDEX_HTML)
         self.assertIn("视觉侧车离线，系统保持雷达与 SLAM 闭环", web.INDEX_HTML)
         self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
