@@ -66,6 +66,11 @@ stop_one() {
     echo "${label}=stopped"
     return 0
   fi
+  if ! kill -0 "${pid}" 2>/dev/null; then
+    rm -f "${pid_file}"
+    echo "${label}=stopped stale_pid=${pid}"
+    return 0
+  fi
   if ! pid_matches "${pid}" "${expected}"; then
     echo "${label}=pid_mismatch pid=${pid}; refusing to signal" >&2
     return 1
