@@ -819,6 +819,8 @@ INDEX_HTML = r"""<!doctype html>
 </html>
 """
 
+INDEX_HTML = (Path(__file__).with_name("go2w_operator_ui.html")).read_text(encoding="utf-8")
+
 
 class OperatorRequestHandler(BaseHTTPRequestHandler):
     server_version = "GO2WOperatorWeb/0.1"
@@ -974,10 +976,11 @@ def run_startup_script(config: WebConfig) -> None:
 
 
 def self_test(config: WebConfig) -> None:
-    assert "GO2W Operator Panel" in INDEX_HTML
+    assert "GO2W 多模态自主机器狗" in INDEX_HTML
     assert "/api/status" in INDEX_HTML
     assert "/relocate" in INDEX_HTML
-    assert "DeepYOLO scene" in INDEX_HTML
+    assert "智能巡检交互屏" in INDEX_HTML
+    assert "视觉场景" in INDEX_HTML
     assert "effective_action" in INDEX_HTML
     parsed = parse_panel_summary("phase=idle | target=none | loc=true | map=true | motion=false")
     assert parsed["phase"] == "idle"

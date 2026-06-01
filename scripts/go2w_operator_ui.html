@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GO2W 多模态自主机器狗</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3f2;
+      --surface: #ffffff;
+      --surface-soft: #f6f8f8;
+      --ink: #172321;
+      --muted: #62716e;
+      --line: #d6dfdd;
+      --brand: #0b6b62;
+      --brand-dark: #084c47;
+      --blue: #2364aa;
+      --ok: #147447;
+      --warn: #a45d08;
+      --danger: #b42318;
+      --screen: #0d1918;
+      --screen-soft: #152725;
+      --screen-line: #28413e;
+      --screen-ink: #e4f3ef;
+      --screen-muted: #9fc0ba;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .96);
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 18px; letter-spacing: 0; }
+    h2 { margin-bottom: 10px; font-size: 15px; letter-spacing: 0; }
+    h3 { font-size: 13px; letter-spacing: 0; }
+    .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+      gap: 14px;
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+    section {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface);
+      padding: 13px;
+    }
+    .stack { display: grid; gap: 12px; align-content: start; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+    .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; }
+    .field-stack { display: grid; gap: 8px; }
+    button, input, textarea, select {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+    }
+    button { min-height: 34px; padding: 7px 10px; cursor: pointer; font-weight: 650; }
+    button:hover { border-color: #9eb4b0; }
+    button:disabled { cursor: wait; opacity: .55; }
+    button.primary { border-color: var(--brand); background: var(--brand); color: #fff; }
+    button.secondary { border-color: var(--blue); background: var(--blue); color: #fff; }
+    button.danger { border-color: #efb5ae; background: #fff3f1; color: var(--danger); }
+    input, select { min-height: 34px; width: 100%; padding: 7px 9px; }
+    textarea { min-height: 86px; width: 100%; padding: 9px; resize: vertical; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      padding: 3px 8px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .pill.ok { border-color: #a4d2b7; background: #eef9f2; color: var(--ok); }
+    .pill.warn { border-color: #e0bf84; background: #fff8e8; color: var(--warn); }
+    .pill.danger { border-color: #efb5ae; background: #fff3f1; color: var(--danger); }
+    .screen {
+      overflow: hidden;
+      border: 1px solid #1b3734;
+      border-radius: 7px;
+      background: var(--screen);
+      color: var(--screen-ink);
+    }
+    .screen-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 13px;
+      border-bottom: 1px solid var(--screen-line);
+      background: #102321;
+    }
+    .screen-head small { display: block; color: var(--screen-muted); }
+    .screen-body { display: grid; gap: 12px; padding: 15px; }
+    .reply {
+      min-height: 116px;
+      border-left: 3px solid #63d6c5;
+      padding: 3px 0 3px 13px;
+    }
+    .reply-label { color: var(--screen-muted); font-size: 12px; }
+    .reply strong { display: block; margin-top: 7px; font-size: 23px; line-height: 1.25; letter-spacing: 0; }
+    .reply p { margin-top: 7px; color: var(--screen-muted); }
+    .screen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .screen-cell {
+      min-height: 76px;
+      border: 1px solid var(--screen-line);
+      border-radius: 6px;
+      background: var(--screen-soft);
+      padding: 9px;
+    }
+    .screen-cell label { display: block; color: var(--screen-muted); font-size: 12px; }
+    .screen-cell strong { display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 14px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .metric { min-height: 66px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); padding: 8px; }
+    .metric label { display: block; color: var(--muted); font-size: 12px; }
+    .metric strong { display: block; margin-top: 5px; overflow-wrap: anywhere; font-size: 13px; }
+    .history { display: grid; max-height: 190px; overflow: auto; gap: 6px; }
+    .history div { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); padding: 7px 8px; overflow-wrap: anywhere; }
+    details { border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+    summary { cursor: pointer; padding: 11px 13px; font-weight: 700; }
+    pre {
+      min-height: 220px;
+      max-height: 42vh;
+      margin: 0;
+      overflow: auto;
+      border-top: 1px solid #263b39;
+      background: #101918;
+      color: #d9e9e6;
+      padding: 12px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    .muted { color: var(--muted); font-size: 12px; }
+    @media (max-width: 1050px) {
+      main { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .screen-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      main { padding: 9px; gap: 9px; }
+      section { padding: 10px; }
+      .row { grid-template-columns: 1fr; }
+      button { width: 100%; }
+      .reply strong { font-size: 19px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>GO2W 多模态自主机器狗</h1>
+      <small>巡检任务控制台</small>
+    </div>
+    <div class="toolbar">
+      <span id="conn" class="pill warn">连接检查中</span>
+      <span id="exec-pill" class="pill">仅预演</span>
+      <span id="weak-pill" class="pill">标准链路</span>
+      <button id="refresh" class="primary" title="立即刷新机器人状态">刷新状态</button>
+    </div>
+  </header>
+  <main>
+    <div class="stack">
+      <section>
+        <h2>运行控制</h2>
+        <div class="toolbar">
+          <button id="start-slam" class="secondary">启动 / 检查 SLAM</button>
+          <button id="exec-on" class="danger">允许真实执行</button>
+          <button id="exec-off">切回仅预演</button>
+          <button id="weak-on">启用弱网摘要</button>
+          <button id="weak-off">恢复完整反馈</button>
+        </div>
+        <div class="field-stack" style="margin-top:10px">
+          <div class="row">
+            <input id="current-node" placeholder="当前锚点，例如 initial_point">
+            <button id="set-current">设置锚点</button>
+          </div>
+          <div class="row">
+            <input id="relocate-anchor" value="mapping_origin" placeholder="重定位锚点 ID">
+            <button id="relocate-anchor-btn">执行重定位</button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <h2>建图与拓扑</h2>
+        <div class="field-stack">
+          <div class="row">
+            <input id="map-path" value="/home/unitree/test.pcd">
+            <button id="mapping-end">结束并保存</button>
+          </div>
+          <div class="toolbar">
+            <button id="mapping-start" class="danger">开始建图</button>
+            <button id="rviz-start">打开 RViz2</button>
+          </div>
+          <div class="row">
+            <input id="topology-name" placeholder="拓扑点 ID，例如 wp_station_01">
+            <button id="topology-preview">预览拓扑点</button>
+          </div>
+          <div class="toolbar">
+            <button id="topology-add" class="danger">写入当前拓扑点</button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <h2>任务历史</h2>
+        <div id="history" class="history"></div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="screen">
+        <div class="screen-head">
+          <div>
+            <h2>智能巡检交互屏</h2>
+            <small>LLM 任务反馈与实时环境理解</small>
+          </div>
+          <span id="screen-health" class="pill">系统检查中</span>
+        </div>
+        <div class="screen-body">
+          <div class="reply">
+            <span class="reply-label">机器狗回复</span>
+            <strong id="screen-reply">正在读取机器人状态</strong>
+            <p id="screen-detail">请稍候，系统正在同步 SLAM、雷达和视觉语义。</p>
+          </div>
+          <div class="screen-grid">
+            <div class="screen-cell"><label>当前位置</label><strong id="screen-target">尚未定位</strong></div>
+            <div class="screen-cell"><label>视觉理解</label><strong id="screen-vision">等待视觉摘要</strong></div>
+            <div class="screen-cell"><label>安全策略</label><strong id="screen-action">等待安全状态</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>实时状态</h2>
+        <div class="metrics">
+          <div class="metric"><label>任务阶段</label><strong id="m-phase">未知</strong></div>
+          <div class="metric"><label>当前目标</label><strong id="m-target">暂无</strong></div>
+          <div class="metric"><label>定位状态</label><strong id="m-loc">未知</strong></div>
+          <div class="metric"><label>地图状态</label><strong id="m-map">未知</strong></div>
+          <div class="metric"><label>底盘运动</label><strong id="m-motion">关闭</strong></div>
+          <div class="metric"><label>障碍物</label><strong id="m-obstacle">未知</strong></div>
+          <div class="metric"><label>网络模式</label><strong id="m-net">标准链路</strong></div>
+          <div class="metric"><label>安全状态</label><strong id="m-safety">等待</strong></div>
+          <div class="metric"><label>双目距离</label><strong id="m-stereo-front">暂无数据</strong></div>
+          <div class="metric"><label>双目质量</label><strong id="m-stereo-health">暂无数据</strong></div>
+          <div class="metric"><label>视觉场景</label><strong id="m-semantic-scene">暂无数据</strong></div>
+          <div class="metric"><label>视觉建议</label><strong id="m-semantic-action">暂无数据</strong></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>LLM 任务输入</h2>
+        <textarea id="llm-input" placeholder="例如：去陈嘉瑜工位查看环境，到了以后告诉我当前位置"></textarea>
+        <div class="toolbar" style="margin-top:8px">
+          <button id="send-llm" class="primary">发送任务</button>
+          <select id="refresh-interval" style="width:150px">
+            <option value="0">暂停自动刷新</option>
+            <option value="1000">每 1 秒刷新</option>
+            <option value="2000" selected>每 2 秒刷新</option>
+            <option value="5000">每 5 秒刷新</option>
+          </select>
+        </div>
+      </section>
+
+      <details>
+        <summary>工程控制台</summary>
+        <pre id="output">等待状态刷新...</pre>
+      </details>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let appState = { execute_enabled: false, weak_link_mode: false, current_node: "initial_point", history: [] };
+    let timer = null;
+
+    const zh = {
+      idle: "待命", queued: "已排队", planning: "规划中", navigating: "前往目标", arrived: "已到达",
+      true: "正常", false: "关闭", clear: "前方通畅", normal: "正常", ok: "安全",
+      localized: "定位正常", fresh: "在线", event_only_idle: "视觉静默", stale: "数据过期",
+      unavailable: "不可用", clock_skew: "时钟异常", depth_insufficient: "深度不足",
+      ignored: "仅观察", semantic_observe: "持续观察", slow_and_watch: "减速观察", hold_or_pause: "暂停等待",
+      person: "人员", chair: "座椅", bottle: "瓶状物", none: "无显著目标", unknown: "未知"
+    };
+    const z = (value, fallback = "未知") => zh[String(value ?? "")] || String(value ?? fallback);
+    const yes = (value) => String(value) === "true";
+
+    function setBusy(busy) {
+      document.querySelectorAll("button, input, textarea, select").forEach((el) => { el.disabled = busy; });
+    }
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
+    }
+    function parseSummaryText(text) {
+      const lines = String(text || "").split(/\r?\n/).reverse();
+      for (const line of lines) {
+        if (!line.includes("phase=") && !line.includes("loc=")) continue;
+        const out = {};
+        for (const part of line.split("|")) {
+          const idx = part.indexOf("=");
+          if (idx < 0) continue;
+          out[part.slice(0, idx).trim().replace(/^\[[^\]]+\]\s*/, "")] = part.slice(idx + 1).trim();
+        }
+        return out;
+      }
+      return {};
+    }
+    function setScreen(summary, semantic) {
+      const s = summary || {};
+      const semanticData = semantic && semantic.data ? semantic.data : {};
+      const locOk = yes(s.loc);
+      const safetyOk = (s.safety || "") === "ok";
+      const phase = s.phase || "idle";
+      const target = s.target || "暂无目标";
+      const dominant = z(semanticData.dominant_class || "none");
+      const action = z(semanticData.effective_action || "ignored");
+      $("screen-target").textContent = target;
+      $("screen-vision").textContent = `${dominant} / ${semanticData.object_count ?? 0} 个目标`;
+      $("screen-action").textContent = action;
+      if (!locOk) {
+        $("screen-reply").textContent = "定位尚未就绪，请先检查 SLAM";
+        $("screen-detail").textContent = "当前不会执行导航任务。";
+        $("screen-health").textContent = "定位异常";
+        $("screen-health").className = "pill danger";
+      } else if (!safetyOk) {
+        $("screen-reply").textContent = "检测到安全限制，任务保持等待";
+        $("screen-detail").textContent = `安全状态：${z(s.safety, s.safety || "未知")}`;
+        $("screen-health").textContent = "安全限制";
+        $("screen-health").className = "pill warn";
+      } else if (phase === "arrived") {
+        $("screen-reply").textContent = `已经到达 ${target}`;
+        $("screen-detail").textContent = `视觉反馈：${dominant}，当前策略：${action}。`;
+        $("screen-health").textContent = "已到达";
+        $("screen-health").className = "pill ok";
+      } else if (phase === "navigating") {
+        $("screen-reply").textContent = `正在前往 ${target}`;
+        $("screen-detail").textContent = `环境理解：${dominant}，当前策略：${action}。`;
+        $("screen-health").textContent = "任务进行中";
+        $("screen-health").className = "pill ok";
+      } else {
+        $("screen-reply").textContent = "系统在线，等待新的巡检任务";
+        $("screen-detail").textContent = `当前位于 ${target}。视觉理解：${dominant}，策略：${action}。`;
+        $("screen-health").textContent = "系统在线";
+        $("screen-health").className = "pill ok";
+      }
+    }
+    function updateMetrics(summary) {
+      const s = summary || {};
+      $("m-phase").textContent = z(s.phase || "unknown");
+      $("m-target").textContent = s.target || "暂无";
+      $("m-loc").textContent = yes(s.loc) ? "定位正常" : "未定位";
+      $("m-map").textContent = yes(s.map) ? "地图可用" : "地图未就绪";
+      $("m-motion").textContent = yes(s.motion) ? "运动中" : "静止";
+      $("m-obstacle").textContent = z(s.obstacle || "unknown");
+      $("m-net").textContent = s.net === "normal" ? "标准链路" : z(s.net);
+      $("m-safety").textContent = z(s.safety || "unknown");
+    }
+    function updateState(state) {
+      if (!state) return;
+      appState = state;
+      $("exec-pill").textContent = state.execute_enabled ? "真实执行" : "仅预演";
+      $("exec-pill").className = state.execute_enabled ? "pill danger" : "pill ok";
+      $("weak-pill").textContent = state.weak_link_mode ? "弱网摘要" : "标准链路";
+      $("weak-pill").className = state.weak_link_mode ? "pill warn" : "pill";
+      $("current-node").value = state.current_node || "";
+      const items = (state.history || []).slice().reverse().map((item) => {
+        const code = item.exit_code === 0 ? "成功" : "异常";
+        return `<div><b>${escapeHtml(code)}</b> ${escapeHtml(item.line)}<br><small>${escapeHtml(JSON.stringify(item.summary || {}))}</small></div>`;
+      });
+      $("history").innerHTML = items.join("") || "<div>暂无任务历史</div>";
+    }
+    function updateStereo(stereo) {
+      if (!stereo || !stereo.available || !stereo.data) {
+        $("m-stereo-front").textContent = "暂无数据";
+        $("m-stereo-health").textContent = "暂无数据";
+        return;
+      }
+      const data = stereo.data;
+      const front = data.front_clearance_m;
+      const center = data.center_distance_m ?? data.center_window_m;
+      const frontText = front == null ? "前方 ?" : `前方 ${Number(front).toFixed(2)}m`;
+      const centerText = center == null ? "中心 ?" : `中心 ${Number(center).toFixed(2)}m`;
+      $("m-stereo-front").textContent = `${frontText} / ${centerText}`;
+      const confidence = data.confidence == null ? "整体 ?" : `整体 ${Number(data.confidence).toFixed(3)}`;
+      const frontConfidence = data.roi_confidence && data.roi_confidence.front !== undefined ? `前方 ${Number(data.roi_confidence.front).toFixed(3)}` : "前方 ?";
+      const age = stereo.age_ms == null ? "未知" : `${Math.round(stereo.age_ms)}ms`;
+      $("m-stereo-health").textContent = `${confidence}, ${frontConfidence} / ${age}${stereo.stale_by_age ? " 已过期" : ""}`;
+    }
+    function updateSemantic(semantic) {
+      if (!semantic || !semantic.available || !semantic.data) {
+        $("m-semantic-scene").textContent = "暂无数据";
+        $("m-semantic-action").textContent = "暂无数据";
+        return;
+      }
+      const data = semantic.data;
+      const age = semantic.age_ms == null ? "未知" : `${Math.round(semantic.age_ms)}ms`;
+      const stale = semantic.stale_by_age || data.stale;
+      const recommended = data.recommended_action || "normal";
+      const effective = data.effective_action || (stale ? "ignored" : recommended);
+      $("m-semantic-scene").textContent = `${z(data.source_status)} / ${z(data.dominant_class || "none")} / ${data.object_count ?? 0} 个目标`;
+      $("m-semantic-action").textContent = `${z(effective)} / ${age}${stale ? " 已过期" : ""}`;
+    }
+    async function api(path, options = {}) {
+      const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return res.json();
+    }
+    async function refreshStatus(force = false) {
+      setBusy(true);
+      try {
+        const result = await api(force ? "/api/status?force=1" : "/api/status");
+        $("conn").textContent = result.exit_code === 0 ? "机器人已连接" : "状态异常";
+        $("conn").className = result.exit_code === 0 ? "pill ok" : "pill danger";
+        const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
+        updateMetrics(summary);
+        updateState(result.state);
+        updateStereo(result.stereo_summary);
+        updateSemantic(result.semantic_summary);
+        setScreen(summary, result.semantic_summary);
+        $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
+      } catch (err) {
+        $("conn").textContent = "UI 服务异常";
+        $("conn").className = "pill danger";
+        $("screen-health").textContent = "连接异常";
+        $("screen-health").className = "pill danger";
+        $("screen-reply").textContent = "无法读取机器人状态";
+        $("screen-detail").textContent = String(err);
+        $("output").textContent = String(err);
+      } finally {
+        setBusy(false);
+      }
+    }
+    async function runCommand(line, confirmText = "", confirmed = false) {
+      if (confirmText && !window.confirm(confirmText)) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/command", { method: "POST", body: JSON.stringify({ line, confirm: confirmed || Boolean(confirmText) }) });
+        const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
+        updateMetrics(summary);
+        updateState(result.state);
+        updateStereo(result.stereo_summary);
+        updateSemantic(result.semantic_summary);
+        setScreen(summary, result.semantic_summary);
+        $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
+      } catch (err) {
+        $("output").textContent = String(err);
+      } finally {
+        setBusy(false);
+      }
+    }
+    function resetTimer() {
+      if (timer) clearInterval(timer);
+      const ms = Number($("refresh-interval").value || 0);
+      if (ms > 0) timer = setInterval(refreshStatus, ms);
+    }
+
+    $("refresh").onclick = () => refreshStatus(true);
+    $("start-slam").onclick = () => runCommand("/start-slam", "确认启动或检查 SLAM 与雷达驱动？", true);
+    $("exec-on").onclick = () => runCommand("/execute on", "确认允许真实执行？机器人趴卧时请勿开启。", true);
+    $("exec-off").onclick = () => runCommand("/execute off");
+    $("weak-on").onclick = () => runCommand("/weak on");
+    $("weak-off").onclick = () => runCommand("/weak off");
+    $("set-current").onclick = () => runCommand(`/current ${$("current-node").value.trim()}`);
+    $("relocate-anchor-btn").onclick = () => {
+      const anchor = $("relocate-anchor").value.trim() || "mapping_origin";
+      runCommand(`/relocate ${anchor} confirm`, "确认按该锚点执行 SLAM 重定位？此操作不会移动底盘。", true);
+    };
+    $("mapping-start").onclick = () => runCommand("/mapping start confirm", "确认开始建图？这会改变 SLAM 状态。", true);
+    $("mapping-end").onclick = () => runCommand(`/mapping end confirm ${$("map-path").value.trim()}`, "确认结束建图并保存地图？", true);
+    $("rviz-start").onclick = () => runCommand("/rviz2 start confirm", "确认打开 RViz2 可视化？", true);
+    $("topology-preview").onclick = () => runCommand(`/topology preview ${$("topology-name").value.trim()}`);
+    $("topology-add").onclick = () => runCommand(`/topology add ${$("topology-name").value.trim()} confirm`, "确认写入当前位置为拓扑点？", true);
+    $("send-llm").onclick = () => {
+      const line = $("llm-input").value.trim();
+      if (!line) return;
+      const confirmText = appState.execute_enabled ? "当前是真实执行模式，确认发送给机器人？" : "";
+      runCommand(line, confirmText, Boolean(confirmText));
+    };
+    $("refresh-interval").onchange = resetTimer;
+    refreshStatus();
+    resetTimer();
+  </script>
+</body>
+</html>

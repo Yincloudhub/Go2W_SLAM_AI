@@ -21,6 +21,12 @@ web = load_operator_web()
 
 
 class OperatorWebTests(unittest.TestCase):
+    def test_operator_ui_is_chinese_and_has_feedback_screen(self):
+        self.assertIn("GO2W 多模态自主机器狗", web.INDEX_HTML)
+        self.assertIn("智能巡检交互屏", web.INDEX_HTML)
+        self.assertIn("机器狗回复", web.INDEX_HTML)
+        self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
+
     def test_parse_panel_summary(self):
         text = "noise\n[18:38:24] phase=idle | target=none | loc=true | map=true | motion=false | safety=ok\n"
         parsed = web.parse_panel_summary(text)
