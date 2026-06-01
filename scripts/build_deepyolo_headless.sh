@@ -223,18 +223,14 @@ perf_replacement = """    int perf_frame_count = 0;
 if perf_marker not in text:
     raise SystemExit("failed to locate DeepYOLO performance counters")
 text = text.replace(perf_marker, perf_replacement, 1)
-fps_marker = """            double current_fps = 1000.0 / avg_latency;
-
-            std::cout << "\\r[INFO] " """
+fps_marker = "            double current_fps = 1000.0 / avg_latency;"
 fps_replacement = """            auto perf_window_end = std::chrono::steady_clock::now();
             std::chrono::duration<double> perf_window_duration = perf_window_end - perf_window_start;
             double semantic_fps = perf_window_duration.count() > 0.0
                 ? 30.0 / perf_window_duration.count()
-                : 0.0;
-
-            std::cout << "\\r[INFO] " """
+                : 0.0;"""
 if fps_marker not in text:
-    raise SystemExit("failed to locate DeepYOLO performance FPS")
+    raise SystemExit("failed to locate DeepYOLO performance FPS calculation")
 text = text.replace(fps_marker, fps_replacement, 1)
 if '<< current_fps << " FPS | "' not in text:
     raise SystemExit("failed to locate DeepYOLO performance FPS output")
