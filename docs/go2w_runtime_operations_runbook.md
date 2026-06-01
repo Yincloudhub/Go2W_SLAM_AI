@@ -91,6 +91,11 @@ GO2W_DEEPYOLO_PROFILE=balanced bash scripts/go2w_deepyolo_sidecar.sh restart
 
 # 全速诊断：只用于短时排障，不建议常驻
 GO2W_DEEPYOLO_PROFILE=diagnostic bash scripts/go2w_deepyolo_sidecar.sh restart
+
+# 如需检查画框效果，短时显式开启 overlay
+GO2W_DEEPYOLO_PROFILE=diagnostic \
+GO2W_DEEPYOLO_RENDER_OVERLAY=1 \
+  bash scripts/go2w_deepyolo_sidecar.sh restart
 ```
 
 档位只影响 DeepYOLO 可选语义侧车。XT16、SLAM、SafetyGate 和 QueueExecutor 不依赖该侧车。

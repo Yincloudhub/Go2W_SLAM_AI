@@ -43,6 +43,7 @@ NICE_LEVEL="${GO2W_DEEPYOLO_NICE_LEVEL:-${DEFAULT_NICE_LEVEL}}"
 RETAIN_STREAMS="${GO2W_DEEPYOLO_RETAIN_STREAMS:-4}"
 INPUT_FPS="${GO2W_DEEPYOLO_INPUT_FPS:-15}"
 IR_MODE="${GO2W_DEEPYOLO_IR_MODE:-0}"
+RENDER_OVERLAY="${GO2W_DEEPYOLO_RENDER_OVERLAY:-0}"
 CAPTURE_EVERY_N="${GO2W_DEEPYOLO_CAPTURE_EVERY_N:-${DEFAULT_CAPTURE_EVERY_N}}"
 INFERENCE_INTERVAL_MS="${GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS:-${DEFAULT_INFERENCE_INTERVAL_MS}}"
 HEARTBEAT_MS="${GO2W_DEEPYOLO_HEARTBEAT_MS:-1000}"
@@ -143,6 +144,7 @@ print_status() {
     echo "nice_level=${NICE_LEVEL}"
     echo "input_fps=${INPUT_FPS}"
     echo "ir_mode=${IR_MODE}"
+    echo "render_overlay=${RENDER_OVERLAY}"
     echo "capture_every_n=${CAPTURE_EVERY_N}"
     echo "inference_interval_ms=${INFERENCE_INTERVAL_MS}"
     echo "heartbeat_ms=${HEARTBEAT_MS}"
@@ -180,12 +182,13 @@ case "${1:-status}" in
     prune_streams
     : > "${DETECTOR_LOG}"
     : > "${BRIDGE_LOG}"
-    printf 'profile=%s\nnice_level=%s\ninput_fps=%s\nir_mode=%s\ncapture_every_n=%s\ninference_interval_ms=%s\nheartbeat_ms=%s\nmax_jsonl_bytes=%s\nmax_jsonl_files=%s\n' \
-      "${PROFILE}" "${NICE_LEVEL}" "${INPUT_FPS}" "${IR_MODE}" "${CAPTURE_EVERY_N}" "${INFERENCE_INTERVAL_MS}" "${HEARTBEAT_MS}" "${MAX_JSONL_BYTES}" "${MAX_JSONL_FILES}" > "${CONFIG_FILE}"
+    printf 'profile=%s\nnice_level=%s\ninput_fps=%s\nir_mode=%s\nrender_overlay=%s\ncapture_every_n=%s\ninference_interval_ms=%s\nheartbeat_ms=%s\nmax_jsonl_bytes=%s\nmax_jsonl_files=%s\n' \
+      "${PROFILE}" "${NICE_LEVEL}" "${INPUT_FPS}" "${IR_MODE}" "${RENDER_OVERLAY}" "${CAPTURE_EVERY_N}" "${INFERENCE_INTERVAL_MS}" "${HEARTBEAT_MS}" "${MAX_JSONL_BYTES}" "${MAX_JSONL_FILES}" > "${CONFIG_FILE}"
     nohup nice -n "${NICE_LEVEL}" env \
       GO2W_DEEPYOLO_OUTPUT_DIR="${STREAM_DIR}" \
       GO2W_DEEPYOLO_INPUT_FPS="${INPUT_FPS}" \
       GO2W_DEEPYOLO_IR_MODE="${IR_MODE}" \
+      GO2W_DEEPYOLO_RENDER_OVERLAY="${RENDER_OVERLAY}" \
       GO2W_DEEPYOLO_CAPTURE_EVERY_N="${CAPTURE_EVERY_N}" \
       GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS="${INFERENCE_INTERVAL_MS}" \
       GO2W_DEEPYOLO_HEARTBEAT_MS="${HEARTBEAT_MS}" \

@@ -30,6 +30,16 @@ def load_fixture(name: str):
 
 
 class DeepYoloSemanticBridgeTests(unittest.TestCase):
+    def test_read_last_json_line_expands_scan_window_for_large_packet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "semantic.jsonl"
+            packet = {"frame_id": 7, "padding": "x" * 70_000}
+            path.write_text(json.dumps(packet) + "\n", encoding="utf-8")
+
+            loaded = bridge.read_last_json_line(path)
+
+            self.assertEqual(loaded["frame_id"], 7)
+
     def assert_summary_valid(self, summary):
         validate(instance=summary, schema=SUMMARY_SCHEMA)
 

@@ -202,6 +202,18 @@ inference_replacement = """    // ----------------------------------------
 if inference_marker not in text:
     raise SystemExit("failed to locate DeepYOLO inference loop")
 text = text.replace(inference_marker, inference_replacement, 1)
+overlay_setup_marker = """    uint64_t last_inference_sensor_frame_id = 0;
+
+    while (is_running) {"""
+overlay_setup_replacement = """    uint64_t last_inference_sensor_frame_id = 0;
+    const char* render_overlay_env = std::getenv("GO2W_DEEPYOLO_RENDER_OVERLAY");
+    bool render_overlay = render_overlay_env && std::atoi(render_overlay_env) != 0;
+    std::cout << "[GO2W] render_overlay=" << (render_overlay ? 1 : 0) << std::endl;
+
+    while (is_running) {"""
+if overlay_setup_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO overlay setup insertion")
+text = text.replace(overlay_setup_marker, overlay_setup_replacement, 1)
 inference_copy_marker = """            if (!shared_sensor.valid_color || shared_sensor.color_bgr.empty()) continue;
 
             shared_sensor.color_bgr.copyTo(frame);"""
@@ -243,6 +255,13 @@ perf_reset_replacement = """            total_latency = 0.0;
 if perf_reset_marker not in text:
     raise SystemExit("failed to locate DeepYOLO performance reset")
 text = text.replace(perf_reset_marker, perf_reset_replacement, 1)
+overlay_block_marker = """            // 绘框
+            {"""
+overlay_block_replacement = """            // Optional overlay is useful for a short diagnostic session only.
+            if (render_overlay) {"""
+if overlay_block_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO render overlay block")
+text = text.replace(overlay_block_marker, overlay_block_replacement, 1)
 
 for needle in ("cv::namedWindow", "cv::resizeWindow"):
     lines = []

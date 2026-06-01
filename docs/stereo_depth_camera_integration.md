@@ -201,6 +201,7 @@ long-term residency by default:
 GO2W_DEEPYOLO_PROFILE=resident
 GO2W_DEEPYOLO_INPUT_FPS=15
 GO2W_DEEPYOLO_IR_MODE=0
+GO2W_DEEPYOLO_RENDER_OVERLAY=0
 GO2W_DEEPYOLO_CAPTURE_EVERY_N=5
 GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS=333
 GO2W_DEEPYOLO_HEARTBEAT_MS=1000
@@ -209,8 +210,9 @@ GO2W_DEEPYOLO_MAX_JSONL_FILES=4
 ```
 
 This keeps the compatible camera profile at 15 FPS, disables IR streams for the
-normal headless semantic path, performs alignment and resize work for every
-fifth capture, and caps semantic inference at about 3 Hz. The inference loop
+normal headless semantic path, skips RGB overlay rendering unless an explicit
+diagnostic enables it, performs alignment and resize work for every fifth
+capture, and caps semantic inference at about 3 Hz. The inference loop
 also rejects a repeated latest-frame id so tracking persistence and heartbeat
 packets advance only from newly prepared camera frames.
 All values can be overridden before `sidecar.sh start`. Lowering camera FPS
@@ -253,6 +255,9 @@ TensorRT engine separately rather than weakening SLAM or LiDAR processing.
 
 Set `GO2W_DEEPYOLO_IR_MODE=2` only for an explicit IR diagnostic session. IR
 frames are not required for the resident RGBD semantic summary.
+Set `GO2W_DEEPYOLO_RENDER_OVERLAY=1` only for a short overlay diagnostic. The
+headless semantic JSONL path does not require boxes or labels to be drawn onto
+the RGB frame.
 
 The bridge reads the latest `semantic_stream_*.jsonl` packet and writes only a
 bounded summary:

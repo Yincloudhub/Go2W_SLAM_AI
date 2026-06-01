@@ -54,24 +54,34 @@ def newest_jsonl(input_dir: Path, pattern: str = "semantic_stream_*.jsonl") -> O
     return max(candidates, key=lambda p: (p.stat().st_mtime_ns, p.name))
 
 
-def read_last_json_line(path: Path, *, max_scan_bytes: int = 1_000_000) -> Optional[dict[str, Any]]:
+def read_last_json_line(
+    path: Path,
+    *,
+    initial_scan_bytes: int = 64_000,
+    max_scan_bytes: int = 1_000_000,
+) -> Optional[dict[str, Any]]:
     if not path.exists() or path.stat().st_size == 0:
         return None
     size = path.stat().st_size
-    offset = max(0, size - max_scan_bytes)
-    with path.open("rb") as f:
-        f.seek(offset)
-        data = f.read().decode("utf-8", errors="replace")
-    for raw in reversed(data.splitlines()):
-        line = raw.strip()
-        if not line:
-            continue
-        try:
-            parsed = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
+    scan_bytes = max(1, min(int(initial_scan_bytes), int(max_scan_bytes)))
+    while True:
+        offset = max(0, size - scan_bytes)
+        with path.open("rb") as f:
+            f.seek(offset)
+            data = f.read().decode("utf-8", errors="replace")
+        for raw in reversed(data.splitlines()):
+            line = raw.strip()
+            if not line:
+                continue
+            try:
+                parsed = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+        if offset == 0 or scan_bytes >= max_scan_bytes:
+            break
+        scan_bytes = min(max_scan_bytes, scan_bytes * 4)
     return None
 
 
