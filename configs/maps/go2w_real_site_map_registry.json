@@ -310,6 +310,26 @@
       ],
       "relocalization_anchors": [
         {
+          "anchor_id": "mapping_origin",
+          "name": "mapping_origin",
+          "status": "verified_startup_relocalization_20260601",
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "yaw": 0.0,
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "Startup relocalization anchor verified on 2026-06-01 after SLAM restart; ICP Score 0.0165342 and relocation succeeded."
+        },
+        {
           "anchor_id": "initial_point",
           "name": "初始点",
           "pose": {
@@ -325,8 +345,8 @@
           },
           "allowed_radius_m": 1.2,
           "allowed_yaw_error_deg": 45.0,
-          "status": "candidate",
-          "description": "候选重定位锚点：初始点。"
+          "status": "candidate_failed_icp509_20260601",
+          "description": "Candidate initial_point anchor failed startup relocalization on 2026-06-01 with ICP 0.0372128/errorCode 509; use mapping_origin for restart recovery."
         },
         {
           "anchor_id": "zhao_bo_office_front",

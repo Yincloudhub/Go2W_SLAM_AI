@@ -331,6 +331,33 @@ Result:
   this as a standing-verification/recovery workflow issue, not as a navigation
   target that should be executed.
 
+2026-06-01 restart relocalization check:
+
+- After a reboot/restart, `xt16_driver` and `unitree_slam` must be running
+  before localization can succeed. If they are not running, the gateway
+  relocation path returns `status_code=3104` and world state stays
+  `localization=not_started`.
+- Running `scripts/start_go2w_slam_stack.sh` restarted the XT16 LiDAR driver and
+  Unitree SLAM without sending motion commands.
+- Registry anchor `initial_point` failed startup relocalization on this run:
+  Unitree returned `errorCode=509` with `ICP Score:0.0372128`.
+- Direct relocalization at the map zero pose succeeded:
+  `x=0,y=0,z=0,q=(0,0,0,1),yaw=0`, `ICP Score:0.0165342`, and
+  `Successfully started relocation.`
+- The registry now includes `mapping_origin` as the verified startup
+  relocalization anchor. The browser Relocalize control defaults to
+  `mapping_origin`.
+- Current restart-safe sequence is:
+
+```text
+/start-slam
+/relocate mapping_origin confirm
+/status
+```
+
+Expected status after success: `loc=true`, `health=ok/localized`,
+`safety=ok`. This is still SLAM-only; it does not imply navigation is enabled.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,

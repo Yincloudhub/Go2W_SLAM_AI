@@ -770,10 +770,10 @@ INDEX_HTML = r"""<!doctype html>
       const row = document.createElement("div");
       row.className = "row";
       row.style.marginTop = "10px";
-      row.innerHTML = '<input id="relocate-anchor" value="initial_point" placeholder="relocalization anchor id"><button id="relocate-anchor-btn">Relocalize</button>';
+      row.innerHTML = '<input id="relocate-anchor" value="mapping_origin" placeholder="relocalization anchor id"><button id="relocate-anchor-btn">Relocalize</button>';
       current.parentElement.insertAdjacentElement("afterend", row);
       $("relocate-anchor-btn").onclick = () => {
-        const anchor = $("relocate-anchor").value.trim() || "initial_point";
+        const anchor = $("relocate-anchor").value.trim() || "mapping_origin";
         runCommand(`/relocate ${anchor} confirm`, "Confirm SLAM relocalization against this registry anchor? This does not move the chassis.", true);
       };
     }
