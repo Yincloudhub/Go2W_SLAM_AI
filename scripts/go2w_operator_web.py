@@ -641,11 +641,20 @@ class OperatorWebApp:
             for tag in ("live_verified", "ui_verified"):
                 if tag not in target["tags"]:
                     target["tags"].append(tag)
+            previous_pose = dict(target_pose)
+            target["pose"] = pose_from_xy_yaw(
+                float(current_pose["x"]),
+                float(current_pose["y"]),
+                float(current_pose["yaw"]),
+                speed=float(target_pose.get("speed", 0.3)),
+                mode=int(target_pose.get("mode", 0)),
+            )
             target["verification"] = {
                 "verified_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "source": "operator_ui_current_pose",
                 "distance_m": round(distance, 3),
                 "current_pose": current_pose,
+                "previous_pose": previous_pose,
             }
             target["description"] = (
                 trim_line(str(target.get("description", "")))

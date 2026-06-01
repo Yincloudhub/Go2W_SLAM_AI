@@ -216,8 +216,8 @@
           <summary>高级运行设置</summary>
           <div class="field-stack" style="padding:0 11px 11px">
             <div class="row">
-              <input id="current-node" placeholder="当前锚点，例如 initial_point">
-              <button id="set-current">设置锚点</button>
+              <input id="current-node" placeholder="定位丢失时使用的备用锚点，例如 initial_point">
+              <button id="set-current">保存备用锚点</button>
             </div>
             <div class="row">
               <input id="relocate-anchor" value="mapping_origin" placeholder="重定位锚点 ID">
@@ -485,7 +485,6 @@
           <div class="tags">${tags}</div>
           <div class="toolbar">
             <button data-action="preview" data-node="${escapeHtml(node.node_id)}">预览</button>
-            <button data-action="current" data-node="${escapeHtml(node.node_id)}">设为当前</button>
             ${verify}
             ${action}
           </div>
@@ -637,11 +636,6 @@
       if (action === "preview") {
         $("topology-name").value = nodeId;
         runCommand(`/topology preview ${nodeId}`);
-        return;
-      }
-      if (action === "current") {
-        $("topology-name").value = nodeId;
-        runCommand(`/current ${nodeId}`);
         return;
       }
       if (action === "disable") {

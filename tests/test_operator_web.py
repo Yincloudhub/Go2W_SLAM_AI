@@ -48,6 +48,8 @@ class OperatorWebTests(unittest.TestCase):
         self.assertNotIn('id="topology-add"', web.INDEX_HTML)
         self.assertNotIn('id="exec-on"', web.INDEX_HTML)
         self.assertNotIn('id="weak-on"', web.INDEX_HTML)
+        self.assertNotIn('data-action="current"', web.INDEX_HTML)
+        self.assertIn("保存备用锚点", web.INDEX_HTML)
 
     def test_history_keeps_compact_failure_reason(self):
         state = web.WebState()
@@ -199,6 +201,14 @@ class OperatorWebTests(unittest.TestCase):
             self.assertNotIn("needs_calibration", tags)
             self.assertNotIn("needs_standing_verification", tags)
             self.assertIn("ui_verified", tags)
+            node = result["topology"]["nodes"][0]
+            self.assertAlmostEqual(node["pose"]["x"], 1.05)
+            self.assertAlmostEqual(node["pose"]["y"], 2.02)
+            self.assertAlmostEqual(node["pose"]["yaw"], 0.10)
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            verified = registry["maps"][0]["topology_nodes"][0]
+            self.assertAlmostEqual(verified["verification"]["previous_pose"]["x"], 1.0)
+            self.assertAlmostEqual(verified["verification"]["previous_pose"]["y"], 2.0)
 
     def test_parse_panel_summary(self):
         text = "noise\n[18:38:24] phase=idle | target=none | loc=true | map=true | motion=false | safety=ok\n"
