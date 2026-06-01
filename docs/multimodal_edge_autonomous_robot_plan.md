@@ -372,6 +372,37 @@ UI 不需要做成复杂控制台，第一版只需要五个稳定区域：
 
 ## 分阶段路线
 
+### 2026-06-01 工程基线与近期推进
+
+当前主链路已经达到“够用可演示”的工程基线，不再继续追求传感器侧车的极致资源压缩。已验证的闭环边界是：
+
+```text
+XT16 LiDAR
+  -> Unitree SLAM / relocation
+  -> C++ GatewayClient / OperatorPanel
+  -> SemanticRouter / TaskQueue validator
+  -> SafetyGate / QueueExecutor
+  -> Web UI / LLM 输入口
+```
+
+趴卧静止调试状态下，当前可作为基线认定：
+
+- SLAM 与 XT16 可一键检查/启动，重定位后 UI 可读到 `loc=true`、`map=true`、`motion=false`、`safety=ok`。
+- 中文 Web UI 已能显示机器狗回复、当前位置、视觉理解、安全策略和 LLM 任务输入。
+- DeepYOLO / D435I 已被收敛为可选语义侧车：正常时提供约 3 Hz 的语义摘要，stale 或设备离线时 UI 明确降级为“视觉离线”，主闭环继续按 LiDAR + SLAM 运行。
+- 资源优化以不影响实时主链路为边界：Web 与桥接器开销接近零，DeepYOLO 只在相机可用时按 resident 档常驻；`unitree_slam` 仍是最大 CPU 项，暂不在比赛前改厂商参数。
+- 当前不把双目、TI 雷达、语音、拍照全部压进同一次演示，而是作为可插拔能力逐项接入。
+
+接下来推进顺序建议：
+
+1. **录点与站立复核**：机器人站起后先启动 SLAM / XT16，执行重定位，确认 `loc=true`、`safety=ok` 后录制真实拓扑点；`陈嘉瑜工位` 当前是趴卧标准位姿，真实导航前仍保留 standing verification。
+2. **巡检任务模板**：先做多点任务队列、到点反馈、失败停止和结束报告；拍照可先记录 `capture_keyframe` 事件，再接真实相机命令。
+3. **状态持久化**：补 `state_journal` 或长驻 operator core，保存任务队列、到达事件、SafetyGate 决策和人工确认记录，减少短进程状态丢失。
+4. **LLM 使用边界**：确定性拓扑匹配优先，LLM 只处理模糊目标、任务拆解和自然语言解释；不微调模型，直到日志样本达到 500-1000 条。
+5. **视觉恢复**：先解决 D435I 在系统层的枚举稳定性，再跑 resident / balanced A/B；不要为了视觉侧车牺牲 SLAM 主链路。
+6. **弱网实验**：把 `/weak on` 做成可量化实验，比较全量视频、关键帧+语义、纯语义、本地智能体闭环四种模式的带宽、时延和任务成功率。
+7. **TI 雷达 / NX**：只发布 `RadarDetectionSummary`，作为巡检异常告警和 `slow/confirm/inspect_area` 的输入，不把原始 ADC 或高频点云送入 LLM。
+
 ### P0：比赛主线最小闭环
 
 - 一键启动 SLAM、LiDAR、operator panel。
