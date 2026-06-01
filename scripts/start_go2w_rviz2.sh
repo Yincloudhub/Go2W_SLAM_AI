@@ -13,8 +13,19 @@ RVIZ2_CONFIG="${GO2W_RVIZ2_CONFIG:-}"
 mkdir -p "${LOG_DIR}"
 
 if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
-  echo "DISPLAY/WAYLAND_DISPLAY is not set; enable X11 forwarding or run from a desktop session." >&2
-  exit 3
+  if [[ -S /tmp/.X11-unix/X0 ]]; then
+    export DISPLAY="${GO2W_RVIZ2_DISPLAY:-:0}"
+    if [[ -z "${XAUTHORITY:-}" && -f "${HOME}/.Xauthority" ]]; then
+      export XAUTHORITY="${HOME}/.Xauthority"
+    fi
+    echo "rviz2_display_auto=${DISPLAY}"
+    if [[ -n "${XAUTHORITY:-}" ]]; then
+      echo "rviz2_xauthority=${XAUTHORITY}"
+    fi
+  else
+    echo "DISPLAY/WAYLAND_DISPLAY is not set; enable X11 forwarding or run from a desktop session." >&2
+    exit 3
+  fi
 fi
 
 source /opt/ros/foxy/setup.bash >/dev/null 2>&1 || true
