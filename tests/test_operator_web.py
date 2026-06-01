@@ -37,6 +37,11 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn('document.querySelectorAll("button")', web.INDEX_HTML)
         self.assertNotIn('document.querySelectorAll("button, input, textarea, select")', web.INDEX_HTML)
 
+    def test_operator_ui_has_topology_registry_controls(self):
+        self.assertIn("/api/topology", web.INDEX_HTML)
+        self.assertIn("topology-node", web.INDEX_HTML)
+        self.assertIn("topology-registry-add", web.INDEX_HTML)
+
     def test_history_keeps_compact_failure_reason(self):
         state = web.WebState()
         state.remember(
@@ -52,6 +57,73 @@ class OperatorWebTests(unittest.TestCase):
         item = state.snapshot()["history"][0]
         self.assertIn("verification_guard", item["reason"])
         self.assertIn("/slam_info", item["reason"])
+
+    def test_topology_soft_delete_and_restore_updates_registry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = root / "registry.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "maps": [
+                            {
+                                "map_id": "go2w_real_site",
+                                "topology_nodes": [
+                                    {"node_id": "wp_a", "name": "A", "tags": ["real_site"], "pose": {"x": 1.0, "y": 2.0}}
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                registry_path=registry_path,
+            )
+            app = web.OperatorWebApp(config)
+
+            disabled = app.set_topology_node_disabled("wp_a", True, confirmed=True)
+            self.assertTrue(disabled["accepted"])
+            self.assertTrue(disabled["topology"]["nodes"][0]["disabled"])
+
+            restored = app.set_topology_node_disabled("wp_a", False, confirmed=True)
+            self.assertTrue(restored["accepted"])
+            self.assertFalse(restored["topology"]["nodes"][0]["disabled"])
+
+    def test_add_current_topology_node_uses_safe_live_pose(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "true", "safety": "ok", "pose:x": "x=1.25, y=-0.50, yaw=0.30"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = root / "registry.json"
+            registry_path.write_text(
+                json.dumps({"maps": [{"map_id": "go2w_real_site", "topology_nodes": []}]}),
+                encoding="utf-8",
+            )
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                    registry_path=registry_path,
+                )
+            )
+
+            result = app.add_current_topology_node({"node_id": "wp_new", "name": "New", "aliases": "New,新点"}, confirmed=True)
+            self.assertTrue(result["accepted"])
+            node = result["topology"]["nodes"][0]
+            self.assertEqual(node["node_id"], "wp_new")
+            self.assertIn("needs_standing_verification", node["tags"])
+            self.assertAlmostEqual(node["pose"]["x"], 1.25)
 
     def test_parse_panel_summary(self):
         text = "noise\n[18:38:24] phase=idle | target=none | loc=true | map=true | motion=false | safety=ok\n"

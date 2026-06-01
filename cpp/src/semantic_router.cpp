@@ -75,7 +75,10 @@ const nlohmann::json* SemanticRouter::findNode(const std::string& node_id) const
     const auto* map = findMap();
     if (!map || !map->contains("topology_nodes") || !map->at("topology_nodes").is_array()) return nullptr;
     for (const auto& node : map->at("topology_nodes")) {
-        if (node.value("node_id", "") == node_id) return &node;
+        if (node.value("node_id", "") == node_id) {
+            if (nodeDisabled(node)) return nullptr;
+            return &node;
+        }
     }
     return nullptr;
 }
@@ -96,6 +99,11 @@ bool SemanticRouter::nodeHasTag(const nlohmann::json& node, const std::string& t
     return false;
 }
 
+bool SemanticRouter::nodeDisabled(const nlohmann::json& node) const
+{
+    return nodeHasTag(node, "disabled") || nodeHasTag(node, "ui_disabled") || nodeHasTag(node, "deleted");
+}
+
 std::vector<ResolvedTarget> SemanticRouter::resolveTargets(const std::string& text) const
 {
     const auto* map = findMap();
@@ -105,6 +113,7 @@ std::vector<ResolvedTarget> SemanticRouter::resolveTargets(const std::string& te
     std::set<std::string> seen;
     for (const auto& node : map->at("topology_nodes")) {
         if (!node.is_object()) continue;
+        if (nodeDisabled(node)) continue;
         ResolvedTarget target;
         target.node_id = node.value("node_id", "");
         target.name = node.value("name", target.node_id);

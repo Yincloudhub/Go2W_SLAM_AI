@@ -49,3 +49,11 @@ add_executable(go2w_llm_http_client_smoke_test
 target_link_libraries(go2w_llm_http_client_smoke_test PRIVATE go2w_plan_executor_core)
 
 add_test(NAME go2w_llm_http_client_smoke_test COMMAND go2w_llm_http_client_smoke_test)
+
+add_executable(go2w_semantic_router_smoke_test
+    src/semantic_router_smoke_test.cpp
+)
+
+target_link_libraries(go2w_semantic_router_smoke_test PRIVATE go2w_plan_executor_core)
+
+add_test(NAME go2w_semantic_router_smoke_test COMMAND go2w_semantic_router_smoke_test)

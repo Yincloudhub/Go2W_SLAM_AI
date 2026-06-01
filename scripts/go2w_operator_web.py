@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -25,6 +27,10 @@ from urllib.parse import parse_qs, urlparse
 
 
 DEFAULT_PORT = 8765
+DEFAULT_MAP_ID = "go2w_real_site"
+DEFAULT_REGISTRY_PATH = Path("configs/maps/go2w_real_site_map_registry.json")
+DISABLED_NODE_TAGS = {"disabled", "ui_disabled", "deleted"}
+NODE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
 
 
 def truthy(value: str) -> bool:
@@ -37,6 +43,55 @@ def repo_root_from_script() -> Path:
 
 def trim_line(value: str) -> str:
     return value.strip(" \t\r\n")
+
+
+def parse_pose_summary(summary: Dict[str, str]) -> Optional[Dict[str, float]]:
+    raw = summary.get("pose:x") or summary.get("pose") or ""
+    match = re.search(
+        r"(?:x=)?([-+]?\d+(?:\.\d+)?)\s*,?\s*y=([-+]?\d+(?:\.\d+)?)\s*,?\s*yaw=([-+]?\d+(?:\.\d+)?)",
+        raw,
+    )
+    if not match:
+        return None
+    return {"x": float(match.group(1)), "y": float(match.group(2)), "yaw": float(match.group(3))}
+
+
+def pose_from_xy_yaw(x: float, y: float, yaw: float, *, speed: float = 0.3, mode: int = 0) -> Dict[str, Any]:
+    return {
+        "x": x,
+        "y": y,
+        "z": 0.0,
+        "yaw": yaw,
+        "q_x": 0.0,
+        "q_y": 0.0,
+        "q_z": math.sin(yaw / 2.0),
+        "q_w": math.cos(yaw / 2.0),
+        "speed": speed,
+        "mode": mode,
+    }
+
+
+def tag_list(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    out: List[str] = []
+    for item in value:
+        if isinstance(item, str) and item not in out:
+            out.append(item)
+    return out
+
+
+def node_is_disabled(node: Dict[str, Any]) -> bool:
+    return bool(set(tag_list(node.get("tags"))) & DISABLED_NODE_TAGS)
+
+
+def split_aliases(value: str) -> List[str]:
+    aliases: List[str] = []
+    for part in re.split(r"[,，、\n]+", value):
+        alias = trim_line(part)
+        if alias and alias not in aliases:
+            aliases.append(alias)
+    return aliases
 
 
 def parse_panel_summary(text: str) -> Dict[str, str]:
@@ -127,6 +182,8 @@ class WebConfig:
     semantic_stale_ms: int = 3000
     status_cache_ms: int = 1500
     ensure_slam_on_start: bool = False
+    registry_path: Path = DEFAULT_REGISTRY_PATH
+    map_id: str = DEFAULT_MAP_ID
 
     def panel_argv(self, execute_enabled: bool, weak_link_mode: bool, current_node: str) -> List[str]:
         argv = [
@@ -356,6 +413,170 @@ class OperatorWebApp:
             self.state.remember(line, result)
         self.invalidate_status_cache()
         return result
+
+    def resolved_registry_path(self) -> Path:
+        path = self.config.registry_path
+        if not path.is_absolute():
+            path = self.config.repo_root / path
+        return path
+
+    def _load_registry(self) -> Dict[str, Any]:
+        path = self.resolved_registry_path()
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _write_registry(self, registry: Dict[str, Any]) -> None:
+        path = self.resolved_registry_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        old_text = path.read_text(encoding="utf-8") if path.exists() else ""
+        if old_text:
+            backup = path.with_name(path.name + "." + time.strftime("%Y%m%d_%H%M%S") + ".bak")
+            backup.write_text(old_text, encoding="utf-8")
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(path)
+
+    def _registry_map(self, registry: Dict[str, Any]) -> Dict[str, Any]:
+        for item in registry.get("maps", []):
+            if isinstance(item, dict) and item.get("map_id") == self.config.map_id:
+                return item
+        raise ValueError(f"map_id {self.config.map_id!r} not found in registry")
+
+    def topology(self) -> Dict[str, Any]:
+        with self.lock:
+            registry = self._load_registry()
+            selected = self._registry_map(registry)
+            nodes = []
+            for node in selected.get("topology_nodes", []):
+                if not isinstance(node, dict):
+                    continue
+                tags = tag_list(node.get("tags"))
+                pose = node.get("pose") if isinstance(node.get("pose"), dict) else {}
+                nodes.append({
+                    "node_id": node.get("node_id", ""),
+                    "name": node.get("name", node.get("node_id", "")),
+                    "aliases": [a for a in node.get("aliases", []) if isinstance(a, str)] if isinstance(node.get("aliases"), list) else [],
+                    "tags": tags,
+                    "disabled": bool(set(tags) & DISABLED_NODE_TAGS),
+                    "needs_calibration": "needs_calibration" in tags,
+                    "needs_standing_verification": "needs_standing_verification" in tags,
+                    "pose": {
+                        "x": pose.get("x"),
+                        "y": pose.get("y"),
+                        "yaw": pose.get("yaw"),
+                        "speed": pose.get("speed"),
+                        "mode": pose.get("mode"),
+                    },
+                    "description": node.get("description", ""),
+                })
+            return {
+                "accepted": True,
+                "map_id": selected.get("map_id", self.config.map_id),
+                "registry": str(self.resolved_registry_path()),
+                "nodes": nodes,
+            }
+
+    def add_current_topology_node(self, payload: Dict[str, Any], confirmed: bool = False) -> Dict[str, Any]:
+        if not confirmed:
+            return {"accepted": False, "exit_code": 2, "error": "topology registry update requires confirmation"}
+        node_id = trim_line(str(payload.get("node_id", "")))
+        if not NODE_ID_RE.match(node_id):
+            return {"accepted": False, "exit_code": 2, "error": "node_id must be 2-64 ASCII letters, numbers, '_' or '-'"}
+
+        display_name = trim_line(str(payload.get("name", ""))) or node_id
+        aliases = split_aliases(str(payload.get("aliases", "")))
+        for alias in (display_name, node_id):
+            if alias and alias not in aliases:
+                aliases.append(alias)
+
+        status = self.status(force=True)
+        summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
+        if summary.get("loc") != "true" or summary.get("safety") != "ok":
+            return {"accepted": False, "exit_code": 3, "error": "current pose is not safe/fresh enough for topology write", "summary": summary}
+        pose_summary = parse_pose_summary(summary)
+        if not pose_summary:
+            return {"accepted": False, "exit_code": 3, "error": "cannot parse current pose from status summary", "summary": summary}
+
+        with self.lock:
+            registry = self._load_registry()
+            selected = self._registry_map(registry)
+            nodes = selected.setdefault("topology_nodes", [])
+            target = None
+            for node in nodes:
+                if isinstance(node, dict) and node.get("node_id") == node_id:
+                    target = node
+                    break
+            created = target is None
+            if target is None:
+                target = {"node_id": node_id}
+                nodes.append(target)
+
+            old_pose = target.get("pose")
+            old_tags = tag_list(target.get("tags"))
+            tags = [tag for tag in old_tags if tag not in DISABLED_NODE_TAGS]
+            for tag in ("real_site", "ui_recorded", "live_calibrated", "needs_standing_verification"):
+                if tag not in tags:
+                    tags.append(tag)
+            speed = float((old_pose or {}).get("speed", 0.3)) if isinstance(old_pose, dict) else 0.3
+            mode = int((old_pose or {}).get("mode", 0)) if isinstance(old_pose, dict) else 0
+            target.update({
+                "node_id": node_id,
+                "name": display_name,
+                "node_type": target.get("node_type", "ui_recorded_waypoint"),
+                "aliases": aliases,
+                "tags": tags,
+                "pose": pose_from_xy_yaw(pose_summary["x"], pose_summary["y"], pose_summary["yaw"], speed=speed, mode=mode),
+                "description": (
+                    trim_line(str(target.get("description", "")))
+                    + " UI-recorded from current localized pose at "
+                    + time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                    + "; keep standing verification before real navigation."
+                ).strip(),
+            })
+            self._write_registry(registry)
+
+        self.invalidate_status_cache()
+        return {
+            "accepted": True,
+            "exit_code": 0,
+            "created": created,
+            "node_id": node_id,
+            "summary": summary,
+            "topology": self.topology(),
+        }
+
+    def set_topology_node_disabled(self, node_id: str, disabled: bool, confirmed: bool = False) -> Dict[str, Any]:
+        node_id = trim_line(node_id)
+        if not confirmed:
+            return {"accepted": False, "exit_code": 2, "error": "topology disable/restore requires confirmation"}
+        with self.lock:
+            registry = self._load_registry()
+            selected = self._registry_map(registry)
+            target = None
+            for node in selected.get("topology_nodes", []):
+                if isinstance(node, dict) and node.get("node_id") == node_id:
+                    target = node
+                    break
+            if target is None:
+                return {"accepted": False, "exit_code": 404, "error": f"node_id {node_id!r} not found"}
+
+            tags = tag_list(target.get("tags"))
+            if disabled:
+                for tag in ("disabled", "ui_disabled"):
+                    if tag not in tags:
+                        tags.append(tag)
+            else:
+                tags = [tag for tag in tags if tag not in DISABLED_NODE_TAGS]
+            target["tags"] = tags
+            target["description"] = (
+                trim_line(str(target.get("description", "")))
+                + f" UI {'disabled' if disabled else 'restored'} at "
+                + time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                + "."
+            ).strip()
+            self._write_registry(registry)
+
+        self.invalidate_status_cache()
+        return {"accepted": True, "exit_code": 0, "node_id": node_id, "disabled": disabled, "topology": self.topology()}
 
     def state_snapshot(self) -> Dict[str, Any]:
         with self.lock:
@@ -873,9 +1094,34 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
         if parsed_path.path == "/api/semantic-summary":
             self.send_json({"semantic_summary": self.app.semantic_summary()})
             return
+        if parsed_path.path == "/api/topology":
+            try:
+                self.send_json(self.app.topology())
+            except Exception as exc:  # noqa: BLE001 - keep browser diagnostics visible.
+                self.send_json({"accepted": False, "error": str(exc)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
+        if self.path == "/api/topology-node":
+            try:
+                payload = self.read_json()
+                action = str(payload.get("action", ""))
+                confirmed = bool(payload.get("confirm", False))
+                if action == "add_current":
+                    self.send_json(self.app.add_current_topology_node(payload, confirmed=confirmed))
+                    return
+                if action in {"disable", "delete"}:
+                    self.send_json(self.app.set_topology_node_disabled(str(payload.get("node_id", "")), True, confirmed=confirmed))
+                    return
+                if action == "restore":
+                    self.send_json(self.app.set_topology_node_disabled(str(payload.get("node_id", "")), False, confirmed=confirmed))
+                    return
+                self.send_json({"accepted": False, "exit_code": 2, "error": f"unknown topology action: {action}"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            except Exception as exc:  # noqa: BLE001 - report bad request to browser.
+                self.send_json({"accepted": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+                return
         if self.path != "/api/command":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -951,6 +1197,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--semantic-summary-path", default=env.get("GO2W_SEMANTIC_SUMMARY_PATH", "artifacts/vision_semantic_summary.json"))
     parser.add_argument("--semantic-stale-ms", type=int, default=int(env.get("GO2W_SEMANTIC_STALE_MS", "3000")))
     parser.add_argument("--status-cache-ms", type=int, default=int(env.get("GO2W_STATUS_CACHE_MS", "1500")))
+    parser.add_argument("--registry", default=env.get("GO2W_REGISTRY", str(DEFAULT_REGISTRY_PATH)))
+    parser.add_argument("--map-id", default=env.get("GO2W_MAP_ID", DEFAULT_MAP_ID))
     parser.add_argument("--ensure-slam-on-start", action="store_true", default=truthy(env.get("GO2W_WEB_ENSURE_SLAM_ON_START", "0")))
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
@@ -980,6 +1228,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         semantic_stale_ms=max(1, args.semantic_stale_ms),
         status_cache_ms=max(0, args.status_cache_ms),
         ensure_slam_on_start=args.ensure_slam_on_start,
+        registry_path=Path(args.registry).expanduser(),
+        map_id=args.map_id,
     )
 
 
@@ -1009,6 +1259,8 @@ def run_startup_script(config: WebConfig) -> None:
 def self_test(config: WebConfig) -> None:
     assert "GO2W 多模态自主机器狗" in INDEX_HTML
     assert "/api/status" in INDEX_HTML
+    assert "/api/topology" in INDEX_HTML
+    assert "topology-node" in INDEX_HTML
     assert "/relocate" in INDEX_HTML
     assert "智能巡检交互屏" in INDEX_HTML
     assert "视觉场景" in INDEX_HTML

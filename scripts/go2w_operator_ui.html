@@ -140,6 +140,23 @@
     .metric strong { display: block; margin-top: 5px; overflow-wrap: anywhere; font-size: 13px; }
     .history { display: grid; max-height: 190px; overflow: auto; gap: 6px; }
     .history div { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); padding: 7px 8px; overflow-wrap: anywhere; }
+    .topology-list { display: grid; max-height: 330px; overflow: auto; gap: 8px; }
+    .node-card {
+      display: grid;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--surface-soft);
+      padding: 9px;
+    }
+    .node-card.disabled { opacity: .62; }
+    .node-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .node-title { display: grid; gap: 2px; min-width: 0; }
+    .node-title strong, .node-title small { overflow-wrap: anywhere; }
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tag { border: 1px solid var(--line); border-radius: 999px; background: #fff; padding: 2px 6px; color: var(--muted); font-size: 11px; }
+    .tag.warn { border-color: #e0bf84; background: #fff8e8; color: var(--warn); }
+    .tag.danger { border-color: #efb5ae; background: #fff3f1; color: var(--danger); }
     details { border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
     summary { cursor: pointer; padding: 11px 13px; font-weight: 700; }
     pre {
@@ -226,6 +243,18 @@
           <div class="toolbar">
             <button id="topology-add" class="danger">写入当前拓扑点</button>
           </div>
+          <div class="row">
+            <input id="topology-display-name" placeholder="显示名，例如 赵博办公室门口">
+            <button id="topology-registry-add" class="danger">登记/更新语义点</button>
+          </div>
+          <input id="topology-aliases" placeholder="别名，用逗号分隔，例如 赵博办公室,赵博门口">
+          <div class="toolbar">
+            <button id="topology-refresh">刷新拓扑列表</button>
+            <span class="muted">禁用是软删除；坐标保留，路由会跳过。</span>
+          </div>
+          <div id="topology-list" class="topology-list">
+            <div class="muted">正在读取拓扑点...</div>
+          </div>
         </div>
       </section>
       <section>
@@ -304,6 +333,7 @@
     let latestPhase = "idle";
     let statusInFlight = false;
     let commandInFlight = false;
+    let topologyState = { nodes: [] };
 
     const zh = {
       idle: "待命", queued: "已排队", planning: "规划中", navigating: "前往目标", arrived: "已到达",
@@ -410,6 +440,66 @@
         return `<div><b>${escapeHtml(code)}</b> ${escapeHtml(item.line)}${reason}<br><small>${escapeHtml(JSON.stringify(item.summary || {}))}</small></div>`;
       });
       $("history").innerHTML = items.join("") || "<div>暂无任务历史</div>";
+    }
+    function poseLabel(pose) {
+      if (!pose || pose.x === null || pose.x === undefined || pose.y === null || pose.y === undefined) return "pose ?";
+      const yaw = pose.yaw === null || pose.yaw === undefined ? "?" : Number(pose.yaw).toFixed(2);
+      return `x ${Number(pose.x).toFixed(2)}, y ${Number(pose.y).toFixed(2)}, yaw ${yaw}`;
+    }
+    function tagClass(tag) {
+      if (["disabled", "ui_disabled", "deleted", "needs_calibration", "needs_standing_verification"].includes(tag)) return "tag danger";
+      if (["photo_required", "people_possible"].includes(tag)) return "tag warn";
+      return "tag";
+    }
+    function renderTopology(topology) {
+      topologyState = topology || { nodes: [] };
+      const nodes = topologyState.nodes || [];
+      const list = $("topology-list");
+      if (!nodes.length) {
+        list.innerHTML = '<div class="muted">暂无语义拓扑点</div>';
+        return;
+      }
+      list.innerHTML = nodes.map((node) => {
+        const disabled = node.disabled ? " disabled" : "";
+        const tags = (node.tags || []).map((tag) => `<span class="${tagClass(tag)}">${escapeHtml(tag)}</span>`).join("");
+        const aliases = (node.aliases || []).slice(0, 4).join(" / ");
+        const action = node.disabled
+          ? `<button data-action="restore" data-node="${escapeHtml(node.node_id)}">恢复</button>`
+          : `<button class="danger" data-action="disable" data-node="${escapeHtml(node.node_id)}">禁用</button>`;
+        return `<div class="node-card${disabled}">
+          <div class="node-head">
+            <div class="node-title">
+              <strong>${escapeHtml(node.name || node.node_id)}</strong>
+              <small>${escapeHtml(node.node_id)} · ${escapeHtml(poseLabel(node.pose))}</small>
+              <small>${escapeHtml(aliases)}</small>
+            </div>
+            <span class="${node.disabled ? "pill danger" : "pill ok"}">${node.disabled ? "已禁用" : "可匹配"}</span>
+          </div>
+          <div class="tags">${tags}</div>
+          <div class="toolbar">
+            <button data-action="preview" data-node="${escapeHtml(node.node_id)}">预览</button>
+            <button data-action="current" data-node="${escapeHtml(node.node_id)}">设为当前</button>
+            ${action}
+          </div>
+        </div>`;
+      }).join("");
+    }
+    async function refreshTopology() {
+      try {
+        const result = await api("/api/topology");
+        renderTopology(result);
+      } catch (err) {
+        $("topology-list").innerHTML = `<div class="muted">${escapeHtml(String(err))}</div>`;
+      }
+    }
+    async function topologyAction(action, nodeId, extra = {}) {
+      const result = await api("/api/topology-node", {
+        method: "POST",
+        body: JSON.stringify({ action, node_id: nodeId, confirm: true, ...extra })
+      });
+      if (result.topology) renderTopology(result.topology);
+      $("output").textContent = JSON.stringify(result, null, 2);
+      return result;
     }
     function updateStereo(stereo) {
       if (!stereo || !stereo.available || !stereo.data) {
@@ -523,6 +613,41 @@
     $("rviz-start").onclick = () => runCommand("/rviz2 start confirm", "确认打开 RViz2 可视化？", true);
     $("topology-preview").onclick = () => runCommand(`/topology preview ${$("topology-name").value.trim()}`);
     $("topology-add").onclick = () => runCommand(`/topology add ${$("topology-name").value.trim()} confirm`, "确认写入当前位置为拓扑点？", true);
+    $("topology-refresh").onclick = refreshTopology;
+    $("topology-registry-add").onclick = async () => {
+      const nodeId = $("topology-name").value.trim();
+      if (!nodeId) return;
+      if (!window.confirm("确认把当前 SLAM 位姿登记/更新到语义拓扑？默认仍需站立验证后才允许真实导航。")) return;
+      await topologyAction("add_current", nodeId, {
+        name: $("topology-display-name").value.trim(),
+        aliases: $("topology-aliases").value.trim()
+      });
+    };
+    $("topology-list").onclick = async (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      const nodeId = button.dataset.node || "";
+      const action = button.dataset.action || "";
+      if (action === "preview") {
+        $("topology-name").value = nodeId;
+        runCommand(`/topology preview ${nodeId}`);
+        return;
+      }
+      if (action === "current") {
+        $("topology-name").value = nodeId;
+        runCommand(`/current ${nodeId}`);
+        return;
+      }
+      if (action === "disable") {
+        if (!window.confirm(`确认禁用 ${nodeId}？它会从 LLM/路由匹配中跳过，但坐标仍保留。`)) return;
+        await topologyAction("disable", nodeId);
+        return;
+      }
+      if (action === "restore") {
+        if (!window.confirm(`确认恢复 ${nodeId}？恢复后仍受 needs_calibration/standing verification 安全门约束。`)) return;
+        await topologyAction("restore", nodeId);
+      }
+    };
     $("send-llm").onclick = () => {
       const line = $("llm-input").value.trim();
       if (!line) return;
@@ -530,6 +655,7 @@
       runCommand(line, confirmText, Boolean(confirmText));
     };
     $("refresh-interval").onchange = resetTimer;
+    refreshTopology();
     refreshStatus();
     resetTimer();
   </script>
