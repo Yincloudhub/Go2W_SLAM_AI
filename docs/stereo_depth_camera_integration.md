@@ -161,6 +161,22 @@ or, as a wrapper:
 bash scripts/start_go2w_deepyolo_bridge.sh
 ```
 
+The original DeepYOLO example opens OpenCV GUI windows and can crash in SSH
+headless sessions with a GTK initialization error. For robot-side service or
+short detection checks, generate a headless binary without modifying the vendor
+source:
+
+```bash
+cd ~/Go2W_SLAM_AI
+bash scripts/build_deepyolo_headless.sh
+GO2W_DEEPYOLO_MAX_FRAMES=30 \
+  /home/unitree/librealsense/examples/DeepYolo_test/go2w_headless/build/yolo_test_realsense_headless
+python3 scripts/deepyolo_semantic_bridge.py \
+  --input-dir /home/unitree/librealsense/examples/DeepYolo_test/output \
+  --output artifacts/vision_semantic_summary.json \
+  --pretty
+```
+
 The bridge reads the latest `semantic_stream_*.jsonl` packet and writes only a
 bounded summary:
 

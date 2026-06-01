@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SRC_DIR="${GO2W_DEEPYOLO_SRC_DIR:-/home/unitree/librealsense/examples/DeepYolo_test}"
+WORK_DIR="${GO2W_DEEPYOLO_HEADLESS_DIR:-${SRC_DIR}/go2w_headless}"
+ENGINE_PATH="${GO2W_DEEPYOLO_ENGINE:-${SRC_DIR}/yolo11m.engine}"
+OUTPUT_DIR="${GO2W_DEEPYOLO_OUTPUT_DIR:-${SRC_DIR}/output}"
+
+if [ ! -f "${SRC_DIR}/main.cpp" ]; then
+  echo "DeepYOLO source not found: ${SRC_DIR}/main.cpp" >&2
+  exit 2
+fi
+if [ ! -f "${ENGINE_PATH}" ]; then
+  echo "DeepYOLO TensorRT engine not found: ${ENGINE_PATH}" >&2
+  exit 2
+fi
+
+mkdir -p "${WORK_DIR}" "${OUTPUT_DIR}"
+
+SRC_DIR="${SRC_DIR}" WORK_DIR="${WORK_DIR}" ENGINE_PATH="${ENGINE_PATH}" OUTPUT_DIR="${OUTPUT_DIR}" python3 - <<'PY'
+import os
+from pathlib import Path
+
+src_dir = Path(os.environ["SRC_DIR"])
+work_dir = Path(os.environ["WORK_DIR"])
+engine_path = os.environ["ENGINE_PATH"]
+output_dir = os.environ["OUTPUT_DIR"]
+
+text = (src_dir / "main.cpp").read_text(encoding="utf-8", errors="replace")
+if "#include <cstdlib>" not in text:
+    text = text.replace("#include <ctime>\n", "#include <ctime>\n#include <cstdlib>\n", 1)
+
+old_engine = 'std::string engine_path = "../yolo11m.engine";'
+new_engine = (
+    'const char* engine_env = std::getenv("GO2W_DEEPYOLO_ENGINE");\n'
+    f'    std::string engine_path = engine_env ? engine_env : "{engine_path}";'
+)
+text = text.replace(old_engine, new_engine, 1)
+
+old_output = 'std::string semantic_path = "../output/semantic_stream_" + session_id + ".jsonl";'
+new_output = (
+    'const char* output_env = std::getenv("GO2W_DEEPYOLO_OUTPUT_DIR");\n'
+    f'    std::string semantic_dir = output_env ? output_env : "{output_dir}";\n'
+    '    std::string semantic_path = semantic_dir + "/semantic_stream_" + session_id + ".jsonl";'
+)
+text = text.replace(old_output, new_output, 1)
+
+for needle in ("cv::namedWindow", "cv::resizeWindow"):
+    lines = []
+    for line in text.splitlines():
+        if needle in line:
+            lines.append("// GO2W headless: " + line)
+        else:
+            lines.append(line)
+    text = "\n".join(lines) + "\n"
+
+start = text.find('        cv::imshow("YOLO RGB", frame);')
+end_marker = "        int key = cv::waitKey(1);\n        if (key == 27 || key == 'q' || key == 'Q') {\n            is_running = false;\n        }"
+end = text.find(end_marker, start)
+if start < 0 or end < 0:
+    raise SystemExit("failed to locate DeepYOLO GUI block for headless patch")
+replacement = '''        const char* max_frames_env = std::getenv("GO2W_DEEPYOLO_MAX_FRAMES");
+        if (max_frames_env) {
+            int max_frames = std::atoi(max_frames_env);
+            if (max_frames > 0 && perf_frame_count >= max_frames) {
+                is_running = false;
+            }
+        }'''
+text = text[:start] + replacement + text[end + len(end_marker):]
+
+(work_dir / "main_headless.cpp").write_text(text, encoding="utf-8")
+(work_dir / "CMakeLists.txt").write_text(f"""cmake_minimum_required(VERSION 3.10)
+project(Go2YoloRealsenseHeadless)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+find_package(OpenCV REQUIRED)
+find_package(CUDA REQUIRED)
+find_package(Threads REQUIRED)
+find_package(realsense2 REQUIRED)
+
+include_directories(
+    ${{OpenCV_INCLUDE_DIRS}}
+    ${{CUDA_INCLUDE_DIRS}}
+    /usr/include/aarch64-linux-gnu
+    /usr/local/cuda/include
+    {src_dir.parent.parent}/common
+    {src_dir.parent.parent}/third-party/imgui
+    {src_dir}
+)
+
+link_directories(
+    /usr/lib/aarch64-linux-gnu
+    /usr/local/cuda/lib64
+)
+
+add_executable(yolo_test_realsense_headless main_headless.cpp)
+target_compile_options(yolo_test_realsense_headless PRIVATE -O3 -Wall -Wextra)
+target_link_libraries(yolo_test_realsense_headless
+    PRIVATE
+    ${{OpenCV_LIBS}}
+    ${{CUDA_LIBRARIES}}
+    ${{realsense2_LIBRARY}}
+    nvinfer
+    cudart
+    Threads::Threads
+)
+""", encoding="utf-8")
+print(work_dir)
+PY
+
+cmake -S "${WORK_DIR}" -B "${WORK_DIR}/build"
+cmake --build "${WORK_DIR}/build" -j2
+echo "headless_binary=${WORK_DIR}/build/yolo_test_realsense_headless"
