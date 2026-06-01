@@ -200,6 +200,8 @@ The generated headless detector is paced for residency by default:
 GO2W_DEEPYOLO_INPUT_FPS=15
 GO2W_DEEPYOLO_CAPTURE_EVERY_N=3
 GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS=200
+GO2W_DEEPYOLO_HEARTBEAT_MS=1000
+GO2W_DEEPYOLO_MAX_JSONL_BYTES=16777216
 ```
 
 This keeps the compatible camera profile at 15 FPS, performs alignment and
@@ -209,6 +211,11 @@ alone is not sufficient because the original prototype inference loop may
 process the same shared latest frame repeatedly. Profiles below 15 FPS must be
 validated on the actual D435I stream combination before use. LiDAR remains the
 high-rate safety source; DeepYOLO supplies lower-rate semantic context.
+
+The headless producer writes scene changes immediately and emits a compact
+heartbeat at 1 Hz. This keeps source freshness observable during a stable scene
+without raising UI refresh rate. Active JSONL streams rotate at 16 MB; sidecar
+cleanup retains only the most recent four streams.
 
 2026-06-01 prone-safe residency benchmark on the current D435I:
 

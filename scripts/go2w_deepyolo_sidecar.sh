@@ -21,6 +21,8 @@ RETAIN_STREAMS="${GO2W_DEEPYOLO_RETAIN_STREAMS:-4}"
 INPUT_FPS="${GO2W_DEEPYOLO_INPUT_FPS:-15}"
 CAPTURE_EVERY_N="${GO2W_DEEPYOLO_CAPTURE_EVERY_N:-3}"
 INFERENCE_INTERVAL_MS="${GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS:-200}"
+HEARTBEAT_MS="${GO2W_DEEPYOLO_HEARTBEAT_MS:-1000}"
+MAX_JSONL_BYTES="${GO2W_DEEPYOLO_MAX_JSONL_BYTES:-16777216}"
 STARTUP_WAIT_S="${GO2W_DEEPYOLO_STARTUP_WAIT_S:-8}"
 
 mkdir -p "${SERVICE_DIR}" "${STREAM_DIR}"
@@ -115,6 +117,8 @@ print_status() {
     echo "input_fps=${INPUT_FPS}"
     echo "capture_every_n=${CAPTURE_EVERY_N}"
     echo "inference_interval_ms=${INFERENCE_INTERVAL_MS}"
+    echo "heartbeat_ms=${HEARTBEAT_MS}"
+    echo "max_jsonl_bytes=${MAX_JSONL_BYTES}"
   fi
   if [[ -f "${SUMMARY_PATH}" ]]; then
     SUMMARY_PATH="${SUMMARY_PATH}" python3 - <<'PY'
@@ -147,13 +151,15 @@ case "${1:-status}" in
     prune_streams
     : > "${DETECTOR_LOG}"
     : > "${BRIDGE_LOG}"
-    printf 'input_fps=%s\ncapture_every_n=%s\ninference_interval_ms=%s\n' \
-      "${INPUT_FPS}" "${CAPTURE_EVERY_N}" "${INFERENCE_INTERVAL_MS}" > "${CONFIG_FILE}"
+    printf 'input_fps=%s\ncapture_every_n=%s\ninference_interval_ms=%s\nheartbeat_ms=%s\nmax_jsonl_bytes=%s\n' \
+      "${INPUT_FPS}" "${CAPTURE_EVERY_N}" "${INFERENCE_INTERVAL_MS}" "${HEARTBEAT_MS}" "${MAX_JSONL_BYTES}" > "${CONFIG_FILE}"
     nohup nice -n "${NICE_LEVEL}" env \
       GO2W_DEEPYOLO_OUTPUT_DIR="${STREAM_DIR}" \
       GO2W_DEEPYOLO_INPUT_FPS="${INPUT_FPS}" \
       GO2W_DEEPYOLO_CAPTURE_EVERY_N="${CAPTURE_EVERY_N}" \
       GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS="${INFERENCE_INTERVAL_MS}" \
+      GO2W_DEEPYOLO_HEARTBEAT_MS="${HEARTBEAT_MS}" \
+      GO2W_DEEPYOLO_MAX_JSONL_BYTES="${MAX_JSONL_BYTES}" \
       "${HEADLESS_BIN}" > "${DETECTOR_LOG}" 2>&1 < /dev/null &
     echo "$!" > "${DETECTOR_PID_FILE}"
     nohup nice -n "${NICE_LEVEL}" env \

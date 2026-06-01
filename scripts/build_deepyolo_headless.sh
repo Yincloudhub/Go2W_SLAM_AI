@@ -81,6 +81,8 @@ new_engine = (
     'const char* engine_env = std::getenv("GO2W_DEEPYOLO_ENGINE");\n'
     f'    std::string engine_path = engine_env ? engine_env : "{engine_path}";'
 )
+if old_engine not in text:
+    raise SystemExit("failed to locate DeepYOLO TensorRT engine path")
 text = text.replace(old_engine, new_engine, 1)
 
 old_output = 'std::string semantic_path = "../output/semantic_stream_" + session_id + ".jsonl";'
@@ -89,7 +91,57 @@ new_output = (
     f'    std::string semantic_dir = output_env ? output_env : "{output_dir}";\n'
     '    std::string semantic_path = semantic_dir + "/semantic_stream_" + session_id + ".jsonl";'
 )
+if old_output not in text:
+    raise SystemExit("failed to locate DeepYOLO semantic JSONL path")
 text = text.replace(old_output, new_output, 1)
+semantic_open_marker = """    std::ofstream semantic_out(semantic_path, std::ios::out);
+
+    if (!semantic_out.is_open()) {"""
+semantic_open_replacement = """    std::ofstream semantic_out(semantic_path, std::ios::out);
+    const char* heartbeat_env = std::getenv("GO2W_DEEPYOLO_HEARTBEAT_MS");
+    uint64_t heartbeat_ms = heartbeat_env ? std::strtoull(heartbeat_env, nullptr, 10) : 1000;
+    const char* max_jsonl_bytes_env = std::getenv("GO2W_DEEPYOLO_MAX_JSONL_BYTES");
+    uint64_t max_jsonl_bytes = max_jsonl_bytes_env ? std::strtoull(max_jsonl_bytes_env, nullptr, 10) : 16777216;
+    uint64_t last_semantic_write_ms = 0;
+    uint64_t semantic_file_index = 0;
+    std::cout << "[GO2W] heartbeat_ms=" << heartbeat_ms
+              << " max_jsonl_bytes=" << max_jsonl_bytes << std::endl;
+
+    if (!semantic_out.is_open()) {"""
+if semantic_open_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO semantic JSONL open")
+text = text.replace(semantic_open_marker, semantic_open_replacement, 1)
+semantic_write_marker = """        if (semantic_out.is_open()) {
+            if (shouldWriteEventPacket(packet, has_prev_packet, prev_packet)) {
+            semantic_out << packetToJson(packet) << std::endl;
+            prev_packet = packet;
+            has_prev_packet = true;
+        }
+}"""
+semantic_write_replacement = """        if (semantic_out.is_open()) {
+            uint64_t semantic_write_ts = nowMs();
+            bool heartbeat_due = heartbeat_ms > 0 && semantic_write_ts - last_semantic_write_ms >= heartbeat_ms;
+            if (shouldWriteEventPacket(packet, has_prev_packet, prev_packet) || heartbeat_due) {
+                const std::streamoff semantic_bytes = static_cast<std::streamoff>(semantic_out.tellp());
+                if (max_jsonl_bytes > 0 && semantic_bytes >= 0
+                    && static_cast<uint64_t>(semantic_bytes) >= max_jsonl_bytes) {
+                    semantic_out.close();
+                    semantic_file_index++;
+                    semantic_path = semantic_dir + "/semantic_stream_" + session_id + "_"
+                        + std::to_string(semantic_file_index) + ".jsonl";
+                    semantic_out.open(semantic_path, std::ios::out);
+                }
+                if (semantic_out.is_open()) {
+                    semantic_out << packetToJson(packet) << std::endl;
+                    last_semantic_write_ms = semantic_write_ts;
+                    prev_packet = packet;
+                    has_prev_packet = true;
+                }
+            }
+        }"""
+if semantic_write_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO semantic JSONL write")
+text = text.replace(semantic_write_marker, semantic_write_replacement, 1)
 
 inference_marker = """    // ----------------------------------------
     // 3. 推理主循环
