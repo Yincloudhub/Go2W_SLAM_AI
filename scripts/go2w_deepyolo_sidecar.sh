@@ -16,12 +16,35 @@ BRIDGE_PID_FILE="${SERVICE_DIR}/bridge.pid"
 DETECTOR_LOG="${SERVICE_DIR}/detector.log"
 BRIDGE_LOG="${SERVICE_DIR}/bridge.log"
 CONFIG_FILE="${SERVICE_DIR}/last_start_config.env"
-NICE_LEVEL="${GO2W_DEEPYOLO_NICE_LEVEL:-5}"
+PROFILE="${GO2W_DEEPYOLO_PROFILE:-resident}"
+case "${PROFILE}" in
+  resident)
+    DEFAULT_NICE_LEVEL=8
+    DEFAULT_CAPTURE_EVERY_N=5
+    DEFAULT_INFERENCE_INTERVAL_MS=333
+    ;;
+  balanced)
+    DEFAULT_NICE_LEVEL=5
+    DEFAULT_CAPTURE_EVERY_N=3
+    DEFAULT_INFERENCE_INTERVAL_MS=200
+    ;;
+  diagnostic)
+    DEFAULT_NICE_LEVEL=0
+    DEFAULT_CAPTURE_EVERY_N=1
+    DEFAULT_INFERENCE_INTERVAL_MS=0
+    ;;
+  *)
+    echo "invalid GO2W_DEEPYOLO_PROFILE=${PROFILE}; expected resident, balanced, or diagnostic" >&2
+    exit 2
+    ;;
+esac
+
+NICE_LEVEL="${GO2W_DEEPYOLO_NICE_LEVEL:-${DEFAULT_NICE_LEVEL}}"
 RETAIN_STREAMS="${GO2W_DEEPYOLO_RETAIN_STREAMS:-4}"
 INPUT_FPS="${GO2W_DEEPYOLO_INPUT_FPS:-15}"
 IR_MODE="${GO2W_DEEPYOLO_IR_MODE:-0}"
-CAPTURE_EVERY_N="${GO2W_DEEPYOLO_CAPTURE_EVERY_N:-3}"
-INFERENCE_INTERVAL_MS="${GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS:-200}"
+CAPTURE_EVERY_N="${GO2W_DEEPYOLO_CAPTURE_EVERY_N:-${DEFAULT_CAPTURE_EVERY_N}}"
+INFERENCE_INTERVAL_MS="${GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS:-${DEFAULT_INFERENCE_INTERVAL_MS}}"
 HEARTBEAT_MS="${GO2W_DEEPYOLO_HEARTBEAT_MS:-1000}"
 MAX_JSONL_BYTES="${GO2W_DEEPYOLO_MAX_JSONL_BYTES:-16777216}"
 MAX_JSONL_FILES="${GO2W_DEEPYOLO_MAX_JSONL_FILES:-4}"
@@ -116,6 +139,8 @@ print_status() {
   if [[ -f "${CONFIG_FILE}" ]]; then
     cat "${CONFIG_FILE}"
   else
+    echo "profile=${PROFILE}"
+    echo "nice_level=${NICE_LEVEL}"
     echo "input_fps=${INPUT_FPS}"
     echo "ir_mode=${IR_MODE}"
     echo "capture_every_n=${CAPTURE_EVERY_N}"
@@ -155,8 +180,8 @@ case "${1:-status}" in
     prune_streams
     : > "${DETECTOR_LOG}"
     : > "${BRIDGE_LOG}"
-    printf 'input_fps=%s\nir_mode=%s\ncapture_every_n=%s\ninference_interval_ms=%s\nheartbeat_ms=%s\nmax_jsonl_bytes=%s\nmax_jsonl_files=%s\n' \
-      "${INPUT_FPS}" "${IR_MODE}" "${CAPTURE_EVERY_N}" "${INFERENCE_INTERVAL_MS}" "${HEARTBEAT_MS}" "${MAX_JSONL_BYTES}" "${MAX_JSONL_FILES}" > "${CONFIG_FILE}"
+    printf 'profile=%s\nnice_level=%s\ninput_fps=%s\nir_mode=%s\ncapture_every_n=%s\ninference_interval_ms=%s\nheartbeat_ms=%s\nmax_jsonl_bytes=%s\nmax_jsonl_files=%s\n' \
+      "${PROFILE}" "${NICE_LEVEL}" "${INPUT_FPS}" "${IR_MODE}" "${CAPTURE_EVERY_N}" "${INFERENCE_INTERVAL_MS}" "${HEARTBEAT_MS}" "${MAX_JSONL_BYTES}" "${MAX_JSONL_FILES}" > "${CONFIG_FILE}"
     nohup nice -n "${NICE_LEVEL}" env \
       GO2W_DEEPYOLO_OUTPUT_DIR="${STREAM_DIR}" \
       GO2W_DEEPYOLO_INPUT_FPS="${INPUT_FPS}" \

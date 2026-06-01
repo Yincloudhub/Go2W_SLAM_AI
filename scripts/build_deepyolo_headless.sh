@@ -62,8 +62,8 @@ capture_loop_marker = """    rs2::align align_to_color(RS2_STREAM_COLOR);
     std::cout << "[RealSense] RGBD";"""
 capture_loop_replacement = """    rs2::align align_to_color(RS2_STREAM_COLOR);
     const char* capture_every_n_env = std::getenv("GO2W_DEEPYOLO_CAPTURE_EVERY_N");
-    int capture_every_n = capture_every_n_env ? std::atoi(capture_every_n_env) : 3;
-    if (capture_every_n <= 0) capture_every_n = 3;
+    int capture_every_n = capture_every_n_env ? std::atoi(capture_every_n_env) : 5;
+    if (capture_every_n <= 0) capture_every_n = 5;
     uint64_t capture_frame_count = 0;
 
     std::cout << "[GO2W] capture_every_n=" << capture_every_n << std::endl;
@@ -185,8 +185,8 @@ inference_replacement = """    // ----------------------------------------
     // 3. 推理主循环
     // ----------------------------------------
     const char* inference_interval_env = std::getenv("GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS");
-    int inference_interval_ms = inference_interval_env ? std::atoi(inference_interval_env) : 200;
-    if (inference_interval_ms < 0) inference_interval_ms = 200;
+    int inference_interval_ms = inference_interval_env ? std::atoi(inference_interval_env) : 333;
+    if (inference_interval_ms < 0) inference_interval_ms = 333;
     auto next_inference_time = std::chrono::steady_clock::now();
     std::cout << "[GO2W] inference_interval_ms=" << inference_interval_ms << std::endl;
     uint64_t last_inference_sensor_frame_id = 0;

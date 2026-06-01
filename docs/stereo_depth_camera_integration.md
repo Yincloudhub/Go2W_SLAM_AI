@@ -194,13 +194,15 @@ directory and old streams are pruned to a small retained set. It remains
 optional: UI, SLAM startup, localization, and LiDAR-only navigation do not wait
 for it.
 
-The generated headless detector is paced for residency by default:
+The generated headless detector and sidecar `resident` profile are paced for
+long-term residency by default:
 
 ```text
+GO2W_DEEPYOLO_PROFILE=resident
 GO2W_DEEPYOLO_INPUT_FPS=15
 GO2W_DEEPYOLO_IR_MODE=0
-GO2W_DEEPYOLO_CAPTURE_EVERY_N=3
-GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS=200
+GO2W_DEEPYOLO_CAPTURE_EVERY_N=5
+GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS=333
 GO2W_DEEPYOLO_HEARTBEAT_MS=1000
 GO2W_DEEPYOLO_MAX_JSONL_BYTES=16777216
 GO2W_DEEPYOLO_MAX_JSONL_FILES=4
@@ -208,7 +210,7 @@ GO2W_DEEPYOLO_MAX_JSONL_FILES=4
 
 This keeps the compatible camera profile at 15 FPS, disables IR streams for the
 normal headless semantic path, performs alignment and resize work for every
-third capture, and caps semantic inference at about 5 Hz. The inference loop
+fifth capture, and caps semantic inference at about 3 Hz. The inference loop
 also rejects a repeated latest-frame id so tracking persistence and heartbeat
 packets advance only from newly prepared camera frames.
 All values can be overridden before `sidecar.sh start`. Lowering camera FPS
@@ -229,8 +231,21 @@ lifecycle boundaries.
 | --- | ---: | ---: | ---: | --- |
 | Original headless full-rate prototype | about 93.7% | about 1.1% | about 16.4% | Works, but too expensive for default residency. |
 | 15 FPS input, 5 Hz inference cap | about 42.8% | about 0.6% | about 16.4% | CPU improved; capture preparation still expensive. |
-| 15 FPS input, prepare every third capture, 5 Hz inference cap | about 28.1% after warm-up | about 0.6% | about 16.4% | Current resident default. |
+| 15 FPS input, prepare every third capture, 5 Hz inference cap | about 28.1% after warm-up | about 0.6% | about 16.4% | Preserved as the `balanced` profile. |
 | 6 FPS input | n/a | n/a | n/a | Rejected by the current RGBD+IR D435I stream profile. |
+
+The sidecar exposes explicit profiles so the long-term resident mode can remain
+lightweight while a demo can temporarily opt into faster semantic refresh:
+
+```text
+resident   -> prepare every fifth capture, about 3 Hz inference, nice 8
+balanced   -> prepare every third capture, about 5 Hz inference, nice 5
+diagnostic -> prepare every capture, unpaced inference, nice 0
+```
+
+The old 5 Hz benchmark remains the `balanced` profile. Measure the current
+`resident` profile with `scripts/snapshot_go2w_runtime_resources.sh` after
+deploying it on the robot.
 
 Frame-rate controls reduce CPU work but do not release the loaded TensorRT
 engine memory. If memory becomes the next bottleneck, benchmark a smaller

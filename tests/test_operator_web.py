@@ -25,6 +25,8 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("GO2W 多模态自主机器狗", web.INDEX_HTML)
         self.assertIn("智能巡检交互屏", web.INDEX_HTML)
         self.assertIn("机器狗回复", web.INDEX_HTML)
+        self.assertIn("自适应：任务 2 秒 / 待机 5 秒", web.INDEX_HTML)
+        self.assertIn('requestedMs === -1 ? (active.has(latestPhase) ? 2000 : 5000)', web.INDEX_HTML)
         self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
 
     def test_parse_panel_summary(self):

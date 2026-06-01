@@ -281,9 +281,10 @@
         <div class="toolbar" style="margin-top:8px">
           <button id="send-llm" class="primary">发送任务</button>
           <select id="refresh-interval" style="width:150px">
+            <option value="-1" selected>自适应：任务 2 秒 / 待机 5 秒</option>
             <option value="0">暂停自动刷新</option>
             <option value="1000">每 1 秒刷新</option>
-            <option value="2000" selected>每 2 秒刷新</option>
+            <option value="2000">每 2 秒刷新</option>
             <option value="5000">每 5 秒刷新</option>
           </select>
         </div>
@@ -300,6 +301,7 @@
     const $ = (id) => document.getElementById(id);
     let appState = { execute_enabled: false, weak_link_mode: false, current_node: "initial_point", history: [] };
     let timer = null;
+    let latestPhase = "idle";
 
     const zh = {
       idle: "待命", queued: "已排队", planning: "规划中", navigating: "前往目标", arrived: "已到达",
@@ -373,6 +375,11 @@
     }
     function updateMetrics(summary) {
       const s = summary || {};
+      const nextPhase = s.phase || "idle";
+      if (nextPhase !== latestPhase) {
+        latestPhase = nextPhase;
+        if ($("refresh-interval").value === "-1") resetTimer();
+      }
       $("m-phase").textContent = z(s.phase || "unknown");
       $("m-target").textContent = s.target || "暂无";
       $("m-loc").textContent = yes(s.loc) ? "定位正常" : "未定位";
@@ -477,7 +484,9 @@
     }
     function resetTimer() {
       if (timer) clearInterval(timer);
-      const ms = Number($("refresh-interval").value || 0);
+      const requestedMs = Number($("refresh-interval").value || 0);
+      const active = new Set(["queued", "planning", "navigating"]);
+      const ms = requestedMs === -1 ? (active.has(latestPhase) ? 2000 : 5000) : requestedMs;
       if (ms > 0) timer = setInterval(refreshStatus, ms);
     }
 
