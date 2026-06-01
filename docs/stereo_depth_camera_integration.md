@@ -198,6 +198,7 @@ The generated headless detector is paced for residency by default:
 
 ```text
 GO2W_DEEPYOLO_INPUT_FPS=15
+GO2W_DEEPYOLO_IR_MODE=0
 GO2W_DEEPYOLO_CAPTURE_EVERY_N=3
 GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS=200
 GO2W_DEEPYOLO_HEARTBEAT_MS=1000
@@ -205,8 +206,11 @@ GO2W_DEEPYOLO_MAX_JSONL_BYTES=16777216
 GO2W_DEEPYOLO_MAX_JSONL_FILES=4
 ```
 
-This keeps the compatible camera profile at 15 FPS, performs alignment and
-resize work for every third capture, and caps semantic inference at about 5 Hz.
+This keeps the compatible camera profile at 15 FPS, disables IR streams for the
+normal headless semantic path, performs alignment and resize work for every
+third capture, and caps semantic inference at about 5 Hz. The inference loop
+also rejects a repeated latest-frame id so tracking persistence and heartbeat
+packets advance only from newly prepared camera frames.
 All values can be overridden before `sidecar.sh start`. Lowering camera FPS
 alone is not sufficient because the original prototype inference loop may
 process the same shared latest frame repeatedly. Profiles below 15 FPS must be
@@ -231,6 +235,9 @@ lifecycle boundaries.
 Frame-rate controls reduce CPU work but do not release the loaded TensorRT
 engine memory. If memory becomes the next bottleneck, benchmark a smaller
 TensorRT engine separately rather than weakening SLAM or LiDAR processing.
+
+Set `GO2W_DEEPYOLO_IR_MODE=2` only for an explicit IR diagnostic session. IR
+frames are not required for the resident RGBD semantic summary.
 
 The bridge reads the latest `semantic_stream_*.jsonl` packet and writes only a
 bounded summary:

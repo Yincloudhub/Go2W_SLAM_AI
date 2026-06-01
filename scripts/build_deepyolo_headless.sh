@@ -35,8 +35,15 @@ capture_marker = """    for (int mode : {2, 1, 0}) {
 capture_replacement = """    const char* input_fps_env = std::getenv("GO2W_DEEPYOLO_INPUT_FPS");
     int input_fps = input_fps_env ? std::atoi(input_fps_env) : 15;
     if (input_fps <= 0) input_fps = 15;
+    const char* ir_mode_env = std::getenv("GO2W_DEEPYOLO_IR_MODE");
+    int requested_ir_mode = ir_mode_env ? std::atoi(ir_mode_env) : 0;
+    if (requested_ir_mode < 0 || requested_ir_mode > 2) requested_ir_mode = 0;
+    std::vector<int> ir_modes = requested_ir_mode >= 2
+        ? std::vector<int>{2, 1, 0}
+        : (requested_ir_mode == 1 ? std::vector<int>{1, 0} : std::vector<int>{0});
+    std::cout << "[GO2W] requested_ir_mode=" << requested_ir_mode << std::endl;
 
-    for (int mode : {2, 1, 0}) {
+    for (int mode : ir_modes) {
         rs2::config cfg;"""
 if capture_marker not in text:
     raise SystemExit("failed to locate DeepYOLO RealSense capture config")
@@ -75,6 +82,24 @@ capture_wait_replacement = """            raw_frames = pipe.wait_for_frames();
 if capture_wait_marker not in text:
     raise SystemExit("failed to locate DeepYOLO capture frame wait")
 text = text.replace(capture_wait_marker, capture_wait_replacement, 1)
+shared_frame_marker = """    uint64_t timestamp_ms = 0;
+
+    bool valid_color = false;"""
+shared_frame_replacement = """    uint64_t timestamp_ms = 0;
+    uint64_t frame_id = 0;
+
+    bool valid_color = false;"""
+if shared_frame_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO shared sensor timestamp")
+text = text.replace(shared_frame_marker, shared_frame_replacement, 1)
+capture_publish_marker = """            shared_sensor.timestamp_ms = nowMs();
+            shared_sensor.valid_color = true;"""
+capture_publish_replacement = """            shared_sensor.timestamp_ms = nowMs();
+            shared_sensor.frame_id = capture_frame_count;
+            shared_sensor.valid_color = true;"""
+if capture_publish_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO shared sensor publish")
+text = text.replace(capture_publish_marker, capture_publish_replacement, 1)
 
 old_engine = 'std::string engine_path = "../yolo11m.engine";'
 new_engine = (
@@ -164,6 +189,7 @@ inference_replacement = """    // ----------------------------------------
     if (inference_interval_ms < 0) inference_interval_ms = 200;
     auto next_inference_time = std::chrono::steady_clock::now();
     std::cout << "[GO2W] inference_interval_ms=" << inference_interval_ms << std::endl;
+    uint64_t last_inference_sensor_frame_id = 0;
 
     while (is_running) {
         if (inference_interval_ms > 0) {
@@ -176,6 +202,51 @@ inference_replacement = """    // ----------------------------------------
 if inference_marker not in text:
     raise SystemExit("failed to locate DeepYOLO inference loop")
 text = text.replace(inference_marker, inference_replacement, 1)
+inference_copy_marker = """            if (!shared_sensor.valid_color || shared_sensor.color_bgr.empty()) continue;
+
+            shared_sensor.color_bgr.copyTo(frame);"""
+inference_copy_replacement = """            if (!shared_sensor.valid_color || shared_sensor.color_bgr.empty()) continue;
+            if (shared_sensor.frame_id == last_inference_sensor_frame_id) continue;
+            last_inference_sensor_frame_id = shared_sensor.frame_id;
+
+            shared_sensor.color_bgr.copyTo(frame);"""
+if inference_copy_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO inference frame copy")
+text = text.replace(inference_copy_marker, inference_copy_replacement, 1)
+perf_marker = """    int perf_frame_count = 0;
+    double total_latency = 0.0;
+    double total_infer_time = 0.0;"""
+perf_replacement = """    int perf_frame_count = 0;
+    double total_latency = 0.0;
+    double total_infer_time = 0.0;
+    auto perf_window_start = std::chrono::steady_clock::now();"""
+if perf_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO performance counters")
+text = text.replace(perf_marker, perf_replacement, 1)
+fps_marker = """            double current_fps = 1000.0 / avg_latency;
+
+            std::cout << "\\r[INFO] " """
+fps_replacement = """            auto perf_window_end = std::chrono::steady_clock::now();
+            std::chrono::duration<double> perf_window_duration = perf_window_end - perf_window_start;
+            double semantic_fps = perf_window_duration.count() > 0.0
+                ? 30.0 / perf_window_duration.count()
+                : 0.0;
+
+            std::cout << "\\r[INFO] " """
+if fps_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO performance FPS")
+text = text.replace(fps_marker, fps_replacement, 1)
+if '<< current_fps << " FPS | "' not in text:
+    raise SystemExit("failed to locate DeepYOLO performance FPS output")
+text = text.replace('<< current_fps << " FPS | "', '<< semantic_fps << " semantic FPS | "', 1)
+perf_reset_marker = """            total_latency = 0.0;
+            total_infer_time = 0.0;"""
+perf_reset_replacement = """            total_latency = 0.0;
+            total_infer_time = 0.0;
+            perf_window_start = perf_window_end;"""
+if perf_reset_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO performance reset")
+text = text.replace(perf_reset_marker, perf_reset_replacement, 1)
 
 for needle in ("cv::namedWindow", "cv::resizeWindow"):
     lines = []
