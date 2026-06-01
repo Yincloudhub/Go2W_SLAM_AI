@@ -337,14 +337,17 @@
     function setScreen(summary, semantic) {
       const s = summary || {};
       const semanticData = semantic && semantic.data ? semantic.data : {};
+      const semanticStatus = String(semanticData.source_status || "");
+      const semanticOffline = !semantic || !semantic.available || semantic.stale_by_age || semanticData.stale ||
+        ["stale", "unavailable", "clock_skew"].includes(semanticStatus);
       const locOk = yes(s.loc);
       const safetyOk = (s.safety || "") === "ok";
       const phase = s.phase || "idle";
       const target = s.target || "暂无目标";
-      const dominant = z(semanticData.dominant_class || "none");
-      const action = z(semanticData.effective_action || "ignored");
+      const dominant = semanticOffline ? "视觉离线" : z(semanticData.dominant_class || "none");
+      const action = semanticOffline ? "仅使用雷达与 SLAM" : z(semanticData.effective_action || "ignored");
       $("screen-target").textContent = target;
-      $("screen-vision").textContent = `${dominant} / ${semanticData.object_count ?? 0} 个目标`;
+      $("screen-vision").textContent = semanticOffline ? "视觉数据过期，不参与决策" : `${dominant} / ${semanticData.object_count ?? 0} 个目标`;
       $("screen-action").textContent = action;
       if (!locOk) {
         $("screen-reply").textContent = "定位尚未就绪，请先检查 SLAM";
@@ -368,7 +371,9 @@
         $("screen-health").className = "pill ok";
       } else {
         $("screen-reply").textContent = "系统在线，等待新的巡检任务";
-        $("screen-detail").textContent = `当前位于 ${target}。视觉理解：${dominant}，策略：${action}。`;
+        $("screen-detail").textContent = semanticOffline
+          ? `当前位于 ${target}。视觉侧车离线，系统保持雷达与 SLAM 闭环。`
+          : `当前位于 ${target}。视觉理解：${dominant}，策略：${action}。`;
         $("screen-health").textContent = "系统在线";
         $("screen-health").className = "pill ok";
       }
@@ -429,6 +434,11 @@
       const data = semantic.data;
       const age = semantic.age_ms == null ? "未知" : `${Math.round(semantic.age_ms)}ms`;
       const stale = semantic.stale_by_age || data.stale;
+      if (stale || ["stale", "unavailable", "clock_skew"].includes(String(data.source_status || ""))) {
+        $("m-semantic-scene").textContent = `视觉离线 / ${age} 已过期`;
+        $("m-semantic-action").textContent = "仅观察，不参与决策";
+        return;
+      }
       const recommended = data.recommended_action || "normal";
       const effective = data.effective_action || (stale ? "ignored" : recommended);
       $("m-semantic-scene").textContent = `${z(data.source_status)} / ${z(data.dominant_class || "none")} / ${data.object_count ?? 0} 个目标`;

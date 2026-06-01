@@ -108,6 +108,9 @@ GO2W_DEEPYOLO_RENDER_OVERLAY=1 \
 如果 UI 显示视觉语义 `stale/ignored`，先运行 `health`；确认 stale 后再用
 `restart-if-stale` 恢复。该命令只重启 DeepYOLO 和语义桥接器，不会触发 SLAM、
 重定位或底盘运动。
+如果 `rs-enumerate-devices -s` 没有枚举到 D435I，或系统没有 `/dev/video*`，
+不要循环重启侧车；先检查相机 USB、供电和线缆。此时 UI 会把视觉显示为离线，
+主链路仍按 XT16 LiDAR + SLAM 运行。
 
 ## Dry-run 与真实执行
 
