@@ -28,10 +28,12 @@ if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
   fi
 fi
 
+set +u
 source /opt/ros/foxy/setup.bash >/dev/null 2>&1 || true
 if [[ -f "${REPO_ROOT}/install/setup.bash" ]]; then
   source "${REPO_ROOT}/install/setup.bash" >/dev/null 2>&1 || true
 fi
+set -u
 
 if ! command -v "${RVIZ2_BIN}" >/dev/null 2>&1; then
   echo "rviz2 executable not found: ${RVIZ2_BIN}" >&2
