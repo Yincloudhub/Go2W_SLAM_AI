@@ -17,6 +17,8 @@ DETECTOR_LOG="${SERVICE_DIR}/detector.log"
 BRIDGE_LOG="${SERVICE_DIR}/bridge.log"
 NICE_LEVEL="${GO2W_DEEPYOLO_NICE_LEVEL:-5}"
 RETAIN_STREAMS="${GO2W_DEEPYOLO_RETAIN_STREAMS:-4}"
+INPUT_FPS="${GO2W_DEEPYOLO_INPUT_FPS:-15}"
+INFERENCE_INTERVAL_MS="${GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS:-200}"
 
 mkdir -p "${SERVICE_DIR}" "${STREAM_DIR}"
 
@@ -104,6 +106,8 @@ print_status() {
   fi
   echo "stream_dir=${STREAM_DIR}"
   echo "summary_path=${SUMMARY_PATH}"
+  echo "input_fps=${INPUT_FPS}"
+  echo "inference_interval_ms=${INFERENCE_INTERVAL_MS}"
   if [[ -f "${SUMMARY_PATH}" ]]; then
     SUMMARY_PATH="${SUMMARY_PATH}" python3 - <<'PY'
 import json
@@ -137,6 +141,8 @@ case "${1:-status}" in
     : > "${BRIDGE_LOG}"
     nohup nice -n "${NICE_LEVEL}" env \
       GO2W_DEEPYOLO_OUTPUT_DIR="${STREAM_DIR}" \
+      GO2W_DEEPYOLO_INPUT_FPS="${INPUT_FPS}" \
+      GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS="${INFERENCE_INTERVAL_MS}" \
       "${HEADLESS_BIN}" > "${DETECTOR_LOG}" 2>&1 < /dev/null &
     echo "$!" > "${DETECTOR_PID_FILE}"
     nohup nice -n "${NICE_LEVEL}" env \

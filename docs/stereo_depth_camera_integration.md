@@ -194,6 +194,19 @@ directory and old streams are pruned to a small retained set. It remains
 optional: UI, SLAM startup, localization, and LiDAR-only navigation do not wait
 for it.
 
+The generated headless detector is paced for residency by default:
+
+```text
+GO2W_DEEPYOLO_INPUT_FPS=15
+GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS=200
+```
+
+This keeps camera capture at 15 FPS and semantic inference at no more than
+about 5 Hz. Both values can be overridden before `sidecar.sh start`. Lowering
+camera FPS alone is not sufficient because the original prototype inference
+loop may process the same shared latest frame repeatedly. LiDAR remains the
+high-rate safety source; DeepYOLO supplies lower-rate semantic context.
+
 The bridge reads the latest `semantic_stream_*.jsonl` packet and writes only a
 bounded summary:
 

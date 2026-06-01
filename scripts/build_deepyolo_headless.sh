@@ -30,6 +30,27 @@ text = (src_dir / "main.cpp").read_text(encoding="utf-8", errors="replace")
 if "#include <cstdlib>" not in text:
     text = text.replace("#include <ctime>\n", "#include <ctime>\n#include <cstdlib>\n", 1)
 
+capture_marker = """    for (int mode : {2, 1, 0}) {
+        rs2::config cfg;"""
+capture_replacement = """    const char* input_fps_env = std::getenv("GO2W_DEEPYOLO_INPUT_FPS");
+    int input_fps = input_fps_env ? std::atoi(input_fps_env) : 15;
+    if (input_fps <= 0) input_fps = 15;
+
+    for (int mode : {2, 1, 0}) {
+        rs2::config cfg;"""
+if capture_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO RealSense capture config")
+text = text.replace(capture_marker, capture_replacement, 1)
+text = text.replace("RS2_FORMAT_BGR8, 30);", "RS2_FORMAT_BGR8, input_fps);")
+text = text.replace("RS2_FORMAT_Z16, 30);", "RS2_FORMAT_Z16, input_fps);")
+text = text.replace("RS2_FORMAT_Y8, 30);", "RS2_FORMAT_Y8, input_fps);")
+text = text.replace(
+    'std::cout << " 流启动成功，depth_scale=" << depth_scale << std::endl;',
+    'std::cout << " 流启动成功，depth_scale=" << depth_scale'
+    ' << " input_fps=" << input_fps << std::endl;',
+    1,
+)
+
 old_engine = 'std::string engine_path = "../yolo11m.engine";'
 new_engine = (
     'const char* engine_env = std::getenv("GO2W_DEEPYOLO_ENGINE");\n'
@@ -44,6 +65,33 @@ new_output = (
     '    std::string semantic_path = semantic_dir + "/semantic_stream_" + session_id + ".jsonl";'
 )
 text = text.replace(old_output, new_output, 1)
+
+inference_marker = """    // ----------------------------------------
+    // 3. 推理主循环
+    // ----------------------------------------
+    while (is_running) {
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);"""
+inference_replacement = """    // ----------------------------------------
+    // 3. 推理主循环
+    // ----------------------------------------
+    const char* inference_interval_env = std::getenv("GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS");
+    int inference_interval_ms = inference_interval_env ? std::atoi(inference_interval_env) : 200;
+    if (inference_interval_ms < 0) inference_interval_ms = 200;
+    auto next_inference_time = std::chrono::steady_clock::now();
+    std::cout << "[GO2W] inference_interval_ms=" << inference_interval_ms << std::endl;
+
+    while (is_running) {
+        if (inference_interval_ms > 0) {
+            std::this_thread::sleep_until(next_inference_time);
+            next_inference_time = std::chrono::steady_clock::now()
+                + std::chrono::milliseconds(inference_interval_ms);
+        }
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex);"""
+if inference_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO inference loop")
+text = text.replace(inference_marker, inference_replacement, 1)
 
 for needle in ("cv::namedWindow", "cv::resizeWindow"):
     lines = []
