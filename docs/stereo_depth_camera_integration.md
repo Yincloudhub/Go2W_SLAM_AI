@@ -82,6 +82,9 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
 - LiDAR blocked, camera clear: stay blocked; stereo cannot relax the LiDAR safety decision.
 - Camera process crash: mark source unavailable, keep queue executor alive.
 - Camera timestamp jumps backward or frames stall: mark stale and expose this in UI diagnostics.
+- Detector process alive but source stays stale: keep the main LiDAR/SLAM loop
+  running and recover only the optional sidecar with
+  `bash scripts/go2w_deepyolo_sidecar.sh restart-if-stale`.
 
 ## Next Wiring Step
 
@@ -182,6 +185,7 @@ For a controlled longer-running check, use the optional sidecar manager:
 ```bash
 bash scripts/go2w_deepyolo_sidecar.sh build
 bash scripts/go2w_deepyolo_sidecar.sh start
+bash scripts/go2w_deepyolo_sidecar.sh health
 bash scripts/snapshot_go2w_perception_sidecar.sh
 bash scripts/go2w_deepyolo_sidecar.sh stop
 ```

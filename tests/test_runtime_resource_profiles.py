@@ -15,6 +15,9 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("DEFAULT_CAPTURE_EVERY_N=5", text)
         self.assertIn("DEFAULT_INFERENCE_INTERVAL_MS=333", text)
         self.assertIn('RENDER_OVERLAY="${GO2W_DEEPYOLO_RENDER_OVERLAY:-0}"', text)
+        self.assertIn("summary_health()", text)
+        self.assertIn("restart-if-stale)", text)
+        self.assertIn('healthy_statuses = {"fresh", "event_only_idle", "depth_insufficient"}', text)
 
     def test_deepyolo_headless_skips_overlay_by_default(self):
         text = (REPO_ROOT / "scripts" / "build_deepyolo_headless.sh").read_text(encoding="utf-8")

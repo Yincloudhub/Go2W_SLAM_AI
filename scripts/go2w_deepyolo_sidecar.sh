@@ -164,6 +164,34 @@ PY
   fi
 }
 
+summary_health() {
+  if [[ ! -f "${SUMMARY_PATH}" ]]; then
+    echo "summary_health=missing path=${SUMMARY_PATH}"
+    return 1
+  fi
+  SUMMARY_PATH="${SUMMARY_PATH}" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+data = json.loads(Path(os.environ["SUMMARY_PATH"]).read_text(encoding="utf-8"))
+status = str(data.get("source_status", "unknown"))
+stale = bool(data.get("stale", False))
+available = bool(data.get("available", True))
+source_age_ms = data.get("source_file_age_ms")
+source_stale_ms = int(data.get("source_stale_ms") or data.get("stale_ms") or 30000)
+healthy_statuses = {"fresh", "event_only_idle", "depth_insufficient"}
+source_fresh = source_age_ms is None or int(source_age_ms) <= source_stale_ms
+healthy = available and not stale and status in healthy_statuses and source_fresh
+print(
+    "summary_health="
+    + ("ok" if healthy else "stale")
+    + f" source_status={status} stale={stale} source_file_age_ms={source_age_ms} source_stale_ms={source_stale_ms}"
+)
+raise SystemExit(0 if healthy else 1)
+PY
+}
+
 case "${1:-status}" in
   build)
     exec bash "${SCRIPT_DIR}/build_deepyolo_headless.sh"
@@ -223,8 +251,26 @@ case "${1:-status}" in
   status)
     print_status
     ;;
+  health)
+    rc=0
+    print_status
+    is_running "${DETECTOR_PID_FILE}" "${HEADLESS_BIN}" || rc=1
+    is_running "${BRIDGE_PID_FILE}" "deepyolo_semantic_bridge.py" || rc=1
+    summary_health || rc=1
+    exit "${rc}"
+    ;;
+  restart-if-stale)
+    if "$0" health >/dev/null; then
+      echo "restart=not_needed"
+      print_status
+      exit 0
+    fi
+    echo "restart=needed"
+    "$0" stop
+    exec "$0" start
+    ;;
   *)
-    echo "usage: $0 {build|start|status|stop|restart}" >&2
+    echo "usage: $0 {build|start|status|health|restart-if-stale|stop|restart}" >&2
     exit 2
     ;;
 esac

@@ -59,6 +59,12 @@ bash scripts/snapshot_go2w_runtime_resources.sh
 
 # 查看可选 DeepYOLO 侧车状态
 bash scripts/go2w_deepyolo_sidecar.sh status
+
+# 检查视觉侧车是否真的还在刷新语义摘要
+bash scripts/go2w_deepyolo_sidecar.sh health
+
+# 如果 detector 进程还活着但相机长时间无新帧，安全地重启可选视觉侧车
+bash scripts/go2w_deepyolo_sidecar.sh restart-if-stale
 ```
 
 如果机器人重启后未定位，在确认机器人实际位于对应锚点附近后，通过 UI 执行：
@@ -99,6 +105,9 @@ GO2W_DEEPYOLO_RENDER_OVERLAY=1 \
 ```
 
 档位只影响 DeepYOLO 可选语义侧车。XT16、SLAM、SafetyGate 和 QueueExecutor 不依赖该侧车。
+如果 UI 显示视觉语义 `stale/ignored`，先运行 `health`；确认 stale 后再用
+`restart-if-stale` 恢复。该命令只重启 DeepYOLO 和语义桥接器，不会触发 SLAM、
+重定位或底盘运动。
 
 ## Dry-run 与真实执行
 
