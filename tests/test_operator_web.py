@@ -33,6 +33,26 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("视觉侧车离线，系统保持雷达与 SLAM 闭环", web.INDEX_HTML)
         self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
 
+    def test_operator_ui_busy_state_does_not_lock_text_inputs(self):
+        self.assertIn('document.querySelectorAll("button")', web.INDEX_HTML)
+        self.assertNotIn('document.querySelectorAll("button, input, textarea, select")', web.INDEX_HTML)
+
+    def test_history_keeps_compact_failure_reason(self):
+        state = web.WebState()
+        state.remember(
+            "go target",
+            {
+                "exit_code": 3,
+                "accepted": False,
+                "stdout": "prefix\nverification_guard: target requires calibration\n",
+                "stderr": "warning: topic not confirmed yet: /slam_info\n",
+                "summary": {"safety": "ok"},
+            },
+        )
+        item = state.snapshot()["history"][0]
+        self.assertIn("verification_guard", item["reason"])
+        self.assertIn("/slam_info", item["reason"])
+
     def test_parse_panel_summary(self):
         text = "noise\n[18:38:24] phase=idle | target=none | loc=true | map=true | motion=false | safety=ok\n"
         parsed = web.parse_panel_summary(text)

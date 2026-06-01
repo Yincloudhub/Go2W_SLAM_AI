@@ -317,7 +317,7 @@
     const yes = (value) => String(value) === "true";
 
     function setBusy(busy) {
-      document.querySelectorAll("button, input, textarea, select").forEach((el) => { el.disabled = busy; });
+      document.querySelectorAll("button").forEach((el) => { el.disabled = busy; });
     }
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
@@ -406,7 +406,8 @@
       $("current-node").value = state.current_node || "";
       const items = (state.history || []).slice().reverse().map((item) => {
         const code = item.exit_code === 0 ? "成功" : "异常";
-        return `<div><b>${escapeHtml(code)}</b> ${escapeHtml(item.line)}<br><small>${escapeHtml(JSON.stringify(item.summary || {}))}</small></div>`;
+        const reason = item.reason ? `<br><small>${escapeHtml(item.reason)}</small>` : "";
+        return `<div><b>${escapeHtml(code)}</b> ${escapeHtml(item.line)}${reason}<br><small>${escapeHtml(JSON.stringify(item.summary || {}))}</small></div>`;
       });
       $("history").innerHTML = items.join("") || "<div>暂无任务历史</div>";
     }

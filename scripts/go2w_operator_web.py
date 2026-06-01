@@ -77,6 +77,34 @@ def strip_ansi(text: str) -> str:
     return "".join(out)
 
 
+def compact_result_reason(result: Dict[str, Any], *, limit: int = 600) -> str:
+    markers = (
+        "verification_guard",
+        "blocked",
+        "rejected",
+        "failed",
+        "warning:",
+        "error",
+        "requires ",
+        "not confirmed",
+        "not fresh",
+        "slam health",
+    )
+    lines: List[str] = []
+    for key in ("stderr", "stdout"):
+        for raw_line in str(result.get(key) or "").splitlines():
+            line = trim_line(raw_line)
+            if not line:
+                continue
+            lower = line.lower()
+            if any(marker in lower for marker in markers):
+                lines.append(line)
+    if not lines:
+        return ""
+    text = " | ".join(lines[-4:])
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
 @dataclass
 class WebConfig:
     repo_root: Path
@@ -198,6 +226,7 @@ class WebState:
             "exit_code": result.get("exit_code"),
             "accepted": result.get("accepted", result.get("exit_code") == 0),
             "summary": result.get("summary", {}),
+            "reason": compact_result_reason(result),
         })
         if len(self.history) > 80:
             del self.history[:-80]
@@ -872,6 +901,8 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
         data = text.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("content-type", "text/html; charset=utf-8")
+        self.send_header("cache-control", "no-store, max-age=0")
+        self.send_header("pragma", "no-cache")
         self.send_header("content-length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
