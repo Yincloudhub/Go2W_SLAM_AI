@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/deepyolo_semantic_summary.schema.json",
+  "title": "Go2wDeepYoloSemanticSummary",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "available",
+    "source",
+    "source_status",
+    "timestamp_ms",
+    "packet_timestamp_ms",
+    "bridge_timestamp_ms",
+    "age_ms",
+    "packet_age_ms",
+    "source_file_mtime_ms",
+    "source_file_age_ms",
+    "source_file_mtime_inferred",
+    "clock_skew_ms",
+    "clock_skew_limit_ms",
+    "stale_ms",
+    "source_stale_ms",
+    "stale",
+    "recommended_action",
+    "effective_action",
+    "effective_action_reason",
+    "action_depth_sufficient",
+    "objects",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "available": {"type": "boolean"},
+    "source": {"const": "deepyolo_realsense"},
+    "source_status": {
+      "type": "string",
+      "enum": [
+        "fresh",
+        "event_only_idle",
+        "stale",
+        "clock_skew",
+        "depth_insufficient",
+        "unavailable"
+      ]
+    },
+    "timestamp_ms": {"type": "integer"},
+    "packet_timestamp_ms": {"type": ["integer", "null"]},
+    "bridge_timestamp_ms": {"type": "integer"},
+    "age_ms": {"type": ["integer", "null"]},
+    "packet_age_ms": {"type": ["integer", "null"]},
+    "source_file_mtime_ms": {"type": ["integer", "null"]},
+    "source_file_age_ms": {"type": ["integer", "null"]},
+    "source_file_mtime_inferred": {"type": "boolean"},
+    "clock_skew_ms": {
+      "description": "Signed packet timestamp minus source file mtime.",
+      "type": ["integer", "null"]
+    },
+    "clock_skew_limit_ms": {"type": "integer", "minimum": 0},
+    "stale_ms": {"type": "integer", "minimum": 0},
+    "source_stale_ms": {"type": "integer", "minimum": 0},
+    "stale": {"type": "boolean"},
+    "source_path": {"type": "string"},
+    "recommended_action": {
+      "type": "string",
+      "enum": ["normal", "semantic_observe", "slow_and_watch", "hold_or_pause"]
+    },
+    "effective_action": {
+      "type": "string",
+      "enum": ["normal", "semantic_observe", "slow_and_watch", "hold_or_pause", "ignored"]
+    },
+    "effective_action_reason": {"type": "string"},
+    "action_depth_sufficient": {"type": "boolean"},
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "class_name",
+          "risk_level",
+          "region",
+          "distance_m",
+          "depth_valid"
+        ],
+        "properties": {
+          "class_name": {"type": "string"},
+          "risk_level": {"type": "string"},
+          "region": {"type": "string"},
+          "distance_m": {"type": ["number", "null"]},
+          "depth_valid": {"type": "boolean"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["schema", "policy"],
+      "properties": {
+        "schema": {"const": "go2w_deepyolo_semantic_summary_v1"},
+        "policy": {"const": "optional_event_only_latest_value"}
+      }
+    }
+  }
+}

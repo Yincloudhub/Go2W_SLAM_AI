@@ -361,15 +361,22 @@ class OperatorWebApp:
             return {"available": False, "path": str(path)}
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            ts = int(data.get("timestamp_ms") or 0)
-            age_ms = max(0, int(time.time() * 1000) - ts) if ts else None
+            source_file_age = data.get("source_file_age_ms")
+            source_file_mtime = int(data.get("source_file_mtime_ms") or 0)
+            packet_ts = int(data.get("timestamp_ms") or 0)
+            if isinstance(source_file_age, (int, float)) and not isinstance(source_file_age, bool):
+                age_ms = max(0, int(source_file_age))
+            elif source_file_mtime:
+                age_ms = max(0, int(time.time() * 1000) - source_file_mtime)
+            else:
+                age_ms = max(0, int(time.time() * 1000) - packet_ts) if packet_ts else None
             stale_ms = int(data.get("stale_ms") or self.config.semantic_stale_ms)
             return {
                 "available": bool(data.get("available", True)),
                 "path": str(path),
                 "age_ms": age_ms,
                 "stale_ms": stale_ms,
-                "stale_by_age": bool(age_ms is not None and age_ms > stale_ms),
+                "stale_by_age": bool(data.get("stale", False) or (age_ms is not None and age_ms > stale_ms)),
                 "data": data,
             }
         except Exception as exc:  # noqa: BLE001
@@ -706,8 +713,13 @@ INDEX_HTML = r"""<!doctype html>
       const dominant = data.dominant_class || "none";
       const count = data.object_count ?? 0;
       const risk = data.high_risk_count ?? 0;
-      $("m-semantic-scene").textContent = `${scene}, ${dominant}, obj ${count}, risk ${risk}`;
-      $("m-semantic-action").textContent = `${data.recommended_action || "normal"} / ${age}${semantic.stale_by_age || data.stale ? " stale" : ""}`;
+      const stale = semantic.stale_by_age || data.stale;
+      const source = data.source_status || (stale ? "stale" : "unknown");
+      const recommended = data.recommended_action || "normal";
+      const effective = data.effective_action || (stale ? "ignored" : recommended);
+      const diagnostic = effective === recommended ? effective : `${effective} (raw ${recommended})`;
+      $("m-semantic-scene").textContent = `${source} / ${scene}, ${dominant}, obj ${count}, risk ${risk}`;
+      $("m-semantic-action").textContent = `${diagnostic} / ${age}${stale ? " stale" : ""}`;
     }
 
     async function api(path, options = {}) {
@@ -966,6 +978,7 @@ def self_test(config: WebConfig) -> None:
     assert "/api/status" in INDEX_HTML
     assert "/relocate" in INDEX_HTML
     assert "DeepYOLO scene" in INDEX_HTML
+    assert "effective_action" in INDEX_HTML
     parsed = parse_panel_summary("phase=idle | target=none | loc=true | map=true | motion=false")
     assert parsed["phase"] == "idle"
     assert parsed["loc"] == "true"

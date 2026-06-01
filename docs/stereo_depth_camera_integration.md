@@ -177,6 +177,23 @@ python3 scripts/deepyolo_semantic_bridge.py \
   --pretty
 ```
 
+For a controlled longer-running check, use the optional sidecar manager:
+
+```bash
+bash scripts/go2w_deepyolo_sidecar.sh build
+bash scripts/go2w_deepyolo_sidecar.sh start
+bash scripts/snapshot_go2w_perception_sidecar.sh
+bash scripts/go2w_deepyolo_sidecar.sh stop
+```
+
+The sidecar runs the detector and bridge at a lower OS scheduling priority,
+records separate PID files and logs under `artifacts/deepyolo_service`, and
+refuses to signal a PID unless its command line still matches the expected
+process. New detector JSONL files are stored under the service artifact
+directory and old streams are pruned to a small retained set. It remains
+optional: UI, SLAM startup, localization, and LiDAR-only navigation do not wait
+for it.
+
 The bridge reads the latest `semantic_stream_*.jsonl` packet and writes only a
 bounded summary:
 
@@ -199,6 +216,20 @@ bounded summary:
 }
 ```
 
+The v1 summary keeps event time and source-file freshness separate:
+
+- `packet_timestamp_ms` and `packet_age_ms` describe the last semantic event;
+- `source_file_mtime_ms` and `source_file_age_ms` describe detector output
+  health;
+- `source_status` distinguishes `fresh`, `event_only_idle`, `stale`,
+  `clock_skew`, `depth_insufficient`, and `unavailable`;
+- `recommended_action` remains diagnostic context, while `effective_action`
+  becomes `ignored` whenever freshness, clock, or depth checks fail.
+
+The JSONL producer is event-oriented rather than heartbeat-oriented. A short
+quiet scene therefore becomes `event_only_idle`, not an immediate crash. It is
+still excluded from safety actions until a fresh event arrives.
+
 The operator Web UI reads this file through
 `--semantic-summary-path` / `GO2W_SEMANTIC_SUMMARY_PATH` and marks it stale with
 `--semantic-stale-ms` / `GO2W_SEMANTIC_STALE_MS`.
@@ -215,6 +246,12 @@ Current routing policy:
   depth. It must never relax LiDAR/SLAM safety.
 - If DeepYOLO is absent, stale, slow, or crashes, the main SLAM/LiDAR flow
   continues in LiDAR-only mode.
+
+Before wiring semantics into C++ safety fusion, compare the read-only
+`snapshot_go2w_perception_sidecar.sh` output with the sidecar stopped and
+running. Record detector FPS plus CPU/GPU load, and keep the navigation-loop
+acceptance criteria unchanged: normal runs should keep `poll_overruns == 0` and
+`max_loop_elapsed_s < slam_poll_interval_s`.
 
 ## Long-Running Subagent Ownership
 

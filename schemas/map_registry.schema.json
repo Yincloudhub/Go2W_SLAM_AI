@@ -64,6 +64,7 @@
         "allowed_radius_m": {"type": "number", "minimum": 0},
         "allowed_yaw_error_deg": {"type": "number", "minimum": 0},
         "pose": {"$ref": "#/$defs/unitree_pose"},
+        "calibration_observation": {"$ref": "#/$defs/calibration_observation"},
         "description": {"type": "string"}
       }
     },
@@ -85,6 +86,7 @@
           "items": {"type": "string"}
         },
         "pose": {"$ref": "#/$defs/unitree_pose"},
+        "calibration_observation": {"$ref": "#/$defs/calibration_observation"},
         "description": {"type": "string"}
       }
     },
@@ -116,6 +118,19 @@
         "q_w": {"type": "number"},
         "speed": {"type": "number", "minimum": 0},
         "mode": {"type": "integer"}
+      }
+    },
+    "calibration_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captured_at", "source", "robot_posture", "pose"],
+      "properties": {
+        "captured_at": {"type": "string"},
+        "source": {"type": "string"},
+        "robot_posture": {"type": "string"},
+        "localization_status": {"type": "string"},
+        "slam_health": {"type": "string"},
+        "pose": {"$ref": "#/$defs/unitree_pose"}
       }
     }
   }

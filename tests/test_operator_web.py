@@ -141,6 +141,39 @@ class OperatorWebTests(unittest.TestCase):
             self.assertEqual(loaded["stale_ms"], 2345)
             self.assertTrue(loaded["stale_by_age"])
 
+    def test_semantic_summary_prefers_source_file_age(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "artifacts" / "vision_semantic_summary.json"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "timestamp_ms": 1,
+                        "source_file_age_ms": 120,
+                        "stale_ms": 3000,
+                        "available": True,
+                        "source": "deepyolo_realsense",
+                        "source_status": "fresh",
+                        "stale": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                semantic_summary_path=Path("artifacts/vision_semantic_summary.json"),
+            )
+
+            loaded = web.OperatorWebApp(config).semantic_summary()
+
+            self.assertEqual(loaded["age_ms"], 120)
+            self.assertFalse(loaded["stale_by_age"])
+
     def test_status_uses_short_cache_to_bound_panel_spawns(self):
         class FakeApp(web.OperatorWebApp):
             def __init__(self, config):

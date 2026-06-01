@@ -94,21 +94,41 @@
             "workstation",
             "live_calibrated",
             "prone_observed",
-            "needs_standing_verification"
+            "needs_standing_verification",
+            "standard_prone_pose"
           ],
           "pose": {
-            "x": -1.2192105054855347,
-            "y": -0.8398918509483337,
+            "x": -1.1047908067703247,
+            "y": -0.6664881110191345,
             "z": 0.0,
-            "yaw": 1.635797402867592,
+            "yaw": 1.5275480012859097,
             "q_x": 0.0,
             "q_y": 0.0,
-            "q_z": 0.7297106661667475,
-            "q_w": 0.6837560556824938,
+            "q_z": 0.6916520640112973,
+            "q_w": 0.7222308649932598,
             "speed": 0.3,
             "mode": 0
           },
-          "description": "Live-calibrated from current SLAM pose while robot was prone at the standard workstation position; x/y/yaw are updated, z/roll/pitch were flattened for future standing navigation. Needs standing verification before marking as fully verified."
+          "description": "Live-calibrated from a localized gateway world-state sample while robot was prone at the standard workstation position on 2026-06-01. The raw prone pose is retained under calibration_observation; navigation pose keeps precise x/y/yaw with flattened z/roll/pitch. Keep standing verification before enabling real navigation to this target.",
+          "calibration_observation": {
+            "captured_at": "2026-06-01T14:57:00+08:00",
+            "source": "gateway_world_state.rt/slam_info",
+            "robot_posture": "prone",
+            "localization_status": "localized",
+            "slam_health": "ok",
+            "pose": {
+              "x": -1.1047908067703247,
+              "y": -0.6664881110191345,
+              "z": 0.04458674043416977,
+              "yaw": 1.5275480012859097,
+              "q_x": 0.015116733498871326,
+              "q_y": 0.00804204773157835,
+              "q_z": 0.6916059851646423,
+              "q_w": 0.7220719456672668,
+              "speed": 0.800000011920929,
+              "mode": 1
+            }
+          }
         },
         {
           "node_id": "yang_shuyang_station",
@@ -448,20 +468,39 @@
           "name": "陈嘉瑜工位",
           "allowed_radius_m": 1.2,
           "allowed_yaw_error_deg": 45.0,
-          "status": "prone_observed_needs_standing_verification",
+          "status": "standard_prone_pose_needs_standing_verification",
           "pose": {
-            "x": -1.2192105054855347,
-            "y": -0.8398918509483337,
+            "x": -1.1047908067703247,
+            "y": -0.6664881110191345,
             "z": 0.0,
-            "yaw": 1.635797402867592,
+            "yaw": 1.5275480012859097,
             "q_x": 0.0,
             "q_y": 0.0,
-            "q_z": 0.7297106661667475,
-            "q_w": 0.6837560556824938,
+            "q_z": 0.6916520640112973,
+            "q_w": 0.7222308649932598,
             "speed": 0.3,
             "mode": 0
           },
-          "description": "Candidate relocalization anchor captured while prone at the standard workstation position; must be rechecked with the robot standing before use as a verified anchor."
+          "description": "Candidate relocalization anchor refreshed from the standard workstation prone pose on 2026-06-01. Raw gateway observation is retained; verify while standing before promoting this anchor for startup recovery.",
+          "calibration_observation": {
+            "captured_at": "2026-06-01T14:57:00+08:00",
+            "source": "gateway_world_state.rt/slam_info",
+            "robot_posture": "prone",
+            "localization_status": "localized",
+            "slam_health": "ok",
+            "pose": {
+              "x": -1.1047908067703247,
+              "y": -0.6664881110191345,
+              "z": 0.04458674043416977,
+              "yaw": 1.5275480012859097,
+              "q_x": 0.015116733498871326,
+              "q_y": 0.00804204773157835,
+              "q_z": 0.6916059851646423,
+              "q_w": 0.7220719456672668,
+              "speed": 0.800000011920929,
+              "mode": 1
+            }
+          }
         }
       ]
     }

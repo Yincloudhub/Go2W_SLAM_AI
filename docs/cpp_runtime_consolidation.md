@@ -358,6 +358,21 @@ Result:
 Expected status after success: `loc=true`, `health=ok/localized`,
 `safety=ok`. This is still SLAM-only; it does not imply navigation is enabled.
 
+2026-06-01 standard workstation prone-pose refresh:
+
+- With SLAM localized and the robot still prone at the standard workstation
+  position, the operator status reported target `陈嘉瑜工位(0.16m)`,
+  `motion=false`, `safety=ok`, and pose `x=-1.11, y=-0.73, yaw=1.52`.
+- A gateway world-state sample then retained the precise raw prone observation:
+  `x=-1.1047908068, y=-0.6664881110, z=0.0445867404,
+  yaw=1.5275480013`, including its original quaternion.
+- Registry node and candidate relocalization anchor `chen_jiayu_station` were
+  refreshed with precise planar navigation pose and tagged
+  `standard_prone_pose`. The raw prone sample is stored separately as
+  `calibration_observation`. Keep `needs_standing_verification` before enabling
+  real navigation to this target; the current calibration verifies
+  localization and operator display while prone.
+
 ## Next consolidation targets
 
 1. Move startup supervision into a C++ or systemd-managed launcher on the robot,
