@@ -102,10 +102,14 @@ semantic_open_replacement = """    std::ofstream semantic_out(semantic_path, std
     uint64_t heartbeat_ms = heartbeat_env ? std::strtoull(heartbeat_env, nullptr, 10) : 1000;
     const char* max_jsonl_bytes_env = std::getenv("GO2W_DEEPYOLO_MAX_JSONL_BYTES");
     uint64_t max_jsonl_bytes = max_jsonl_bytes_env ? std::strtoull(max_jsonl_bytes_env, nullptr, 10) : 16777216;
+    const char* max_jsonl_files_env = std::getenv("GO2W_DEEPYOLO_MAX_JSONL_FILES");
+    uint64_t max_jsonl_files = max_jsonl_files_env ? std::strtoull(max_jsonl_files_env, nullptr, 10) : 4;
+    if (max_jsonl_files == 0) max_jsonl_files = 4;
     uint64_t last_semantic_write_ms = 0;
     uint64_t semantic_file_index = 0;
     std::cout << "[GO2W] heartbeat_ms=" << heartbeat_ms
-              << " max_jsonl_bytes=" << max_jsonl_bytes << std::endl;
+              << " max_jsonl_bytes=" << max_jsonl_bytes
+              << " max_jsonl_files=" << max_jsonl_files << std::endl;
 
     if (!semantic_out.is_open()) {"""
 if semantic_open_marker not in text:
@@ -126,9 +130,12 @@ semantic_write_replacement = """        if (semantic_out.is_open()) {
                 if (max_jsonl_bytes > 0 && semantic_bytes >= 0
                     && static_cast<uint64_t>(semantic_bytes) >= max_jsonl_bytes) {
                     semantic_out.close();
-                    semantic_file_index++;
-                    semantic_path = semantic_dir + "/semantic_stream_" + session_id + "_"
-                        + std::to_string(semantic_file_index) + ".jsonl";
+                    semantic_file_index = (semantic_file_index + 1) % max_jsonl_files;
+                    semantic_path = semantic_dir + "/semantic_stream_" + session_id;
+                    if (semantic_file_index > 0) {
+                        semantic_path += "_" + std::to_string(semantic_file_index);
+                    }
+                    semantic_path += ".jsonl";
                     semantic_out.open(semantic_path, std::ios::out);
                 }
                 if (semantic_out.is_open()) {

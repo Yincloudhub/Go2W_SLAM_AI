@@ -202,6 +202,7 @@ GO2W_DEEPYOLO_CAPTURE_EVERY_N=3
 GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS=200
 GO2W_DEEPYOLO_HEARTBEAT_MS=1000
 GO2W_DEEPYOLO_MAX_JSONL_BYTES=16777216
+GO2W_DEEPYOLO_MAX_JSONL_FILES=4
 ```
 
 This keeps the compatible camera profile at 15 FPS, performs alignment and
@@ -214,8 +215,9 @@ high-rate safety source; DeepYOLO supplies lower-rate semantic context.
 
 The headless producer writes scene changes immediately and emits a compact
 heartbeat at 1 Hz. This keeps source freshness observable during a stable scene
-without raising UI refresh rate. Active JSONL streams rotate at 16 MB; sidecar
-cleanup retains only the most recent four streams.
+without raising UI refresh rate. Active JSONL streams rotate at 16 MB through
+four reused slots; sidecar cleanup trims older cross-session streams on
+lifecycle boundaries.
 
 2026-06-01 prone-safe residency benchmark on the current D435I:
 
