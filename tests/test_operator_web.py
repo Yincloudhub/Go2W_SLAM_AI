@@ -41,6 +41,13 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("/api/topology", web.INDEX_HTML)
         self.assertIn("topology-node", web.INDEX_HTML)
         self.assertIn("topology-registry-add", web.INDEX_HTML)
+        self.assertIn("现场验证", web.INDEX_HTML)
+        self.assertIn("一键就绪：雷达 + SLAM", web.INDEX_HTML)
+        self.assertIn('id="exec-toggle"', web.INDEX_HTML)
+        self.assertIn('id="weak-toggle"', web.INDEX_HTML)
+        self.assertNotIn('id="topology-add"', web.INDEX_HTML)
+        self.assertNotIn('id="exec-on"', web.INDEX_HTML)
+        self.assertNotIn('id="weak-on"', web.INDEX_HTML)
 
     def test_history_keeps_compact_failure_reason(self):
         state = web.WebState()
@@ -124,6 +131,74 @@ class OperatorWebTests(unittest.TestCase):
             self.assertEqual(node["node_id"], "wp_new")
             self.assertIn("needs_standing_verification", node["tags"])
             self.assertAlmostEqual(node["pose"]["x"], 1.25)
+
+    def test_protected_initial_point_cannot_be_overwritten_or_disabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = root / "registry.json"
+            registry_path.write_text(
+                json.dumps({"maps": [{"map_id": "go2w_real_site", "topology_nodes": [{"node_id": "initial_point", "tags": [], "pose": {"x": 0, "y": 0}}]}]}),
+                encoding="utf-8",
+            )
+            app = web.OperatorWebApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                    registry_path=registry_path,
+                )
+            )
+            overwrite = app.add_current_topology_node({"node_id": "initial_point", "name": "bad"}, confirmed=True)
+            disable = app.set_topology_node_disabled("initial_point", True, confirmed=True)
+            self.assertFalse(overwrite["accepted"])
+            self.assertFalse(disable["accepted"])
+
+    def test_verify_topology_node_removes_safety_tags_when_robot_is_near(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "true", "safety": "ok", "pose:x": "x=1.05, y=2.02, yaw=0.10"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = root / "registry.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "maps": [
+                            {
+                                "map_id": "go2w_real_site",
+                                "topology_nodes": [
+                                    {
+                                        "node_id": "wp_a",
+                                        "name": "A",
+                                        "tags": ["real_site", "needs_calibration", "needs_standing_verification"],
+                                        "pose": {"x": 1.0, "y": 2.0},
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                    registry_path=registry_path,
+                )
+            )
+            result = app.verify_topology_node("wp_a", confirmed=True)
+            self.assertTrue(result["accepted"])
+            tags = result["topology"]["nodes"][0]["tags"]
+            self.assertNotIn("needs_calibration", tags)
+            self.assertNotIn("needs_standing_verification", tags)
+            self.assertIn("ui_verified", tags)
 
     def test_parse_panel_summary(self):
         text = "noise\n[18:38:24] phase=idle | target=none | loc=true | map=true | motion=false | safety=ok\n"

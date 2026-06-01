@@ -208,46 +208,46 @@
       <section>
         <h2>运行控制</h2>
         <div class="toolbar">
-          <button id="start-slam" class="secondary">启动 / 检查 SLAM</button>
-          <button id="exec-on" class="danger">允许真实执行</button>
-          <button id="exec-off">切回仅预演</button>
-          <button id="weak-on">启用弱网摘要</button>
-          <button id="weak-off">恢复完整反馈</button>
+          <button id="start-slam" class="secondary">一键就绪：雷达 + SLAM</button>
+          <button id="exec-toggle" class="danger">允许真实执行</button>
+          <button id="weak-toggle">启用弱网摘要</button>
         </div>
-        <div class="field-stack" style="margin-top:10px">
-          <div class="row">
-            <input id="current-node" placeholder="当前锚点，例如 initial_point">
-            <button id="set-current">设置锚点</button>
+        <details style="margin-top:10px">
+          <summary>高级运行设置</summary>
+          <div class="field-stack" style="padding:0 11px 11px">
+            <div class="row">
+              <input id="current-node" placeholder="当前锚点，例如 initial_point">
+              <button id="set-current">设置锚点</button>
+            </div>
+            <div class="row">
+              <input id="relocate-anchor" value="mapping_origin" placeholder="重定位锚点 ID">
+              <button id="relocate-anchor-btn">执行重定位</button>
+            </div>
           </div>
-          <div class="row">
-            <input id="relocate-anchor" value="mapping_origin" placeholder="重定位锚点 ID">
-            <button id="relocate-anchor-btn">执行重定位</button>
-          </div>
-        </div>
+        </details>
       </section>
       <section>
-        <h2>建图与拓扑</h2>
+        <h2>语义拓扑</h2>
         <div class="field-stack">
           <div class="row">
-            <input id="map-path" value="/home/unitree/test.pcd">
-            <button id="mapping-end">结束并保存</button>
+            <input id="topology-name" placeholder="新拓扑点 ID，例如 wp_station_01">
+            <button id="topology-registry-add" class="danger">登记当前位置</button>
           </div>
-          <div class="toolbar">
-            <button id="mapping-start" class="danger">开始建图</button>
-            <button id="rviz-start">打开 RViz2</button>
-          </div>
-          <div class="row">
-            <input id="topology-name" placeholder="拓扑点 ID，例如 wp_station_01">
-            <button id="topology-preview">预览拓扑点</button>
-          </div>
-          <div class="toolbar">
-            <button id="topology-add" class="danger">写入当前拓扑点</button>
-          </div>
-          <div class="row">
-            <input id="topology-display-name" placeholder="显示名，例如 赵博办公室门口">
-            <button id="topology-registry-add" class="danger">登记/更新语义点</button>
-          </div>
+          <input id="topology-display-name" placeholder="显示名，例如 赵博办公室门口">
           <input id="topology-aliases" placeholder="别名，用逗号分隔，例如 赵博办公室,赵博门口">
+          <details>
+            <summary>建图与可视化</summary>
+            <div class="field-stack" style="padding:0 11px 11px">
+              <div class="row">
+                <input id="map-path" value="/home/unitree/test.pcd">
+                <button id="mapping-end">结束并保存</button>
+              </div>
+              <div class="toolbar">
+                <button id="mapping-start" class="danger">开始建图</button>
+                <button id="rviz-start">打开 RViz2</button>
+              </div>
+            </div>
+          </details>
           <div class="toolbar">
             <button id="topology-refresh">刷新拓扑列表</button>
             <span class="muted">禁用是软删除；坐标保留，路由会跳过。</span>
@@ -433,6 +433,9 @@
       $("exec-pill").className = state.execute_enabled ? "pill danger" : "pill ok";
       $("weak-pill").textContent = state.weak_link_mode ? "弱网摘要" : "标准链路";
       $("weak-pill").className = state.weak_link_mode ? "pill warn" : "pill";
+      $("exec-toggle").textContent = state.execute_enabled ? "切回仅预演" : "允许真实执行";
+      $("exec-toggle").className = state.execute_enabled ? "" : "danger";
+      $("weak-toggle").textContent = state.weak_link_mode ? "恢复完整反馈" : "启用弱网摘要";
       $("current-node").value = state.current_node || "";
       const items = (state.history || []).slice().reverse().map((item) => {
         const code = item.exit_code === 0 ? "成功" : "异常";
@@ -463,9 +466,13 @@
         const disabled = node.disabled ? " disabled" : "";
         const tags = (node.tags || []).map((tag) => `<span class="${tagClass(tag)}">${escapeHtml(tag)}</span>`).join("");
         const aliases = (node.aliases || []).slice(0, 4).join(" / ");
+        const needsVerification = node.needs_calibration || node.needs_standing_verification;
         const action = node.disabled
           ? `<button data-action="restore" data-node="${escapeHtml(node.node_id)}">恢复</button>`
           : `<button class="danger" data-action="disable" data-node="${escapeHtml(node.node_id)}">禁用</button>`;
+        const verify = (!node.disabled && needsVerification)
+          ? `<button class="secondary" data-action="verify" data-node="${escapeHtml(node.node_id)}">现场验证</button>`
+          : "";
         return `<div class="node-card${disabled}">
           <div class="node-head">
             <div class="node-title">
@@ -479,6 +486,7 @@
           <div class="toolbar">
             <button data-action="preview" data-node="${escapeHtml(node.node_id)}">预览</button>
             <button data-action="current" data-node="${escapeHtml(node.node_id)}">设为当前</button>
+            ${verify}
             ${action}
           </div>
         </div>`;
@@ -599,10 +607,10 @@
 
     $("refresh").onclick = () => refreshStatus(true);
     $("start-slam").onclick = () => runCommand("/start-slam", "确认启动或检查 SLAM 与雷达驱动？", true);
-    $("exec-on").onclick = () => runCommand("/execute on", "确认允许真实执行？机器人趴卧时请勿开启。", true);
-    $("exec-off").onclick = () => runCommand("/execute off");
-    $("weak-on").onclick = () => runCommand("/weak on");
-    $("weak-off").onclick = () => runCommand("/weak off");
+    $("exec-toggle").onclick = () => appState.execute_enabled
+      ? runCommand("/execute off")
+      : runCommand("/execute on", "确认允许真实执行？机器人趴卧时请勿开启。", true);
+    $("weak-toggle").onclick = () => appState.weak_link_mode ? runCommand("/weak off") : runCommand("/weak on");
     $("set-current").onclick = () => runCommand(`/current ${$("current-node").value.trim()}`);
     $("relocate-anchor-btn").onclick = () => {
       const anchor = $("relocate-anchor").value.trim() || "mapping_origin";
@@ -611,8 +619,6 @@
     $("mapping-start").onclick = () => runCommand("/mapping start confirm", "确认开始建图？这会改变 SLAM 状态。", true);
     $("mapping-end").onclick = () => runCommand(`/mapping end confirm ${$("map-path").value.trim()}`, "确认结束建图并保存地图？", true);
     $("rviz-start").onclick = () => runCommand("/rviz2 start confirm", "确认打开 RViz2 可视化？", true);
-    $("topology-preview").onclick = () => runCommand(`/topology preview ${$("topology-name").value.trim()}`);
-    $("topology-add").onclick = () => runCommand(`/topology add ${$("topology-name").value.trim()} confirm`, "确认写入当前位置为拓扑点？", true);
     $("topology-refresh").onclick = refreshTopology;
     $("topology-registry-add").onclick = async () => {
       const nodeId = $("topology-name").value.trim();
@@ -646,6 +652,11 @@
       if (action === "restore") {
         if (!window.confirm(`确认恢复 ${nodeId}？恢复后仍受 needs_calibration/standing verification 安全门约束。`)) return;
         await topologyAction("restore", nodeId);
+        return;
+      }
+      if (action === "verify") {
+        if (!window.confirm(`确认现场验证 ${nodeId}？机器人必须已经站在该点附近，且定位和安全门正常。`)) return;
+        await topologyAction("verify", nodeId);
       }
     };
     $("send-llm").onclick = () => {

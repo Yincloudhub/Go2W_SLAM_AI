@@ -41,5 +41,6 @@ exec "${PYTHON:-python3}" "${REPO_ROOT}/scripts/go2w_operator_web.py" \
   --current-node "${CURRENT_NODE}" \
   --host "${WEB_HOST}" \
   --port "${WEB_PORT}" \
+  --ensure-slam-on-start \
   "${LLM_HTTP_ARGS[@]}" \
   "$@"

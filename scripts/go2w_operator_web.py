@@ -30,6 +30,8 @@ DEFAULT_PORT = 8765
 DEFAULT_MAP_ID = "go2w_real_site"
 DEFAULT_REGISTRY_PATH = Path("configs/maps/go2w_real_site_map_registry.json")
 DISABLED_NODE_TAGS = {"disabled", "ui_disabled", "deleted"}
+VERIFICATION_TAGS = {"needs_calibration", "needs_standing_verification"}
+PROTECTED_TOPOLOGY_NODE_IDS = {"initial_point"}
 NODE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
 
 
@@ -69,6 +71,15 @@ def pose_from_xy_yaw(x: float, y: float, yaw: float, *, speed: float = 0.3, mode
         "speed": speed,
         "mode": mode,
     }
+
+
+def pose_distance_m(current: Dict[str, float], target_pose: Dict[str, Any]) -> Optional[float]:
+    try:
+        dx = float(current["x"]) - float(target_pose["x"])
+        dy = float(current["y"]) - float(target_pose["y"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return math.hypot(dx, dy)
 
 
 def tag_list(value: Any) -> List[str]:
@@ -481,6 +492,8 @@ class OperatorWebApp:
         node_id = trim_line(str(payload.get("node_id", "")))
         if not NODE_ID_RE.match(node_id):
             return {"accepted": False, "exit_code": 2, "error": "node_id must be 2-64 ASCII letters, numbers, '_' or '-'"}
+        if node_id in PROTECTED_TOPOLOGY_NODE_IDS:
+            return {"accepted": False, "exit_code": 3, "error": f"node_id {node_id!r} is protected and cannot be overwritten from the UI"}
 
         display_name = trim_line(str(payload.get("name", ""))) or node_id
         aliases = split_aliases(str(payload.get("aliases", "")))
@@ -548,6 +561,8 @@ class OperatorWebApp:
         node_id = trim_line(node_id)
         if not confirmed:
             return {"accepted": False, "exit_code": 2, "error": "topology disable/restore requires confirmation"}
+        if disabled and node_id in PROTECTED_TOPOLOGY_NODE_IDS:
+            return {"accepted": False, "exit_code": 3, "error": f"node_id {node_id!r} is protected and cannot be disabled"}
         with self.lock:
             registry = self._load_registry()
             selected = self._registry_map(registry)
@@ -577,6 +592,69 @@ class OperatorWebApp:
 
         self.invalidate_status_cache()
         return {"accepted": True, "exit_code": 0, "node_id": node_id, "disabled": disabled, "topology": self.topology()}
+
+    def verify_topology_node(self, node_id: str, confirmed: bool = False, max_distance_m: float = 0.8) -> Dict[str, Any]:
+        node_id = trim_line(node_id)
+        if not confirmed:
+            return {"accepted": False, "exit_code": 2, "error": "topology verification requires confirmation"}
+        if not NODE_ID_RE.match(node_id):
+            return {"accepted": False, "exit_code": 2, "error": "invalid node_id"}
+        if node_id in PROTECTED_TOPOLOGY_NODE_IDS:
+            return {"accepted": False, "exit_code": 3, "error": f"node_id {node_id!r} is protected and does not need UI verification"}
+
+        status = self.status(force=True)
+        summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
+        if summary.get("loc") != "true" or summary.get("safety") != "ok":
+            return {"accepted": False, "exit_code": 3, "error": "current pose is not safe/fresh enough for verification", "summary": summary}
+        current_pose = parse_pose_summary(summary)
+        if not current_pose:
+            return {"accepted": False, "exit_code": 3, "error": "cannot parse current pose from status summary", "summary": summary}
+
+        with self.lock:
+            registry = self._load_registry()
+            selected = self._registry_map(registry)
+            target = None
+            for node in selected.get("topology_nodes", []):
+                if isinstance(node, dict) and node.get("node_id") == node_id:
+                    target = node
+                    break
+            if target is None:
+                return {"accepted": False, "exit_code": 404, "error": f"node_id {node_id!r} not found"}
+            if node_is_disabled(target):
+                return {"accepted": False, "exit_code": 3, "error": f"node_id {node_id!r} is disabled; restore it before verification"}
+
+            target_pose = target.get("pose") if isinstance(target.get("pose"), dict) else {}
+            distance = pose_distance_m(current_pose, target_pose)
+            if distance is None:
+                return {"accepted": False, "exit_code": 3, "error": f"node_id {node_id!r} has no usable target pose"}
+            if distance > max_distance_m:
+                return {
+                    "accepted": False,
+                    "exit_code": 3,
+                    "error": f"current pose is {distance:.2f}m from {node_id}; move to the target before verification",
+                    "distance_m": distance,
+                    "summary": summary,
+                }
+
+            old_tags = tag_list(target.get("tags"))
+            target["tags"] = [tag for tag in old_tags if tag not in VERIFICATION_TAGS]
+            for tag in ("live_verified", "ui_verified"):
+                if tag not in target["tags"]:
+                    target["tags"].append(tag)
+            target["verification"] = {
+                "verified_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "source": "operator_ui_current_pose",
+                "distance_m": round(distance, 3),
+                "current_pose": current_pose,
+            }
+            target["description"] = (
+                trim_line(str(target.get("description", "")))
+                + f" UI verified at {time.strftime('%Y-%m-%dT%H:%M:%S%z')} distance_m={distance:.3f}."
+            ).strip()
+            self._write_registry(registry)
+
+        self.invalidate_status_cache()
+        return {"accepted": True, "exit_code": 0, "node_id": node_id, "distance_m": distance, "topology": self.topology()}
 
     def state_snapshot(self) -> Dict[str, Any]:
         with self.lock:
@@ -1116,6 +1194,9 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
                     return
                 if action == "restore":
                     self.send_json(self.app.set_topology_node_disabled(str(payload.get("node_id", "")), False, confirmed=confirmed))
+                    return
+                if action == "verify":
+                    self.send_json(self.app.verify_topology_node(str(payload.get("node_id", "")), confirmed=confirmed))
                     return
                 self.send_json({"accepted": False, "exit_code": 2, "error": f"unknown topology action: {action}"}, status=HTTPStatus.BAD_REQUEST)
                 return
