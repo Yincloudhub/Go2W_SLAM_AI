@@ -210,6 +210,19 @@ process the same shared latest frame repeatedly. Profiles below 15 FPS must be
 validated on the actual D435I stream combination before use. LiDAR remains the
 high-rate safety source; DeepYOLO supplies lower-rate semantic context.
 
+2026-06-01 prone-safe residency benchmark on the current D435I:
+
+| Configuration | Detector CPU | Bridge CPU | Detector memory | Result |
+| --- | ---: | ---: | ---: | --- |
+| Original headless full-rate prototype | about 93.7% | about 1.1% | about 16.4% | Works, but too expensive for default residency. |
+| 15 FPS input, 5 Hz inference cap | about 42.8% | about 0.6% | about 16.4% | CPU improved; capture preparation still expensive. |
+| 15 FPS input, prepare every third capture, 5 Hz inference cap | about 28.1% after warm-up | about 0.6% | about 16.4% | Current resident default. |
+| 6 FPS input | n/a | n/a | n/a | Rejected by the current RGBD+IR D435I stream profile. |
+
+Frame-rate controls reduce CPU work but do not release the loaded TensorRT
+engine memory. If memory becomes the next bottleneck, benchmark a smaller
+TensorRT engine separately rather than weakening SLAM or LiDAR processing.
+
 The bridge reads the latest `semantic_stream_*.jsonl` packet and writes only a
 bounded summary:
 

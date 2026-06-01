@@ -21,7 +21,7 @@ RETAIN_STREAMS="${GO2W_DEEPYOLO_RETAIN_STREAMS:-4}"
 INPUT_FPS="${GO2W_DEEPYOLO_INPUT_FPS:-15}"
 CAPTURE_EVERY_N="${GO2W_DEEPYOLO_CAPTURE_EVERY_N:-3}"
 INFERENCE_INTERVAL_MS="${GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS:-200}"
-STARTUP_WAIT_S="${GO2W_DEEPYOLO_STARTUP_WAIT_S:-4}"
+STARTUP_WAIT_S="${GO2W_DEEPYOLO_STARTUP_WAIT_S:-8}"
 
 mkdir -p "${SERVICE_DIR}" "${STREAM_DIR}"
 
@@ -162,8 +162,8 @@ case "${1:-status}" in
       bash "${SCRIPT_DIR}/start_go2w_deepyolo_bridge.sh" > "${BRIDGE_LOG}" 2>&1 < /dev/null &
     echo "$!" > "${BRIDGE_PID_FILE}"
     sleep "${STARTUP_WAIT_S}"
-    if ! is_running "${DETECTOR_PID_FILE}" "${HEADLESS_BIN}"; then
-      echo "DeepYOLO detector exited during startup" >&2
+    if ! is_running "${DETECTOR_PID_FILE}" "${HEADLESS_BIN}" || ! grep -F "[RealSense] RGBD" "${DETECTOR_LOG}" >/dev/null; then
+      echo "DeepYOLO detector failed startup health check" >&2
       stop_one "bridge" "${BRIDGE_PID_FILE}" "deepyolo_semantic_bridge.py" || true
       stop_one "detector" "${DETECTOR_PID_FILE}" "${HEADLESS_BIN}" || true
       tail -n 30 "${DETECTOR_LOG}" >&2 || true
