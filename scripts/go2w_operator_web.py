@@ -599,9 +599,6 @@ class OperatorWebApp:
             return {"accepted": False, "exit_code": 2, "error": "topology verification requires confirmation"}
         if not NODE_ID_RE.match(node_id):
             return {"accepted": False, "exit_code": 2, "error": "invalid node_id"}
-        if node_id in PROTECTED_TOPOLOGY_NODE_IDS:
-            return {"accepted": False, "exit_code": 3, "error": f"node_id {node_id!r} is protected and does not need UI verification"}
-
         status = self.status(force=True)
         summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
         if summary.get("loc") != "true" or summary.get("safety") != "ok":

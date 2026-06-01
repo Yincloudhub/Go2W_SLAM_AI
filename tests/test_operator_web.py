@@ -50,6 +50,7 @@ class OperatorWebTests(unittest.TestCase):
         self.assertNotIn('id="weak-on"', web.INDEX_HTML)
         self.assertNotIn('data-action="current"', web.INDEX_HTML)
         self.assertIn("保存备用锚点", web.INDEX_HTML)
+        self.assertIn("校准初始点", web.INDEX_HTML)
 
     def test_history_keeps_compact_failure_reason(self):
         state = web.WebState()
@@ -156,6 +157,36 @@ class OperatorWebTests(unittest.TestCase):
             disable = app.set_topology_node_disabled("initial_point", True, confirmed=True)
             self.assertFalse(overwrite["accepted"])
             self.assertFalse(disable["accepted"])
+
+    def test_protected_initial_point_can_be_recalibrated_only_through_verification(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "true", "safety": "ok", "pose:x": "x=0.10, y=0.20, yaw=0.30"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = root / "registry.json"
+            registry_path.write_text(
+                json.dumps({"maps": [{"map_id": "go2w_real_site", "topology_nodes": [{"node_id": "initial_point", "tags": ["safe_return"], "pose": {"x": 0, "y": 0}}]}]}),
+                encoding="utf-8",
+            )
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                    registry_path=registry_path,
+                )
+            )
+            result = app.verify_topology_node("initial_point", confirmed=True)
+            self.assertTrue(result["accepted"])
+            node = result["topology"]["nodes"][0]
+            self.assertAlmostEqual(node["pose"]["x"], 0.10)
+            self.assertAlmostEqual(node["pose"]["y"], 0.20)
+            self.assertAlmostEqual(node["pose"]["yaw"], 0.30)
+            self.assertIn("safe_return", node["tags"])
 
     def test_verify_topology_node_removes_safety_tags_when_robot_is_near(self):
         class FakeApp(web.OperatorWebApp):

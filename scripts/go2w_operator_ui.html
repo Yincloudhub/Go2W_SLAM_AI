@@ -467,11 +467,12 @@
         const tags = (node.tags || []).map((tag) => `<span class="${tagClass(tag)}">${escapeHtml(tag)}</span>`).join("");
         const aliases = (node.aliases || []).slice(0, 4).join(" / ");
         const needsVerification = node.needs_calibration || node.needs_standing_verification;
+        const protectedCalibration = node.node_id === "initial_point";
         const action = node.disabled
           ? `<button data-action="restore" data-node="${escapeHtml(node.node_id)}">恢复</button>`
           : `<button class="danger" data-action="disable" data-node="${escapeHtml(node.node_id)}">禁用</button>`;
-        const verify = (!node.disabled && needsVerification)
-          ? `<button class="secondary" data-action="verify" data-node="${escapeHtml(node.node_id)}">现场验证</button>`
+        const verify = (!node.disabled && (needsVerification || protectedCalibration))
+          ? `<button class="secondary" data-action="verify" data-node="${escapeHtml(node.node_id)}">${protectedCalibration ? "校准初始点" : "现场验证"}</button>`
           : "";
         return `<div class="node-card${disabled}">
           <div class="node-head">
@@ -649,7 +650,10 @@
         return;
       }
       if (action === "verify") {
-        if (!window.confirm(`确认现场验证 ${nodeId}？机器人必须已经站在该点附近，且定位和安全门正常。`)) return;
+        const prompt = nodeId === "initial_point"
+          ? "确认校准初始点？系统只会在机器人位于旧初始点附近且定位正常时写回坐标。"
+          : `确认现场验证 ${nodeId}？机器人必须已经站在该点附近，且定位和安全门正常。`;
+        if (!window.confirm(prompt)) return;
         await topologyAction("verify", nodeId);
       }
     };
