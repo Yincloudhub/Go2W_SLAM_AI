@@ -51,6 +51,7 @@ class OperatorWebTests(unittest.TestCase):
         self.assertNotIn('data-action="current"', web.INDEX_HTML)
         self.assertIn("保存备用锚点", web.INDEX_HTML)
         self.assertIn("校准初始点", web.INDEX_HTML)
+        self.assertIn("更新坐标", web.INDEX_HTML)
 
     def test_history_keeps_compact_failure_reason(self):
         state = web.WebState()
