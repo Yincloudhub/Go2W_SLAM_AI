@@ -50,6 +50,31 @@ text = text.replace(
     ' << " input_fps=" << input_fps << std::endl;',
     1,
 )
+capture_loop_marker = """    rs2::align align_to_color(RS2_STREAM_COLOR);
+
+    std::cout << "[RealSense] RGBD";"""
+capture_loop_replacement = """    rs2::align align_to_color(RS2_STREAM_COLOR);
+    const char* capture_every_n_env = std::getenv("GO2W_DEEPYOLO_CAPTURE_EVERY_N");
+    int capture_every_n = capture_every_n_env ? std::atoi(capture_every_n_env) : 3;
+    if (capture_every_n <= 0) capture_every_n = 3;
+    uint64_t capture_frame_count = 0;
+
+    std::cout << "[GO2W] capture_every_n=" << capture_every_n << std::endl;
+    std::cout << "[RealSense] RGBD";"""
+if capture_loop_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO capture loop setup")
+text = text.replace(capture_loop_marker, capture_loop_replacement, 1)
+capture_wait_marker = """            raw_frames = pipe.wait_for_frames();
+            aligned_frames = align_to_color.process(raw_frames);"""
+capture_wait_replacement = """            raw_frames = pipe.wait_for_frames();
+            capture_frame_count++;
+            if (capture_every_n > 1 && capture_frame_count % capture_every_n != 0) {
+                continue;
+            }
+            aligned_frames = align_to_color.process(raw_frames);"""
+if capture_wait_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO capture frame wait")
+text = text.replace(capture_wait_marker, capture_wait_replacement, 1)
 
 old_engine = 'std::string engine_path = "../yolo11m.engine";'
 new_engine = (

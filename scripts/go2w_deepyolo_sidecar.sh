@@ -15,10 +15,13 @@ DETECTOR_PID_FILE="${SERVICE_DIR}/detector.pid"
 BRIDGE_PID_FILE="${SERVICE_DIR}/bridge.pid"
 DETECTOR_LOG="${SERVICE_DIR}/detector.log"
 BRIDGE_LOG="${SERVICE_DIR}/bridge.log"
+CONFIG_FILE="${SERVICE_DIR}/last_start_config.env"
 NICE_LEVEL="${GO2W_DEEPYOLO_NICE_LEVEL:-5}"
 RETAIN_STREAMS="${GO2W_DEEPYOLO_RETAIN_STREAMS:-4}"
 INPUT_FPS="${GO2W_DEEPYOLO_INPUT_FPS:-15}"
+CAPTURE_EVERY_N="${GO2W_DEEPYOLO_CAPTURE_EVERY_N:-3}"
 INFERENCE_INTERVAL_MS="${GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS:-200}"
+STARTUP_WAIT_S="${GO2W_DEEPYOLO_STARTUP_WAIT_S:-4}"
 
 mkdir -p "${SERVICE_DIR}" "${STREAM_DIR}"
 
@@ -106,8 +109,13 @@ print_status() {
   fi
   echo "stream_dir=${STREAM_DIR}"
   echo "summary_path=${SUMMARY_PATH}"
-  echo "input_fps=${INPUT_FPS}"
-  echo "inference_interval_ms=${INFERENCE_INTERVAL_MS}"
+  if [[ -f "${CONFIG_FILE}" ]]; then
+    cat "${CONFIG_FILE}"
+  else
+    echo "input_fps=${INPUT_FPS}"
+    echo "capture_every_n=${CAPTURE_EVERY_N}"
+    echo "inference_interval_ms=${INFERENCE_INTERVAL_MS}"
+  fi
   if [[ -f "${SUMMARY_PATH}" ]]; then
     SUMMARY_PATH="${SUMMARY_PATH}" python3 - <<'PY'
 import json
@@ -139,9 +147,12 @@ case "${1:-status}" in
     prune_streams
     : > "${DETECTOR_LOG}"
     : > "${BRIDGE_LOG}"
+    printf 'input_fps=%s\ncapture_every_n=%s\ninference_interval_ms=%s\n' \
+      "${INPUT_FPS}" "${CAPTURE_EVERY_N}" "${INFERENCE_INTERVAL_MS}" > "${CONFIG_FILE}"
     nohup nice -n "${NICE_LEVEL}" env \
       GO2W_DEEPYOLO_OUTPUT_DIR="${STREAM_DIR}" \
       GO2W_DEEPYOLO_INPUT_FPS="${INPUT_FPS}" \
+      GO2W_DEEPYOLO_CAPTURE_EVERY_N="${CAPTURE_EVERY_N}" \
       GO2W_DEEPYOLO_INFERENCE_INTERVAL_MS="${INFERENCE_INTERVAL_MS}" \
       "${HEADLESS_BIN}" > "${DETECTOR_LOG}" 2>&1 < /dev/null &
     echo "$!" > "${DETECTOR_PID_FILE}"
@@ -150,7 +161,14 @@ case "${1:-status}" in
       GO2W_DEEPYOLO_SUMMARY_PATH="${SUMMARY_PATH}" \
       bash "${SCRIPT_DIR}/start_go2w_deepyolo_bridge.sh" > "${BRIDGE_LOG}" 2>&1 < /dev/null &
     echo "$!" > "${BRIDGE_PID_FILE}"
-    sleep 1
+    sleep "${STARTUP_WAIT_S}"
+    if ! is_running "${DETECTOR_PID_FILE}" "${HEADLESS_BIN}"; then
+      echo "DeepYOLO detector exited during startup" >&2
+      stop_one "bridge" "${BRIDGE_PID_FILE}" "deepyolo_semantic_bridge.py" || true
+      stop_one "detector" "${DETECTOR_PID_FILE}" "${HEADLESS_BIN}" || true
+      tail -n 30 "${DETECTOR_LOG}" >&2 || true
+      exit 1
+    fi
     print_status
     ;;
   stop)
