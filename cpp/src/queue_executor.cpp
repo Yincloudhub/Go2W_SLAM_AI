@@ -234,6 +234,16 @@ bool QueueExecutor::waitForArrival(
         };
     }
 
+    const auto bestEffortPause = [&](const std::string& reason) {
+        if (!event) return;
+        (*event)["pause_reason"] = reason;
+        try {
+            (*event)["pause_result"] = sendGatewayCommand({{"action", "pause_navigation"}});
+        } catch (const std::exception& exc) {
+            (*event)["pause_error"] = exc.what();
+        }
+    };
+
     const auto finishLoop = [&](const std::chrono::steady_clock::time_point& loop_start) {
         const auto elapsed = std::chrono::steady_clock::now() - loop_start;
         const double elapsed_s = std::chrono::duration<double>(elapsed).count();
@@ -276,6 +286,7 @@ bool QueueExecutor::waitForArrival(
                     }
                     pushFeedback(event, feedbackMessage("blocked", "error", "运行中安全门阻断，已停止等待：" + runtime_safety.reason, target_node, name, distance), max_feedback_events);
                     pushLlmFeedback(event, llmFeedbackRequest("blocked", target_node, name, distance, runtime_safety.reason), max_llm_feedback_events);
+                    bestEffortPause(runtime_safety.reason);
                     return false;
                 }
             }
@@ -318,13 +329,16 @@ bool QueueExecutor::waitForArrival(
                 if (event) (*event)["blocked_reason"] = reason;
                 pushFeedback(event, feedbackMessage("blocked", "error", "连续读取 SLAM 状态失败，停止等待并请求人工确认。", target_node, name), max_feedback_events);
                 pushLlmFeedback(event, llmFeedbackRequest("blocked", target_node, name, -1.0, reason), max_llm_feedback_events);
+                bestEffortPause(reason);
                 return false;
             }
         }
         finishLoop(loop_start);
     }
     pushFeedback(event, feedbackMessage("timeout", "warning", "未在限定时间内确认到达" + name + "，停止后续队列。", target_node, name), max_feedback_events);
+    if (event) (*event)["blocked_reason"] = "arrival threshold not reached before timeout";
     pushLlmFeedback(event, llmFeedbackRequest("timeout", target_node, name, -1.0, "arrival threshold not reached before timeout"), max_llm_feedback_events);
+    bestEffortPause("arrival threshold not reached before timeout");
     return false;
 }
 
@@ -437,6 +451,19 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
             continue;
         }
 
+        if (step.value("needs_calibration", false) || step.value("requires_standing_verification", false)) {
+            const std::string reason = "target requires standing verification before real navigation";
+            event["status"] = "blocked";
+            event["blocked_reason"] = reason;
+            execution["events"].push_back(event);
+            execution["failed_step"] = step_id;
+            execution["blocked_reason"] = reason;
+            result.exit_code = 2;
+            result.execution = execution;
+            result.stdout_text = out.str();
+            return result;
+        }
+
         const auto state = getWorldState();
         const SafetyDecision safety = safety_gate.evaluateBeforeNavigation(state, target_node, command.at("target_pose"));
         event["preflight"] = {{"allowed", safety.allowed}, {"reason", safety.reason}, {"recommended_mode", safety.recommended_mode}};
@@ -477,7 +504,9 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
         const bool arrived = waitForArrival(command.at("target_pose"), target_node, target_name, safety_gate, &event, out);
         event["status"] = arrived ? "ok" : "failed";
         if (!arrived) {
-            event["blocked_reason"] = "arrival threshold not reached before timeout";
+            if (!event.contains("blocked_reason") || !event["blocked_reason"].is_string() || event["blocked_reason"].get<std::string>().empty()) {
+                event["blocked_reason"] = "arrival threshold not reached before timeout";
+            }
             execution["events"].push_back(event);
             execution["failed_step"] = step_id;
             execution["blocked_reason"] = event["blocked_reason"];

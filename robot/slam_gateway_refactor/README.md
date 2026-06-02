@@ -124,10 +124,11 @@ The machine-readable path is intentionally stricter than the keyboard path:
 ## Important notes
 
 1. This code does not modify official `unitree_slam` internals.
-2. `LidarGeometryPerception` is a phase-1 conservative stub. Replace it with real `/utlidar/cloud` processing later.
+2. `LidarGeometryPerception` manual clearance is a phase-1 stub. It is explicitly marked `manual_stub + stale` and can never authorize navigation. Until real XT16 point-cloud geometry is wired, the gateway consumes a fresh D435 ROI summary from `GO2W_STEREO_SUMMARY_PATH` as an additional near-field hard gate.
 3. The keyboard path and LLM path are intentionally separated:
    - `slam_keyboard_client`: original manual operation.
    - `slam_llm_command_client`: structured command input for LLM/task executor.
 4. LLM commands are validated and routed through `SafetySupervisor` before navigation.
 5. Navigation obstacle mode follows Unitree SLAM API semantics: `mode=0` means obstacle avoidance, `mode=1` means stop for obstacle. LLM navigation and manually recorded waypoints default to `mode=0`.
 6. Short-lived command clients must not stop the SLAM backend when they exit. Use the explicit `stop_slam` action or the keyboard stop path when the backend should really stop.
+7. `navigate_to_pose` and `resume_navigation` are rejected unless the near-field summary is sensor-backed, fresh, sufficiently confident, and clear in the front, left, and right ROIs.

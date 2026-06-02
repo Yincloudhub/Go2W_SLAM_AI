@@ -299,6 +299,7 @@
           <div class="metric"><label>安全状态</label><strong id="m-safety">等待</strong></div>
           <div class="metric"><label>双目距离</label><strong id="m-stereo-front">暂无数据</strong></div>
           <div class="metric"><label>双目质量</label><strong id="m-stereo-health">暂无数据</strong></div>
+          <div class="metric"><label>运动安全门</label><strong id="m-motion-guard">等待深度摘要</strong></div>
           <div class="metric"><label>视觉场景</label><strong id="m-semantic-scene">暂无数据</strong></div>
           <div class="metric"><label>视觉建议</label><strong id="m-semantic-action">暂无数据</strong></div>
         </div>
@@ -379,7 +380,7 @@
       const dominant = semanticOffline ? "视觉离线" : z(semanticData.dominant_class || "none");
       const action = semanticOffline ? "仅使用雷达与 SLAM" : z(semanticData.effective_action || "ignored");
       $("screen-target").textContent = target;
-      $("screen-vision").textContent = semanticOffline ? "视觉数据过期，不参与决策" : `${dominant} / ${semanticData.object_count ?? 0} 个目标`;
+      $("screen-vision").textContent = semanticOffline ? "语义视觉未启动或离线，不参与运动决策" : `${dominant} / ${semanticData.object_count ?? 0} 个目标`;
       $("screen-action").textContent = action;
       if (!locOk) {
         $("screen-reply").textContent = "定位尚未就绪，请先检查 SLAM";
@@ -404,7 +405,7 @@
       } else {
         $("screen-reply").textContent = "系统在线，等待新的巡检任务";
         $("screen-detail").textContent = semanticOffline
-          ? `当前位于 ${target}。视觉侧车离线，系统保持雷达与 SLAM 闭环。`
+          ? `当前位于 ${target}。语义视觉侧车未启动或离线，近场运动许可仍由实时深度摘要与 SLAM 安全门决定。`
           : `当前位于 ${target}。视觉理解：${dominant}，策略：${action}。`;
         $("screen-health").textContent = "系统在线";
         $("screen-health").className = "pill ok";
@@ -509,10 +510,11 @@
       $("output").textContent = JSON.stringify(result, null, 2);
       return result;
     }
-    function updateStereo(stereo) {
+    function updateStereo(stereo, motionGuard) {
       if (!stereo || !stereo.available || !stereo.data) {
-        $("m-stereo-front").textContent = "暂无数据";
-        $("m-stereo-health").textContent = "暂无数据";
+        $("m-stereo-front").textContent = "深度侧车未启动或离线";
+        $("m-stereo-health").textContent = "无实时 ROI 摘要";
+        $("m-motion-guard").textContent = "锁定：缺少实时深度";
         return;
       }
       const data = stereo.data;
@@ -524,7 +526,10 @@
       const confidence = data.confidence == null ? "整体 ?" : `整体 ${Number(data.confidence).toFixed(3)}`;
       const frontConfidence = data.roi_confidence && data.roi_confidence.front !== undefined ? `前方 ${Number(data.roi_confidence.front).toFixed(3)}` : "前方 ?";
       const age = stereo.age_ms == null ? "未知" : `${Math.round(stereo.age_ms)}ms`;
-      $("m-stereo-health").textContent = `${confidence}, ${frontConfidence} / ${age}${stereo.stale_by_age ? " 已过期" : ""}`;
+      $("m-stereo-health").textContent = `${confidence}, ${frontConfidence} / ${age}${stereo.stale_by_age ? " 摘要停止更新" : ""}`;
+      $("m-motion-guard").textContent = motionGuard && motionGuard.allowed
+        ? "已就绪：实时近场深度"
+        : `锁定：${motionGuard && motionGuard.reason ? motionGuard.reason : "等待安全校验"}`;
     }
     function updateSemantic(semantic) {
       if (!semantic || !semantic.available || !semantic.data) {
@@ -536,7 +541,7 @@
       const age = semantic.age_ms == null ? "未知" : `${Math.round(semantic.age_ms)}ms`;
       const stale = semantic.stale_by_age || data.stale;
       if (stale || ["stale", "unavailable", "clock_skew"].includes(String(data.source_status || ""))) {
-        $("m-semantic-scene").textContent = `视觉离线 / ${age} 已过期`;
+        $("m-semantic-scene").textContent = `语义侧车未启动或离线 / 最后摘要 ${age}`;
         $("m-semantic-action").textContent = "仅观察，不参与决策";
         return;
       }
@@ -560,7 +565,7 @@
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
-        updateStereo(result.stereo_summary);
+        updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         setScreen(summary, result.semantic_summary);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
@@ -586,7 +591,7 @@
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
-        updateStereo(result.stereo_summary);
+        updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         setScreen(summary, result.semantic_summary);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");

@@ -68,7 +68,7 @@ class NavigationTaskState:
 class LocalObstacleSummary:
     timestamp_ms: int
     frame_id: str = "base_link"
-    source: str = "lidar"
+    source: str = "manual_stub"
     range_m: float = 6.0
     front_clearance_m: float = 6.0
     left_clearance_m: float = 6.0
@@ -77,8 +77,8 @@ class LocalObstacleSummary:
     blocked_directions: list[str] = field(default_factory=list)
     narrow_passage: bool = False
     recommended_action: str = "normal"
-    confidence: float | None = None
-    stale: bool = False
+    confidence: float | None = 0.0
+    stale: bool = True
     latency_ms: float | None = None
 
     def to_dict(self) -> dict[str, Any]:

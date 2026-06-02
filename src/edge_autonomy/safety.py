@@ -132,6 +132,19 @@ class SafetySupervisor:
                 requires_human_ack=True,
             )
 
+        if (
+            local_obstacle.stale
+            or local_obstacle.source not in {"stereo_depth", "lidar_pointcloud", "lidar_pointcloud+stereo_depth"}
+            or local_obstacle.confidence is None
+            or local_obstacle.confidence <= 0.0
+        ):
+            return SafetyDecision(
+                action=SupervisorAction.PAUSE,
+                reason="local obstacle summary is not sensor backed and fresh",
+                speed_limit_scale=0.0,
+                requires_human_ack=True,
+            )
+
         if local_obstacle.front_clearance_m < self.emergency_distance_m:
             return SafetyDecision(
                 action=SupervisorAction.EMERGENCY_STOP,

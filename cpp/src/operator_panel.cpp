@@ -216,6 +216,26 @@ nlohmann::json loadJsonFileOrNull(const std::string& path)
     }
 }
 
+nlohmann::json loadFreshPerceptionForLlm(const std::string& path, int64_t max_age_ms)
+{
+    nlohmann::json payload = loadJsonFileOrNull(path);
+    if (!payload.is_object()) return {{"available", false}, {"excluded_reason", "missing_or_invalid"}};
+    const int64_t timestamp_ms = payload.value("timestamp_ms", int64_t{0});
+    const int64_t now_ms = static_cast<int64_t>(std::time(nullptr)) * 1000;
+    const int64_t age_ms = timestamp_ms > 0 ? now_ms - timestamp_ms : -1;
+    if (payload.value("stale", false) || timestamp_ms <= 0 || age_ms < 0 || age_ms > max_age_ms) {
+        return {
+            {"available", false},
+            {"excluded_reason", "stale_or_offline"},
+            {"source", payload.value("source", "")},
+            {"age_ms", age_ms},
+        };
+    }
+    payload["available"] = true;
+    payload["age_ms"] = age_ms;
+    return payload;
+}
+
 }  // namespace
 
 std::string shellQuote(const std::string& value)
@@ -480,6 +500,16 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
             if (!nodes || !nodes->is_array()) continue;
             for (const auto& node : *nodes) {
                 if (!node.is_object()) continue;
+                bool disabled = false;
+                const auto tags = node.value("tags", nlohmann::json::array());
+                if (tags.is_array()) {
+                    for (const auto& tag : tags) {
+                        if (!tag.is_string()) continue;
+                        const std::string value = tag.get<std::string>();
+                        if (value == "disabled" || value == "ui_disabled" || value == "deleted") disabled = true;
+                    }
+                }
+                if (disabled) continue;
                 candidates.push_back({
                     {"node_id", node.value("node_id", "")},
                     {"name", node.value("name", "")},
@@ -494,11 +524,13 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
         "You are the GO2W robot-dog operator planner. Select only registered topology node_id values. "
         "Return only one compact JSON object with this schema: "
         "{\"reply\":\"short Chinese operator reply\",\"targets\":[\"node_id\"],\"capture_keyframe\":false}. "
-        "Do not output coordinates, speeds, Unitree API ids, markdown, or extra text. "
-        "If the command is unclear, return targets as an empty array.";
+        "Preserve the user's target order for multi-stop tasks. Set capture_keyframe=true only when the user asks for a photo or inspection image. "
+        "Do not output coordinates, speeds, Unitree API ids, markdown, or extra text. Never claim that the robot arrived before runtime feedback says so. "
+        "Perception entries with available=false are diagnostic only and must not affect the plan. "
+        "If the command is unclear or a requested place is not registered, return targets as an empty array and ask one short clarification question in reply.";
     nlohmann::json perception = {
-        {"stereo_depth", loadJsonFileOrNull(config_.repo_root + "/artifacts/stereo_depth_summary.json")},
-        {"deepyolo_semantics", loadJsonFileOrNull(config_.repo_root + "/artifacts/vision_semantic_summary.json")},
+        {"stereo_depth", loadFreshPerceptionForLlm(config_.repo_root + "/artifacts/stereo_depth_summary.json", 1000)},
+        {"deepyolo_semantics", loadFreshPerceptionForLlm(config_.repo_root + "/artifacts/vision_semantic_summary.json", 3000)},
     };
 
     nlohmann::json user_payload = {

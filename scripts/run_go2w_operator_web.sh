@@ -15,6 +15,8 @@ START_SLAM_SCRIPT="${GO2W_START_SLAM_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_sla
 START_RVIZ2_SCRIPT="${GO2W_START_RVIZ2_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_rviz2.sh}"
 WEB_HOST="${GO2W_WEB_HOST:-127.0.0.1}"
 WEB_PORT="${GO2W_WEB_PORT:-8765}"
+export GO2W_STEREO_SUMMARY_PATH="${GO2W_STEREO_SUMMARY_PATH:-${REPO_ROOT}/artifacts/stereo_depth_summary.json}"
+export GO2W_STEREO_SAFETY_STALE_MS="${GO2W_STEREO_SAFETY_STALE_MS:-1000}"
 
 if [[ ! -x "${PANEL_BIN}" ]]; then
   if ! command -v cmake >/dev/null 2>&1; then

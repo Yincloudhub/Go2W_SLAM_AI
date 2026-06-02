@@ -72,23 +72,27 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
    safety fusion.
 7. If the relevant ROI confidence is below threshold, ignore that ROI for
    blocking decisions.
-8. Camera absence must not prevent SLAM startup, localization, dry-run planning, or LiDAR-only navigation.
+8. Camera absence must not prevent SLAM startup, localization, or dry-run planning. Until XT16 point-cloud geometry is wired into the gateway, it must block real navigation.
 9. Do not log raw frames by default; keep only short ring buffers for debugging.
 
 ## Failure Strategy
 
-- LiDAR valid, camera stale: continue LiDAR-only.
+- SLAM valid, camera stale: keep localization and dry-run planning online, but block real navigation until XT16 point-cloud geometry is wired.
 - LiDAR clear, camera near obstacle with confidence: slow or pause conservatively.
 - LiDAR blocked, camera clear: stay blocked; stereo cannot relax the LiDAR safety decision.
-- Camera process crash: mark source unavailable, keep queue executor alive.
+- Camera process crash: mark source unavailable, keep the runtime alive, and block new real navigation.
 - Camera timestamp jumps backward or frames stall: mark stale and expose this in UI diagnostics.
 - Detector process alive but source stays stale: keep the main LiDAR/SLAM loop
   running and recover only the optional sidecar with
   `bash scripts/go2w_deepyolo_sidecar.sh restart-if-stale`.
 
-## Next Wiring Step
+## Current Motion-Safety Wiring
 
-The next implementation step is to add a small robot-side publisher that turns the chosen camera topic into `DepthCameraSummary` JSON, then let the operator core read the latest summary before each `SafetyGate` runtime check. The C++ hot loop should read the latest compact value only; it should never wait for camera processing to finish.
+`scripts/go2w_stereo_depth_sidecar.sh` now keeps the D435 ROI summary fresh at low rate. The robot gateway, Python preflight, C++ `SafetyGate`, and Web UI execute toggle consume only the latest compact value. They never wait for camera processing to finish and never read raw camera frames.
+
+The summary is currently an additional hard gate because XT16 point-cloud geometry has not yet been wired into `LidarGeometryPerception`. A missing, stale, low-confidence, or near-obstacle D435 summary blocks real motion while still allowing SLAM startup, localization debugging, topology inspection, and dry-run planning.
+
+This is an incident-response safety floor, not the final architecture. The formal next step remains implementing XT16 point-cloud-derived front/left/right clearance and then fusing D435 conservatively so either sensor can increase caution but neither can silently relax a LiDAR block.
 
 ## Robot-Side Summary Exporter
 
@@ -126,9 +130,9 @@ python3 scripts/realsense_depth_summary.py \
   --pretty
 ```
 
-The summary is diagnostic until C++ consumes it. A low confidence value should
-be shown in the UI but ignored by safety fusion; it must not block the robot by
-itself.
+The summary is now consumed by the motion-safety chain. Safety checks use the
+front/left/right ROI confidence values rather than treating whole-image valid
+fraction as a direct pass/fail signal.
 
 The operator Web UI reads this file through `--stereo-summary-path` and marks it
 stale by `--stereo-stale-ms` / `GO2W_STEREO_STALE_MS` without subscribing to raw

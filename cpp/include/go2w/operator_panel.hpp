@@ -22,7 +22,7 @@ struct OperatorPanelConfig {
     std::string llm_http_model = "local";
     std::string current_node = "";
     double nav_speed_mps = 0.25;
-    int nav_mode = 1;
+    int nav_mode = 0;
     double arrival_distance_m = 0.7;
     double arrival_monitor_s = 75.0;
     double slam_poll_interval_s = 1.0;

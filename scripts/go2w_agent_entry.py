@@ -710,7 +710,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--skip-gateway-check", action="store_true", help="For planner dry-runs, skip the closed-loop gateway check after planning.")
     parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
     parser.add_argument("--nav-speed-mps", type=float, default=0.3, help="Global navigation speed override for field runs. Use 0 to keep per-node registry speed.")
-    parser.add_argument("--nav-mode", type=int, default=1, help="Global Unitree navigation mode override for field runs. Default 1 keeps terrain-style motion; use -1 to keep registry mode.")
+    parser.add_argument("--nav-mode", type=int, default=0, help="Global Unitree navigation mode override for field runs. Default 0 enables obstacle avoidance; use 1 only for explicit stop-mode diagnostics or -1 to keep registry mode.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-yaw-rad", type=float, default=0.18)
     parser.add_argument("--require-arrival-yaw", action="store_true", help="Require yaw threshold before auto-pause; default pauses by distance only.")
@@ -764,7 +764,8 @@ def main(argv: list[str] | None = None) -> int:
         return watch_world(args)
 
     if args.go or args.go_b64:
-        args.execute = not args.dry_run
+        if args.dry_run:
+            args.execute = False
         args.no_live_snapshot = True
         if args.force_llm:
             args.prompt_mode = "light"

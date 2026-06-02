@@ -39,6 +39,7 @@ class ManualLidarGeometryPerception:
 
         self._summary = LocalObstacleSummary(
             timestamp_ms=timestamp_ms if timestamp_ms is not None else now_ms(),
+            source="manual_stub",
             range_m=self.range_m,
             front_clearance_m=front_clearance_m,
             left_clearance_m=left_clearance_m,
@@ -47,6 +48,8 @@ class ManualLidarGeometryPerception:
             blocked_directions=blocked_directions,
             narrow_passage=left_clearance_m < 0.8 and right_clearance_m < 0.8,
             recommended_action=recommended_action,
+            confidence=0.0,
+            stale=True,
         )
         return self._summary
 

@@ -116,6 +116,25 @@ def gateway_allows_navigation(world_state_result: dict[str, Any]) -> tuple[bool,
     localization = world_state.get("localization", {})
     if isinstance(localization, dict) and localization.get("status") not in (None, "localized_or_tracking", "tracking", "localized"):
         return False, f"localization is {localization.get('status')}"
+    obstacle = world_state.get("local_obstacle", {})
+    if not isinstance(obstacle, dict):
+        return False, "missing local_obstacle sensor summary"
+    if obstacle.get("source") not in {"stereo_depth", "lidar_pointcloud", "lidar_pointcloud+stereo_depth"}:
+        return False, "local_obstacle is not sensor backed"
+    if obstacle.get("stale") is not False:
+        return False, "local_obstacle sensor summary is stale"
+    age_ms = obstacle.get("age_ms")
+    if not isinstance(age_ms, (int, float)) or isinstance(age_ms, bool) or age_ms < 0 or age_ms > 1000:
+        return False, "local_obstacle sensor summary is too old"
+    if not isinstance(obstacle.get("confidence"), (int, float)) or obstacle["confidence"] <= 0:
+        return False, "local_obstacle confidence is too low"
+    for direction in ("front", "left", "right"):
+        roi_confidence = obstacle.get(f"{direction}_confidence")
+        clearance = obstacle.get(f"{direction}_clearance_m")
+        if not isinstance(roi_confidence, (int, float)) or isinstance(roi_confidence, bool) or roi_confidence < 0.15:
+            return False, f"local_obstacle {direction} ROI confidence is too low"
+        if not isinstance(clearance, (int, float)) or isinstance(clearance, bool) or clearance < 0.8:
+            return False, f"local_obstacle {direction} clearance is unsafe"
     return True, "gateway allows navigation"
 
 

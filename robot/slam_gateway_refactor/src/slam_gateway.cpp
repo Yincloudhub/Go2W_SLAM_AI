@@ -2,10 +2,33 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <thread>
 
 namespace slam_gateway {
+namespace {
+
+std::string stereoSummaryPath()
+{
+    const char* configured = std::getenv("GO2W_STEREO_SUMMARY_PATH");
+    return configured && *configured
+        ? configured
+        : "/home/unitree/Go2W_SLAM_AI/artifacts/stereo_depth_summary.json";
+}
+
+int64_t stereoSummaryMaxAgeMs()
+{
+    const char* configured = std::getenv("GO2W_STEREO_SAFETY_STALE_MS");
+    if (!configured || !*configured) return 1000;
+    try {
+        return std::max<int64_t>(1, std::stoll(configured));
+    } catch (...) {
+        return 1000;
+    }
+}
+
+}  // namespace
 
 SlamGateway::SlamGateway()
     : unitree::robot::Client(TEST_SERVICE_NAME, false)
@@ -252,6 +275,13 @@ void SlamGateway::taskLoop(bool loop_patrol)
             const auto start = std::chrono::steady_clock::now();
             while (!is_arrived_.load() && thread_control_.load()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                auto runtime_safety = getSafetyDecision();
+                if (!runtime_safety.allow_navigation) {
+                    std::cout << "Runtime safety blocked navigation: " << runtime_safety.reason << std::endl;
+                    pauseNavigation();
+                    thread_control_.store(false);
+                    return;
+                }
                 {
                     std::lock_guard<std::mutex> lk(state_mutex_);
                     updateDistanceToGoalLocked();
@@ -345,7 +375,7 @@ NavigationTaskState SlamGateway::getNavigationTaskState() const
 
 LocalObstacleSummary SlamGateway::getLocalObstacleSummary() const
 {
-    return lidar_perception_.getLocalObstacleSummary();
+    return lidar_perception_.getExternalSummaryOrFallback(stereoSummaryPath(), stereoSummaryMaxAgeMs());
 }
 
 SafetyDecision SlamGateway::getSafetyDecision() const

@@ -85,7 +85,7 @@ PYTHONPATH=src python3 scripts/go2w_agent_entry.py --go "去701门外走廊拍�
 
 ```text
 nav_speed_mps = 0.3
-nav_mode = 1
+nav_mode = 0
 arrival_distance_m = 0.25
 ```
 

@@ -29,8 +29,9 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn('requestedMs === -1 ? (active.has(latestPhase) ? 2000 : 5000)', web.INDEX_HTML)
         self.assertIn("statusInFlight", web.INDEX_HTML)
         self.assertIn("commandInFlight", web.INDEX_HTML)
-        self.assertIn("视觉数据过期，不参与决策", web.INDEX_HTML)
-        self.assertIn("视觉侧车离线，系统保持雷达与 SLAM 闭环", web.INDEX_HTML)
+        self.assertIn("语义视觉未启动或离线，不参与运动决策", web.INDEX_HTML)
+        self.assertIn("近场运动许可仍由实时深度摘要与 SLAM 安全门决定", web.INDEX_HTML)
+        self.assertIn("运动安全门", web.INDEX_HTML)
         self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
 
     def test_operator_ui_busy_state_does_not_lock_text_inputs(self):
@@ -280,6 +281,54 @@ class OperatorWebTests(unittest.TestCase):
             self.assertFalse(result["accepted"])
             self.assertFalse(app.state.execute_enabled)
             self.assertIn("localization", result["stderr"])
+
+    def test_execute_on_requires_fresh_stereo_motion_guard(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "true", "safety": "ok"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "artifacts" / "stereo_depth_summary.json"
+            summary_path.parent.mkdir(parents=True)
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+            )
+            app = FakeApp(config)
+
+            missing = app.command("/execute on", confirmed=True)
+            self.assertFalse(missing["accepted"])
+            self.assertIn("offline_or_not_started", missing["stderr"])
+
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "timestamp_ms": int(time.time() * 1000),
+                        "source": "stereo_depth",
+                        "front_clearance_m": 2.0,
+                        "left_clearance_m": 2.0,
+                        "right_clearance_m": 2.0,
+                        "roi_confidence": {"front": 0.8, "left": 0.8, "right": 0.8},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            allowed = app.command("/execute on", confirmed=True)
+            self.assertTrue(allowed["accepted"])
+            self.assertTrue(app.state.execute_enabled)
+            app.command("/execute off")
+
+            data = json.loads(summary_path.read_text(encoding="utf-8"))
+            data["timestamp_ms"] = int(time.time() * 1000)
+            data["right_clearance_m"] = 0.6
+            summary_path.write_text(json.dumps(data), encoding="utf-8")
+            blocked = app.command("/execute on", confirmed=True)
+            self.assertFalse(blocked["accepted"])
+            self.assertIn("right_obstacle_too_close", blocked["stderr"])
 
     def test_relocate_is_blocked_when_localization_is_already_healthy(self):
         class FakeApp(web.OperatorWebApp):

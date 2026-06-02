@@ -18,6 +18,12 @@ inline int64_t nowMs()
     return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
 }
 
+inline int64_t wallClockNowMs()
+{
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
 inline double quaternionToYaw(double qx, double qy, double qz, double qw)
 {
     const double siny_cosp = 2.0 * (qw * qz + qx * qy);
@@ -34,7 +40,7 @@ struct PoseData {
     float q_y{0.0f};
     float q_z{0.0f};
     float q_w{1.0f};
-    int mode{1};
+    int mode{0};
     float speed{0.8f};
 
     std::string toNavigationJson() const
@@ -75,7 +81,7 @@ struct PoseData {
         p.q_y = j.value("q_y", 0.0f);
         p.q_z = j.value("q_z", 0.0f);
         p.q_w = j.value("q_w", 1.0f);
-        p.mode = j.value("mode", 1);
+        p.mode = j.value("mode", 0);
         p.speed = j.value("speed", 0.8f);
         return p;
     }
@@ -194,11 +200,18 @@ struct NavigationTaskState {
 struct LocalObstacleSummary {
     int64_t timestamp_ms{0};
     std::string frame_id{"base_link"};
+    std::string source{"manual_stub"};
     double range_m{6.0};
     double front_clearance_m{6.0};
     double left_clearance_m{6.0};
     double right_clearance_m{6.0};
     double rear_clearance_m{6.0};
+    double confidence{0.0};
+    double front_confidence{0.0};
+    double left_confidence{0.0};
+    double right_confidence{0.0};
+    int64_t age_ms{-1};
+    bool stale{true};
     std::vector<std::string> blocked_directions;
     bool narrow_passage{false};
     std::string recommended_action{"normal"};
@@ -209,11 +222,18 @@ struct LocalObstacleSummary {
             {"type", "local_obstacle_summary"},
             {"timestamp_ms", timestamp_ms},
             {"frame_id", frame_id},
+            {"source", source},
             {"range_m", range_m},
             {"front_clearance_m", front_clearance_m},
             {"left_clearance_m", left_clearance_m},
             {"right_clearance_m", right_clearance_m},
             {"rear_clearance_m", rear_clearance_m},
+            {"confidence", confidence},
+            {"front_confidence", front_confidence},
+            {"left_confidence", left_confidence},
+            {"right_confidence", right_confidence},
+            {"age_ms", age_ms},
+            {"stale", stale},
             {"blocked_directions", blocked_directions},
             {"narrow_passage", narrow_passage},
             {"recommended_action", recommended_action}

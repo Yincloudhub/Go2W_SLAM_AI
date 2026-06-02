@@ -4,6 +4,7 @@ set -euo pipefail
 # Minimal GO2W SLAM runtime startup used by the edge autonomy entrypoint.
 # This script intentionally starts only the LiDAR driver and Unitree SLAM backend.
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UNITREE_SLAM_DIR="${UNITREE_SLAM_DIR:-/unitree/module/unitree_slam/bin}"
 CYCLONEDDS_CONFIG="${CYCLONEDDS_CONFIG:-/unitree/module/unitree_slam/config/cyclonedds.xml}"
 SLAM_PARAM_FILE="${SLAM_PARAM_FILE:-/unitree/module/unitree_slam/config/slam_interfaces_server_config/param.yaml}"
@@ -314,5 +315,11 @@ fail_on_startup_log_error unitree_slam
 check_topic_once /slam_info 4
 require_process_alive unitree_slam
 fail_on_startup_log_error unitree_slam
+
+if [[ "${GO2W_START_STEREO_DEPTH:-1}" == "1" ]]; then
+  if ! bash "${SCRIPT_DIR}/go2w_stereo_depth_sidecar.sh" restart-if-stale; then
+    echo "warning: stereo depth sidecar is unavailable; SLAM stays online but real execution remains blocked" >&2
+  fi
+fi
 
 echo "startup command finished"

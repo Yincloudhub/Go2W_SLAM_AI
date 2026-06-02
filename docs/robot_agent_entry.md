@@ -72,7 +72,8 @@ python scripts/make_pcd_annotation_page.py --meta artifacts/real_site_pcd/test_t
 
 - `--execute` 不加时默认只做 dry-run，不会移动。
 - 网关安全门仍会实时检查 `slam_health`、`localization` 和 `safety.allow_navigation`。
-- `--go` 现场入口默认使用 `--nav-speed-mps 0.3 --nav-mode 1`，保持低速、地形/保守运动模式，声音和步态更轻；如果要完全使用 registry 中每个点自己的速度和 mode，可传 `--nav-speed-mps 0 --nav-mode -1`。
+- `--go` 现场入口默认使用 `--nav-speed-mps 0.3 --nav-mode 0`，保持低速并启用 Unitree SLAM 绕障模式；如果要完全使用 registry 中每个点自己的速度和 mode，可传 `--nav-speed-mps 0 --nav-mode -1`。
+- `--go` 和 `--go-b64` 不再隐式开启真实运动。真实执行必须显式传入 `--execute`，UI 也必须通过近场深度安全门后才能开启执行。
 - 当前 C++ 网关状态仍主要是短进程内存态，所以执行后的进度监控不要只依赖新开的 `get_world_state` 里的 `navigation` 字段，后续需要把导航任务状态持久化或改成长驻 agent。
 
 ## 语义链路摘要

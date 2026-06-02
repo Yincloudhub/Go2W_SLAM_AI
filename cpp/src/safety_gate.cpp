@@ -130,10 +130,35 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
         return blocked("battery below low_battery_percent", "confirm_or_charge");
     }
 
+    const auto* obstacle = objectAt(*world, {"local_obstacle"});
+    if (!obstacle || !obstacle->is_object()) return blocked("missing local_obstacle sensor summary");
+    const std::string obstacle_source = obstacle->value("source", "");
+    if (obstacle_source != "stereo_depth" && obstacle_source != "lidar_pointcloud" && obstacle_source != "lidar_pointcloud+stereo_depth") {
+        return blocked("local_obstacle is not sensor backed");
+    }
+    if (obstacle->value("stale", true)) return blocked("local_obstacle sensor summary is stale");
+    const double obstacle_age_ms = obstacle->value("age_ms", -1.0);
+    if (obstacle_age_ms < 0.0 || obstacle_age_ms > 1000.0) return blocked("local_obstacle sensor summary is too old");
+    const double obstacle_confidence = obstacle->value("confidence", 0.0);
+    const double front_confidence = obstacle->value("front_confidence", 0.0);
+    const double left_confidence = obstacle->value("left_confidence", 0.0);
+    const double right_confidence = obstacle->value("right_confidence", 0.0);
+    if (obstacle_confidence <= 0.0 || front_confidence < 0.15 || left_confidence < 0.15 || right_confidence < 0.15) {
+        return blocked("local_obstacle ROI confidence is too low");
+    }
+
     const double front_clearance = numberAt(*world, {"local_obstacle", "front_clearance_m"}, -1.0);
+    const double left_clearance = numberAt(*world, {"local_obstacle", "left_clearance_m"}, -1.0);
+    const double right_clearance = numberAt(*world, {"local_obstacle", "right_clearance_m"}, -1.0);
     const std::string obstacle_action = stringAt(*world, {"local_obstacle", "recommended_action"});
+    if (front_clearance < 0.0 || left_clearance < 0.0 || right_clearance < 0.0) {
+        return blocked("local_obstacle clearance is incomplete");
+    }
     if (front_clearance >= 0.0 && front_clearance < limits_.emergency_clearance_m) {
         return blocked("front obstacle inside emergency distance", "emergency_stop");
+    }
+    if (left_clearance < limits_.emergency_clearance_m || right_clearance < limits_.emergency_clearance_m) {
+        return blocked("side obstacle inside emergency distance", "pause");
     }
     if ((front_clearance >= 0.0 && front_clearance < limits_.pause_clearance_m) || obstacle_action == "pause") {
         return blocked("front obstacle inside pause distance", "pause");

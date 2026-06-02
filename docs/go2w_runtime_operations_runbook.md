@@ -1,5 +1,9 @@
 # GO2W 闭环现场使用手册
 
+## 事故后安全门
+
+2026-06-01 近场碰撞后，真实运动入口已经改为 fail-closed。固定 `6.0m` 占位距离不能解锁导航；当前阶段必须同时具备新鲜 D435 ROI 摘要，且前、左、右近场距离均通过安全门。恢复验证顺序见 `docs/go2w_near_field_collision_incident_2026-06-01.md`。
+
 ## 当前闭环边界
 
 默认链路已经可以在机器人本机运行：
@@ -15,7 +19,7 @@ XT16 LiDAR
   -> operator Web UI / LLM 输入
 ```
 
-DeepYOLO 和双目深度是可选语义侧车。它们可以增强环境理解，但退出或数据过期时不得阻断 LiDAR-only 主链路，也不得放宽 LiDAR 的安全判断。
+DeepYOLO 是可选语义侧车，不参与运动许可。D435 轻量 ROI 深度侧车当前是额外近场硬门槛：它退出或数据过期时，SLAM、定位和干跑仍可继续，但真实运动必须阻断。完成 XT16 点云几何摘要后，再切换为 LiDAR 主安全源与 D435 保守融合。
 
 ## 本地浏览器入口
 
@@ -94,6 +98,9 @@ bash scripts/snapshot_go2w_runtime_resources.sh
 
 # 查看可选 DeepYOLO 侧车状态
 bash scripts/go2w_deepyolo_sidecar.sh status
+
+# 查看真实运动依赖的轻量 D435 深度安全侧车
+bash scripts/go2w_stereo_depth_sidecar.sh health
 
 # 检查视觉侧车是否真的还在刷新语义摘要
 bash scripts/go2w_deepyolo_sidecar.sh health

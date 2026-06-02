@@ -180,6 +180,10 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
     }
 
     if (action == "resume_navigation") {
+        auto safety = gateway_.getSafetyDecision();
+        if (!safety.allow_navigation) {
+            return {{"accepted", false}, {"reason", "safety_blocked"}, {"safety", safety.toJson()}, {"world_state", gateway_.buildWorldStateJson()}};
+        }
         return ok(action, gateway_.resumeNavigation());
     }
 
