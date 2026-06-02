@@ -42,7 +42,7 @@ tests/test_llm_context.py
 
 ```powershell
 cd E:\GO2W_0
-python .\scripts\simulate_llm_planning.py --command "我现在在701实验室，去国篱师兄门口看看" --host 192.168.123.18 --username unitree --password 123 --map-id test_current_main --map-path /home/unitree/test.pcd --pretty
+python .\scripts\simulate_llm_planning.py --command "我现在在701实验室，去国篱师兄门口看看" --host 192.168.123.18 --username unitree --map-id test_current_main --map-path /home/unitree/test.pcd --pretty
 ```
 
 这个脚本会做三件事：

@@ -19,6 +19,11 @@ tunnel = load_module()
 
 
 class Go2wWebTunnelTests(unittest.TestCase):
+    def test_make_config_does_not_embed_robot_password(self):
+        config = tunnel.make_config([])
+
+        self.assertEqual(config.ssh_password, "")
+
     def test_make_config_accepts_port_and_hosts(self):
         config = tunnel.make_config([
             "--ssh-host",

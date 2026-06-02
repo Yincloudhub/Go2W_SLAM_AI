@@ -32,13 +32,13 @@ tests/test_runtime_state.py
 
 ```powershell
 cd E:\GO2W_0
-python .\scripts\slam_runtime_snapshot.py --host 192.168.123.18 --username unitree --password 123 --map-id test_current_main --map-path /home/unitree/test.pcd --pretty
+python .\scripts\slam_runtime_snapshot.py --host 192.168.123.18 --username unitree --map-id test_current_main --map-path /home/unitree/test.pcd --pretty
 ```
 
 如果不想在命令里写密码，可以设置环境变量：
 
 ```powershell
-$env:GO2W_SSH_PASSWORD="123"
+$env:GO2W_SSH_PASSWORD="<现场密码>"
 python .\scripts\slam_runtime_snapshot.py --host 192.168.123.18 --username unitree --map-id test_current_main --map-path /home/unitree/test.pcd --pretty
 ```
 

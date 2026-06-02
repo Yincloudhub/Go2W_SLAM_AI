@@ -9,13 +9,14 @@ robot LAN while keeping the browser URL simple.
 from __future__ import annotations
 
 import argparse
+import getpass
 import os
 import select
 import socket
 import socketserver
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 import paramiko
@@ -29,7 +30,7 @@ class TunnelConfig:
     ssh_host: str = "auto"
     ssh_hosts: tuple[str, ...] = DEFAULT_SSH_HOSTS
     ssh_user: str = "unitree"
-    ssh_password: str = "123"
+    ssh_password: str = ""
     ssh_connect_timeout_s: float = 3.0
     local_host: str = "127.0.0.1"
     local_port: int = 8765
@@ -112,7 +113,7 @@ def make_config(argv: Optional[list[str]] = None) -> TunnelConfig:
         help="Comma-separated management addresses probed when --ssh-host=auto.",
     )
     parser.add_argument("--ssh-user", default=os.environ.get("GO2W_SSH_USER", "unitree"))
-    parser.add_argument("--ssh-password", default=os.environ.get("GO2W_SSH_PASSWORD", "123"))
+    parser.add_argument("--ssh-password", default=os.environ.get("GO2W_SSH_PASSWORD", ""))
     parser.add_argument(
         "--ssh-connect-timeout-s",
         type=float,
@@ -210,6 +211,8 @@ class SshConnectionManager:
 
 
 def run_tunnel(config: TunnelConfig) -> None:
+    if not config.ssh_password:
+        config = replace(config, ssh_password=getpass.getpass(f"{config.ssh_user}@GO2W SSH password: "))
     ssh_manager = SshConnectionManager(config)
     ssh_manager.get_transport()
     manager = ssh_manager
