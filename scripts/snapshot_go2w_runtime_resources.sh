@@ -48,6 +48,8 @@ def find_pid(label: str):
             return pid
         if label == "deepyolo_bridge" and "deepyolo_semantic_bridge.py" in cmdline:
             return pid
+        if label == "stereo_depth" and "realsense_depth_summary.py" in cmdline:
+            return pid
         if label == "operator_web" and "go2w_operator_web.py" in cmdline:
             return pid
     return None
@@ -78,7 +80,7 @@ def read_thread_ticks(pid: int):
     return rows
 
 
-labels = ["xt16_driver", "unitree_slam", "deepyolo_detector", "deepyolo_bridge", "operator_web"]
+labels = ["xt16_driver", "unitree_slam", "stereo_depth", "deepyolo_detector", "deepyolo_bridge", "operator_web"]
 pids = {label: find_pid(label) for label in labels}
 before = {label: read_process(pid) for label, pid in pids.items() if pid is not None}
 slam_pid = pids.get("unitree_slam")
