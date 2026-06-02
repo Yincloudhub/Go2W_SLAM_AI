@@ -32,6 +32,7 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("语义视觉未启动或离线，不参与运动决策", web.INDEX_HTML)
         self.assertIn("近场运动许可仍由实时深度摘要与 SLAM 安全门决定", web.INDEX_HTML)
         self.assertIn("运动安全门", web.INDEX_HTML)
+        self.assertIn("外部边缘节点", web.INDEX_HTML)
         self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
 
     def test_operator_ui_busy_state_does_not_lock_text_inputs(self):
@@ -508,6 +509,48 @@ class OperatorWebTests(unittest.TestCase):
 
             self.assertEqual(loaded["age_ms"], 120)
             self.assertFalse(loaded["stale_by_age"])
+
+    def test_edge_summary_is_semantic_only_until_explicit_safety_adapter_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "artifacts" / "edge_perception_summary.json"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "node_id": "nx_ti_radar_01",
+                        "sensor_type": "ti_millimeter_wave_radar",
+                        "source": "nx_ti_radar",
+                        "timestamp_ms": int(time.time() * 1000),
+                        "health": {"status": "ok"},
+                        "observations": [{"track_id": str(index)} for index in range(40)],
+                        "policy": {
+                            "mode": "semantic_only",
+                            "calibrated": True,
+                            "safety_candidate": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                edge_summary_path=Path("artifacts/edge_perception_summary.json"),
+            )
+
+            loaded = web.OperatorWebApp(config).edge_summary()
+
+            self.assertTrue(loaded["available"])
+            self.assertTrue(loaded["fresh"])
+            self.assertTrue(loaded["eligible_for_llm"])
+            self.assertTrue(loaded["safety_candidate"])
+            self.assertFalse(loaded["safety_wired"])
+            self.assertEqual(len(loaded["data"]["observations"]), 32)
 
     def test_status_uses_short_cache_to_bound_panel_spawns(self):
         class FakeApp(web.OperatorWebApp):

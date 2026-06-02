@@ -115,6 +115,19 @@ The expected model output is only:
 The C++ panel rejects empty or unregistered targets and does not accept raw
 coordinates or Unitree API ids from the model.
 
+## Optional external edge perception node
+
+An external NX can run vendor-specific TI radar drivers and tracking code, then
+publish a bounded latest-value summary to
+`artifacts/edge_perception_summary.json`. The C++ operator core and browser UI
+load fresh summaries without taking ownership of raw radar streams.
+
+This interface defaults to `semantic_only`: fresh summaries can enrich LLM and
+operator context, but they do not authorize movement and cannot relax XT16,
+D435, or SLAM safety blocks. Any later SafetyGate integration requires a
+separate calibrated adapter and static validation. See
+`docs/edge_perception_node_contract.md`.
+
 Watch-only mode:
 
 ```bash

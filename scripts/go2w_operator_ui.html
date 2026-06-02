@@ -302,6 +302,7 @@
           <div class="metric"><label>运动安全门</label><strong id="m-motion-guard">等待深度摘要</strong></div>
           <div class="metric"><label>视觉场景</label><strong id="m-semantic-scene">暂无数据</strong></div>
           <div class="metric"><label>视觉建议</label><strong id="m-semantic-action">暂无数据</strong></div>
+          <div class="metric"><label>外部边缘节点</label><strong id="m-edge-node">未接入</strong></div>
         </div>
       </section>
 
@@ -550,6 +551,20 @@
       $("m-semantic-scene").textContent = `${z(data.source_status)} / ${z(data.dominant_class || "none")} / ${data.object_count ?? 0} 个目标`;
       $("m-semantic-action").textContent = `${z(effective)} / ${age}${stale ? " 已过期" : ""}`;
     }
+    function updateEdge(edge) {
+      if (!edge || !edge.available || !edge.data) {
+        $("m-edge-node").textContent = "未接入，可选增强";
+        return;
+      }
+      const data = edge.data;
+      const age = edge.age_ms == null ? "未知" : `${Math.round(edge.age_ms)}ms`;
+      const node = data.node_id || "外部节点";
+      const sensor = data.sensor_type || "sensor";
+      const mode = data.policy && data.policy.mode ? data.policy.mode : "semantic_only";
+      $("m-edge-node").textContent = edge.fresh
+        ? `${node} / ${sensor} / ${mode} / ${age}`
+        : `${node} / 离线或摘要过期 / ${age}`;
+    }
     async function api(path, options = {}) {
       const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -567,6 +582,7 @@
         updateState(result.state);
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
+        updateEdge(result.edge_summary);
         setScreen(summary, result.semantic_summary);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
@@ -593,6 +609,7 @@
         updateState(result.state);
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
+        updateEdge(result.edge_summary);
         setScreen(summary, result.semantic_summary);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {

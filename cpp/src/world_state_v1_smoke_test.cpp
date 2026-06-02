@@ -28,12 +28,27 @@ int main()
 
     const auto world = go2w::buildWorldStateV1(
         gateway,
-        {{"current_node", "wp_1"}, {"motion_allowed", true}, {"task_phase", "planning"}});
+        {
+            {"current_node", "wp_1"},
+            {"motion_allowed", true},
+            {"task_phase", "planning"},
+            {"perception_summaries", nlohmann::json::array({
+                {
+                    {"source", "nx_ti_radar"},
+                    {"confidence", 0.85},
+                    {"stale", false},
+                    {"latency_ms", 40},
+                    {"timestamp_ms", 123},
+                    {"summary", {{"nearest_track_range_m", 2.4}}},
+                },
+            })},
+        });
     require(world.value("schema_version", 0) == 1, "schema_version mismatch");
     require(world.value("localized", false), "world should be localized");
     require(world.value("motion_allowed", false), "motion should be allowed");
     require(world.value("obstacle_status", std::string("")) == "clear", "obstacle status mismatch");
     require(world.contains("available_tools") && world.at("available_tools").is_array(), "missing available tools");
+    require(world.at("perception_summaries").at(0).value("source", std::string("")) == "nx_ti_radar", "edge summary mismatch");
 
     const nlohmann::json task_queue = {
         {"targets", {"wp_1"}},

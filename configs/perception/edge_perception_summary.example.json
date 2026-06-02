@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "node_id": "nx_ti_radar_01",
+  "sensor_type": "ti_millimeter_wave_radar",
+  "source": "nx_ti_radar",
+  "timestamp_ms": 0,
+  "confidence": 0.85,
+  "latency_ms": 40,
+  "stale": false,
+  "health": {
+    "status": "ok",
+    "detail": "example only"
+  },
+  "policy": {
+    "mode": "semantic_only",
+    "calibrated": false,
+    "safety_candidate": false
+  },
+  "observations": [
+    {
+      "track_id": "radar_track_001",
+      "type": "person",
+      "range_m": 2.4,
+      "azimuth_deg": 12.0,
+      "radial_velocity_mps": -0.3,
+      "confidence": 0.9
+    }
+  ],
+  "events": [
+    {
+      "event_type": "moving_person",
+      "severity": "info",
+      "range_m": 2.4
+    }
+  ],
+  "summary": {
+    "object_count": 1,
+    "nearest_range_m": 2.4,
+    "has_motion": true
+  }
+}
+

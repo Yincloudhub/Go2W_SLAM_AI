@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_library(go2w_plan_executor_core
+    src/edge_perception.cpp
     src/gateway_client.cpp
     src/llm_http_client.cpp
     src/plan_executor.cpp
@@ -65,3 +66,11 @@ add_executable(go2w_safety_gate_smoke_test
 target_link_libraries(go2w_safety_gate_smoke_test PRIVATE go2w_plan_executor_core)
 
 add_test(NAME go2w_safety_gate_smoke_test COMMAND go2w_safety_gate_smoke_test)
+
+add_executable(go2w_edge_perception_smoke_test
+    src/edge_perception_smoke_test.cpp
+)
+
+target_link_libraries(go2w_edge_perception_smoke_test PRIVATE go2w_plan_executor_core)
+
+add_test(NAME go2w_edge_perception_smoke_test COMMAND go2w_edge_perception_smoke_test)

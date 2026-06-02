@@ -29,6 +29,8 @@ from urllib.parse import parse_qs, urlparse
 DEFAULT_PORT = 8765
 DEFAULT_MAP_ID = "go2w_real_site"
 DEFAULT_REGISTRY_PATH = Path("configs/maps/go2w_real_site_map_registry.json")
+MAX_EDGE_SUMMARY_BYTES = 256 * 1024
+MAX_EDGE_SUMMARY_ITEMS = 32
 DISABLED_NODE_TAGS = {"disabled", "ui_disabled", "deleted"}
 VERIFICATION_TAGS = {"needs_calibration", "needs_standing_verification"}
 PROTECTED_TOPOLOGY_NODE_IDS = {"initial_point"}
@@ -196,6 +198,8 @@ class WebConfig:
     stereo_motion_guard_min_clearance_m: float = 0.8
     semantic_summary_path: Path = Path("artifacts/vision_semantic_summary.json")
     semantic_stale_ms: int = 3000
+    edge_summary_path: Path = Path("artifacts/edge_perception_summary.json")
+    edge_stale_ms: int = 3000
     status_cache_ms: int = 1500
     ensure_slam_on_start: bool = False
     registry_path: Path = DEFAULT_REGISTRY_PATH
@@ -396,6 +400,7 @@ class OperatorWebApp:
         result["stereo_summary"] = self.stereo_summary()
         result["stereo_motion_guard"] = self.stereo_motion_guard()
         result["semantic_summary"] = self.semantic_summary()
+        result["edge_summary"] = self.edge_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
         return result
@@ -423,6 +428,7 @@ class OperatorWebApp:
                     "summary": summary,
                     "stereo_summary": self.stereo_summary(),
                     "semantic_summary": self.semantic_summary(),
+                    "edge_summary": self.edge_summary(),
                     "state": self.state.snapshot(),
                 }
             stereo_guard = self.stereo_motion_guard()
@@ -437,6 +443,7 @@ class OperatorWebApp:
                     "stereo_summary": self.stereo_summary(),
                     "stereo_motion_guard": stereo_guard,
                     "semantic_summary": self.semantic_summary(),
+                    "edge_summary": self.edge_summary(),
                     "state": self.state.snapshot(),
                 }
 
@@ -453,6 +460,7 @@ class OperatorWebApp:
                     "summary": summary,
                     "stereo_summary": self.stereo_summary(),
                     "semantic_summary": self.semantic_summary(),
+                    "edge_summary": self.edge_summary(),
                     "state": self.state.snapshot(),
                 }
             remaining = RELOCATE_COOLDOWN_S - (now - self._last_relocate_ts)
@@ -465,6 +473,7 @@ class OperatorWebApp:
                     "summary": summary,
                     "stereo_summary": self.stereo_summary(),
                     "semantic_summary": self.semantic_summary(),
+                    "edge_summary": self.edge_summary(),
                     "state": self.state.snapshot(),
                 }
             self._last_relocate_ts = now
@@ -477,6 +486,7 @@ class OperatorWebApp:
                 local["stereo_summary"] = self.stereo_summary()
                 local["stereo_motion_guard"] = self.stereo_motion_guard()
                 local["semantic_summary"] = self.semantic_summary()
+                local["edge_summary"] = self.edge_summary()
                 local["state"] = self.state.snapshot()
                 self.state.remember(line, local)
         if local is not None:
@@ -487,6 +497,7 @@ class OperatorWebApp:
         result["stereo_summary"] = self.stereo_summary()
         result["stereo_motion_guard"] = self.stereo_motion_guard()
         result["semantic_summary"] = self.semantic_summary()
+        result["edge_summary"] = self.edge_summary()
         with self.lock:
             result["state"] = self.state.snapshot()
             self.state.remember(line, result)
@@ -828,6 +839,87 @@ class OperatorWebApp:
             }
         except Exception as exc:  # noqa: BLE001
             return {"available": False, "path": str(path), "error": str(exc)}
+
+    def edge_summary(self) -> Dict[str, Any]:
+        path = self.config.edge_summary_path
+        if not path.is_absolute():
+            path = self.config.repo_root / path
+        if not path.exists():
+            return {
+                "available": False,
+                "fresh": False,
+                "eligible_for_llm": False,
+                "safety_candidate": False,
+                "safety_wired": False,
+                "status": "offline_or_not_started",
+                "path": str(path),
+            }
+        try:
+            if path.stat().st_size > MAX_EDGE_SUMMARY_BYTES:
+                raise ValueError("summary exceeds 256 KiB limit")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            timestamp_ms = int(data.get("timestamp_ms") or 0)
+            age_ms = max(0, int(time.time() * 1000) - timestamp_ms) if timestamp_ms else -1
+            health = data.get("health") if isinstance(data.get("health"), dict) else {}
+            policy = data.get("policy") if isinstance(data.get("policy"), dict) else {}
+            valid = (
+                data.get("schema_version") == 1
+                and bool(data.get("node_id"))
+                and bool(data.get("sensor_type"))
+                and bool(data.get("source"))
+                and timestamp_ms > 0
+            )
+            fresh = (
+                valid
+                and not bool(data.get("stale", False))
+                and 0 <= age_ms <= self.config.edge_stale_ms
+                and health.get("status") == "ok"
+            )
+            safe_data = {
+                "schema_version": data.get("schema_version"),
+                "node_id": data.get("node_id"),
+                "sensor_type": data.get("sensor_type"),
+                "source": data.get("source"),
+                "timestamp_ms": timestamp_ms,
+                "confidence": data.get("confidence", 0.0),
+                "latency_ms": data.get("latency_ms", 0.0),
+                "health": health,
+                "policy": {
+                    "mode": policy.get("mode", "semantic_only"),
+                    "calibrated": bool(policy.get("calibrated", False)),
+                    "safety_candidate": bool(policy.get("safety_candidate", False)),
+                },
+                "observations": data.get("observations", [])[:MAX_EDGE_SUMMARY_ITEMS]
+                if isinstance(data.get("observations"), list)
+                else [],
+                "events": data.get("events", [])[:MAX_EDGE_SUMMARY_ITEMS]
+                if isinstance(data.get("events"), list)
+                else [],
+                "summary": data.get("summary") if isinstance(data.get("summary"), dict) else {},
+            }
+            return {
+                "available": valid,
+                "fresh": fresh,
+                "eligible_for_llm": fresh,
+                "safety_candidate": bool(fresh and policy.get("calibrated", False) and policy.get("safety_candidate", False)),
+                "safety_wired": False,
+                "status": "fresh" if fresh else ("stale_or_unhealthy" if valid else "invalid_summary"),
+                "path": str(path),
+                "age_ms": age_ms,
+                "stale_ms": self.config.edge_stale_ms,
+                "data": safe_data,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "available": False,
+                "fresh": False,
+                "eligible_for_llm": False,
+                "safety_candidate": False,
+                "safety_wired": False,
+                "status": "invalid_summary",
+                "path": str(path),
+                "error": str(exc),
+            }
 
 
 INDEX_HTML = r"""<!doctype html>
@@ -1291,6 +1383,9 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
         if parsed_path.path == "/api/semantic-summary":
             self.send_json({"semantic_summary": self.app.semantic_summary()})
             return
+        if parsed_path.path == "/api/edge-summary":
+            self.send_json({"edge_summary": self.app.edge_summary()})
+            return
         if parsed_path.path == "/api/topology":
             try:
                 self.send_json(self.app.topology())
@@ -1400,6 +1495,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--stereo-motion-guard-min-clearance-m", type=float, default=float(env.get("GO2W_STEREO_MOTION_GUARD_MIN_CLEARANCE_M", "0.8")))
     parser.add_argument("--semantic-summary-path", default=env.get("GO2W_SEMANTIC_SUMMARY_PATH", "artifacts/vision_semantic_summary.json"))
     parser.add_argument("--semantic-stale-ms", type=int, default=int(env.get("GO2W_SEMANTIC_STALE_MS", "3000")))
+    parser.add_argument("--edge-summary-path", default=env.get("GO2W_EDGE_SUMMARY_PATH", "artifacts/edge_perception_summary.json"))
+    parser.add_argument("--edge-stale-ms", type=int, default=int(env.get("GO2W_EDGE_STALE_MS", "3000")))
     parser.add_argument("--status-cache-ms", type=int, default=int(env.get("GO2W_STATUS_CACHE_MS", "1500")))
     parser.add_argument("--registry", default=env.get("GO2W_REGISTRY", str(DEFAULT_REGISTRY_PATH)))
     parser.add_argument("--map-id", default=env.get("GO2W_MAP_ID", DEFAULT_MAP_ID))
@@ -1434,6 +1531,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         stereo_motion_guard_min_clearance_m=max(0.0, args.stereo_motion_guard_min_clearance_m),
         semantic_summary_path=Path(args.semantic_summary_path).expanduser(),
         semantic_stale_ms=max(1, args.semantic_stale_ms),
+        edge_summary_path=Path(args.edge_summary_path).expanduser(),
+        edge_stale_ms=max(1, args.edge_stale_ms),
         status_cache_ms=max(0, args.status_cache_ms),
         ensure_slam_on_start=args.ensure_slam_on_start,
         registry_path=Path(args.registry).expanduser(),

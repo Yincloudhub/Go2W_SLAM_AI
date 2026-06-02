@@ -1,4 +1,5 @@
 #include "go2w/operator_panel.hpp"
+#include "go2w/edge_perception.hpp"
 #include "go2w/llm_http_client.hpp"
 #include "go2w/queue_executor.hpp"
 #include "go2w/world_state_v1.hpp"
@@ -531,6 +532,7 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
     nlohmann::json perception = {
         {"stereo_depth", loadFreshPerceptionForLlm(config_.repo_root + "/artifacts/stereo_depth_summary.json", 1000)},
         {"deepyolo_semantics", loadFreshPerceptionForLlm(config_.repo_root + "/artifacts/vision_semantic_summary.json", 3000)},
+        {"edge_node", loadEdgePerceptionSummary(config_.repo_root + "/artifacts/edge_perception_summary.json", 3000)},
     };
 
     nlohmann::json user_payload = {
