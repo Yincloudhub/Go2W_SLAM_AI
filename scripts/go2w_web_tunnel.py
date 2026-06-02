@@ -43,20 +43,27 @@ class ForwardServer(socketserver.ThreadingTCPServer):
 
 
 class ForwardHandler(socketserver.BaseRequestHandler):
-    ssh_transport: paramiko.Transport
+    ssh_manager: "SshConnectionManager"
     remote_host: str
     remote_port: int
 
     def handle(self) -> None:
-        try:
-            chan = self.ssh_transport.open_channel(
-                "direct-tcpip",
-                (self.remote_host, self.remote_port),
-                self.request.getpeername(),
-            )
-        except Exception as exc:  # noqa: BLE001
-            print(f"open_channel_failed={exc}", file=sys.stderr)
-            return
+        chan = None
+        transport = None
+        for attempt in range(2):
+            try:
+                transport = self.ssh_manager.get_transport()
+                chan = transport.open_channel(
+                    "direct-tcpip",
+                    (self.remote_host, self.remote_port),
+                    self.request.getpeername(),
+                )
+                break
+            except Exception as exc:  # noqa: BLE001
+                self.ssh_manager.invalidate(transport)
+                print(f"open_channel_failed={exc}", file=sys.stderr)
+                if attempt == 0:
+                    print("retrying_with_fresh_ssh_transport", file=sys.stderr)
         if chan is None:
             print("open_channel_failed=none", file=sys.stderr)
             return
@@ -73,6 +80,10 @@ class ForwardHandler(socketserver.BaseRequestHandler):
                     if not data:
                         break
                     self.request.sendall(data)
+        except (EOFError, OSError, paramiko.SSHException) as exc:
+            print(f"forwarding_interrupted={exc}", file=sys.stderr)
+            if transport is not None and not transport.is_active():
+                self.ssh_manager.invalidate(transport)
         finally:
             chan.close()
             self.request.close()
@@ -155,28 +166,70 @@ def open_ssh(config: TunnelConfig) -> tuple[paramiko.SSHClient, str]:
     raise RuntimeError(f"unable to connect to GO2W SSH candidates: {'; '.join(errors)}")
 
 
+class SshConnectionManager:
+    """Keeps the browser tunnel usable across robot reboots and IP changes."""
+
+    def __init__(self, config: TunnelConfig):
+        self.config = config
+        self._lock = threading.Lock()
+        self._ssh: Optional[paramiko.SSHClient] = None
+        self._transport: Optional[paramiko.Transport] = None
+        self.selected_ssh_host: Optional[str] = None
+
+    def get_transport(self) -> paramiko.Transport:
+        with self._lock:
+            if self._transport is not None and self._transport.is_active():
+                return self._transport
+            self._close_locked()
+            ssh, selected_ssh_host = open_ssh(self.config)
+            transport = ssh.get_transport()
+            if transport is None or not transport.is_active():
+                ssh.close()
+                raise RuntimeError("ssh transport unavailable")
+            self._ssh = ssh
+            self._transport = transport
+            self.selected_ssh_host = selected_ssh_host
+            print(f"ssh_connected={selected_ssh_host}", flush=True)
+            return transport
+
+    def invalidate(self, transport: Optional[paramiko.Transport]) -> None:
+        with self._lock:
+            if transport is None or transport is self._transport:
+                self._close_locked()
+
+    def close(self) -> None:
+        with self._lock:
+            self._close_locked()
+
+    def _close_locked(self) -> None:
+        if self._ssh is not None:
+            self._ssh.close()
+        self._ssh = None
+        self._transport = None
+        self.selected_ssh_host = None
+
+
 def run_tunnel(config: TunnelConfig) -> None:
-    ssh, selected_ssh_host = open_ssh(config)
-    transport = ssh.get_transport()
-    if transport is None:
-        raise RuntimeError("ssh transport unavailable")
+    ssh_manager = SshConnectionManager(config)
+    ssh_manager.get_transport()
+    manager = ssh_manager
 
     class Handler(ForwardHandler):
-        ssh_transport = transport
+        ssh_manager = manager
         remote_host = config.remote_host
         remote_port = config.remote_port
 
     server = ForwardServer((config.local_host, config.local_port), Handler)
     print(
         f"forwarding http://{config.local_host}:{config.local_port} "
-        f"-> {config.ssh_user}@{selected_ssh_host}:{config.remote_host}:{config.remote_port}",
+        f"-> {config.ssh_user}@auto:{config.remote_host}:{config.remote_port}",
         flush=True,
     )
     try:
         server.serve_forever()
     finally:
         server.server_close()
-        ssh.close()
+        ssh_manager.close()
 
 
 def main(argv: Optional[list[str]] = None) -> int:

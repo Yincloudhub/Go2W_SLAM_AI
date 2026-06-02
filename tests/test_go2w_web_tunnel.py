@@ -80,6 +80,48 @@ class Go2wWebTunnelTests(unittest.TestCase):
         self.assertEqual(selected_host, "192.168.3.17")
         self.assertEqual(attempts, ["192.168.123.18", "192.168.3.17"])
 
+    def test_connection_manager_reconnects_after_transport_goes_inactive(self):
+        transports = []
+        clients = []
+
+        class FakeTransport:
+            def __init__(self):
+                self.active = True
+
+            def is_active(self):
+                return self.active
+
+        class FakeClient:
+            def __init__(self, transport):
+                self.transport = transport
+                self.closed = False
+
+            def get_transport(self):
+                return self.transport
+
+            def close(self):
+                self.closed = True
+
+        def fake_open_ssh(config):
+            transport = FakeTransport()
+            client = FakeClient(transport)
+            transports.append(transport)
+            clients.append(client)
+            return client, f"host-{len(clients)}"
+
+        manager = tunnel.SshConnectionManager(tunnel.TunnelConfig())
+        with patch.object(tunnel, "open_ssh", fake_open_ssh):
+            first = manager.get_transport()
+            first.active = False
+            second = manager.get_transport()
+
+        self.assertIsNot(first, second)
+        self.assertTrue(clients[0].closed)
+        self.assertFalse(clients[1].closed)
+        self.assertEqual(manager.selected_ssh_host, "host-2")
+        manager.close()
+        self.assertTrue(clients[1].closed)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -37,6 +37,10 @@ cd E:\GO2W_0
 python scripts\go2w_web_tunnel.py
 ```
 
+The tunnel reconnects lazily after a robot reboot or SSH transport failure. In
+`auto` mode it probes the configured management addresses again, so switching
+between direct cable and Wi-Fi does not require editing the source code.
+
 浏览器打开：
 
 ```text
