@@ -36,6 +36,7 @@ int main()
                          {"map_id", "go2w_real_site"},
                          {"topology_nodes", json::array({
                                                 node("enabled_node", "enabled target", json::array({"real_site"})),
+                                                node("return_node", "return target", json::array({"real_site"})),
                                                 node("disabled_node", "disabled target", json::array({"real_site", "disabled"})),
                                             })},
                      },
@@ -46,5 +47,12 @@ int main()
     require(router.planText("go enabled target", 0.3, 0).matched, "enabled node should resolve");
     require(!router.planText("go disabled target", 0.3, 0).matched, "disabled node should not resolve");
     require(router.findNode("disabled_node") == nullptr, "disabled node should not be returned by findNode");
+    const auto capture_route = router.planText("去 enabled target 拍一张照，然后回 return target", 0.3, 0);
+    require(capture_route.matched, "multi-target capture command should resolve");
+    require(capture_route.task_queue["steps"].size() == 3, "capture command should expand to navigate, capture, navigate");
+    require(capture_route.task_queue["steps"][0]["action"] == "navigate", "first step should navigate to capture target");
+    require(capture_route.task_queue["steps"][1]["action"] == "capture_keyframe", "second step should capture at first target");
+    require(capture_route.task_queue["steps"][1]["target_node"] == "enabled_node", "capture should stay attached to first target");
+    require(capture_route.task_queue["steps"][2]["action"] == "navigate", "third step should navigate to return target");
     return 0;
 }

@@ -143,7 +143,20 @@ std::vector<ResolvedTarget> SemanticRouter::resolveTargets(const std::string& te
 
 bool SemanticRouter::commandRequestsCapture(const std::string& text) const
 {
-    return containsAny(text, {"拍照", "照片", "看一眼", "看看", "关键帧", "photo", "capture", "keyframe"});
+    return containsAny(text, {
+        "拍照",
+        "拍张照",
+        "拍个照",
+        "拍一张照",
+        "拍一张照片",
+        "照片",
+        "看一眼",
+        "看看",
+        "关键帧",
+        "photo",
+        "capture",
+        "keyframe",
+    });
 }
 
 nlohmann::json SemanticRouter::poseToUnitreeJson(const nlohmann::json& node, double speed_mps, int mode) const
