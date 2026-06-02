@@ -238,7 +238,8 @@ TI mmWave Radar
       -> point cloud / target tracking / occupancy / vital sign candidate
       -> RadarDetectionSummary
   -> GO2W Operator Core
-      -> SafetyGate / UI / LLM explanation
+      -> UI / LLM explanation
+      -> calibrated SafetyGate adapter (later phase)
 ```
 
 第一阶段不建议把目标定成完整合成孔径雷达成像。更稳的方向是“复杂环境搜救/巡检感知增强”：
@@ -247,7 +248,7 @@ TI mmWave Radar
 - 遮挡或光照不佳时提供人员存在候选。
 - 输出目标距离、方位、速度、置信度。
 - 在 UI 中作为“雷达告警区域”显示。
-- 在 SafetyGate 中触发 `slow`、`confirm` 或 `inspect_area`。
+- 完成标定和静态验证后，再通过独立适配器在 SafetyGate 中触发 `slow`、`confirm` 或 `inspect_area`。
 
 推荐摘要格式：
 
@@ -278,6 +279,11 @@ TI mmWave Radar
 - Jetson Orin NX 可作为雷达边缘节点，承载 parser、跟踪、轻量视觉或语义融合。
 
 这些硬件只作为可选方向，主链路应允许雷达节点缺席时继续运行。
+
+截至 2026-06-02，仓库已预留 `artifacts/edge_perception_summary.json` 最新值接口，契约见
+`docs/edge_perception_node_contract.md`。默认模式为 `semantic_only`：摘要可以进入 UI 和 LLM 上下文，
+但 `safety_wired=false`，不会授权运动，也不会绕过 XT16、双目深度或 SLAM 的阻断。外部摘要限制在
+256 KiB 内，`observations` 和 `events` 各最多接收 32 条，避免 NX 侧负载影响机器人主链路。
 
 ### 3. 双目深度相机
 
@@ -429,7 +435,7 @@ XT16 LiDAR
 ### P2：多模态边缘节点
 
 - NX 上运行 TI 雷达 parser，发布 `RadarDetectionSummary`。
-- 雷达告警参与巡检任务和 SafetyGate。
+- 雷达告警先参与巡检任务；完成标定与故障测试后再接入 SafetyGate。
 - LLM 常驻服务化，C++/Python 通过 HTTP 调用。
 - 弱网模式压测：延迟、丢包、带宽限制下任务是否继续。
 - 生成巡检结束报告。
