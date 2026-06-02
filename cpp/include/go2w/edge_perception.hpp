@@ -16,4 +16,3 @@ nlohmann::json loadEdgePerceptionSummary(
     std::int64_t current_time_ms = 0);
 
 }  // namespace go2w
-
