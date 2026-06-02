@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Sync curated GO2W project notes into the active local Obsidian vault."""
+"""Sync curated GO2W project notes between the repo and the active Obsidian vault."""
 
 from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Iterable
@@ -14,6 +15,7 @@ from typing import Iterable
 START = "<!-- GO2W_FIELD_SYNC_START -->"
 END = "<!-- GO2W_FIELD_SYNC_END -->"
 DEFAULT_VAULT = Path("E:/codexprofile/obsidian_vault")
+DEFAULT_EXPORT_DIR = Path("docs/obsidian_go2w_overview")
 
 
 COPIES = (
@@ -88,7 +90,46 @@ def copy_files(repo_root: Path, overview_dir: Path, copies: Iterable[tuple[Path,
     return written
 
 
-def sync_docs(repo_root: Path, vault: Path, desktop_copy: Path | None = None) -> list[Path]:
+def sanitize_export_text(text: str) -> str:
+    text = re.sub(
+        r"(?i)(GO2W_SSH_PASSWORD\s*=\s*['\"])(?!<)[^'\"]+(['\"])",
+        r"\1<现场密码>\2",
+        text,
+    )
+    text = re.sub(
+        r"(?i)(RADAR_STATION_SUDO_PASSWORD\s*=\s*['\"])(?!<)[^'\"]+(['\"])",
+        r"\1<sudo_password>\2",
+        text,
+    )
+    text = re.sub(
+        r"(?i)(--password\s+)(?!<)\S+",
+        r"\1<现场密码>",
+        text,
+    )
+    return text.rstrip() + "\n"
+
+
+def export_overview(overview_dir: Path, export_dir: Path) -> list[Path]:
+    export_dir.mkdir(parents=True, exist_ok=True)
+    for stale in export_dir.glob("*.md"):
+        stale.unlink()
+
+    written: list[Path] = []
+    for source in sorted(overview_dir.glob("*.md")):
+        destination = export_dir / source.name
+        text = source.read_text(encoding="utf-8")
+        destination.write_text(sanitize_export_text(text), encoding="utf-8")
+        written.append(destination)
+    return written
+
+
+def sync_docs(
+    repo_root: Path,
+    vault: Path,
+    desktop_copy: Path | None = None,
+    *,
+    export_dir: Path | None = None,
+) -> list[Path]:
     if not (vault / ".obsidian").is_dir():
         raise FileNotFoundError(f"Obsidian vault marker is missing: {vault / '.obsidian'}")
 
@@ -103,6 +144,9 @@ def sync_docs(repo_root: Path, vault: Path, desktop_copy: Path | None = None) ->
     index.write_text(next_text, encoding="utf-8")
     written.append(index)
 
+    if export_dir is not None:
+        written.extend(export_overview(overview_dir, export_dir))
+
     if desktop_copy is not None:
         desktop_copy.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(repo_root / COPIES[0][0], desktop_copy)
@@ -115,16 +159,23 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vault", default=os.environ.get("GO2W_OBSIDIAN_VAULT", str(DEFAULT_VAULT)))
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[1]))
     parser.add_argument("--desktop-copy", default="")
+    parser.add_argument(
+        "--export-overview",
+        action="store_true",
+        help="export only the GO2W overview Markdown notes into the repository",
+    )
     return parser
 
 
 def main() -> int:
     args = make_parser().parse_args()
     desktop_copy = Path(args.desktop_copy).expanduser() if args.desktop_copy else None
+    repo_root = Path(args.repo_root).expanduser().resolve()
     written = sync_docs(
-        repo_root=Path(args.repo_root).expanduser().resolve(),
+        repo_root=repo_root,
         vault=Path(args.vault).expanduser().resolve(),
         desktop_copy=desktop_copy,
+        export_dir=repo_root / DEFAULT_EXPORT_DIR if args.export_overview else None,
     )
     for path in written:
         print(f"updated={path}")

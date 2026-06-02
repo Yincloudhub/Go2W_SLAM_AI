@@ -1,0 +1,73 @@
+# GO2W 近场碰撞事故与恢复验证
+
+## 事故现象
+
+2026-06-01，机器人从初始点执行多点导航时，起步右转后持续顶住右侧箱体，直到关节发热并停止工作。事故后应保持机器人趴下，完成静态检查和分级验证前不得恢复真实运动。
+
+## 已确认的软件原因
+
+1. 网关 `LidarGeometryPerception` 仍是阶段性占位实现，固定输出前后左右 `6.0m`。
+2. 占位值此前没有 `source`、`stale`、`confidence` 标记，`SafetySupervisor` 将其当成真实近场距离。
+3. C++ `SafetyGate` 只检查前方距离，没有拒绝缺少传感器来源的摘要，也没有检查左右近障。
+4. 上层现场入口默认 `nav_mode=1`，但 Unitree SLAM 接口约定中 `mode=0` 才是绕障模式。
+5. `QueueExecutor` 运行中发现阻断、网关连续失败或超时时，没有保证补发一次 `pause_navigation`。
+6. 重启后视觉生产者未启动时，UI 将“未启动或离线”与“运行中数据过期”混成同一种显示。
+
+## 当前修正策略
+
+- 手工 `6.0m` 距离只允许作为调试占位，固定标记为 `manual_stub + stale`，不能解锁运动。
+- 当前阶段由 D435 轻量 ROI 摘要提供近场传感器凭据。只消费最新 JSON，不向 UI、LLM 或执行器传原始图像。
+- 真正执行前要求 D435 摘要小于 `1000ms`，前、左、右 ROI 置信度均不低于 `0.15`，前、左、右距离均不小于 `0.8m`。
+- 默认导航模式改为 `mode=0`，明确启用 Unitree SLAM 绕障。
+- DeepYOLO 保持可选语义侧车。它不参与运动许可，不应与 D435 轻量深度侧车在真实运动时争抢相机资源。
+- XT16 点云几何摘要仍是后续必须补齐的正式主安全源。完成前，D435 轻量摘要是额外硬门槛，不是 XT16 几何感知的替代终点。
+
+## 上电后分级恢复
+
+### 0. 人工检查
+
+- 检查关节温度、异响、外壳、线缆和箱体碰撞位置。
+- 机器人保持趴下，遥控器和物理停机手段在操作员手边。
+- 不开启 UI 的“允许真实执行”。
+
+### 1. 静态启动
+
+```bash
+cd /home/unitree/Go2W_SLAM_AI
+bash scripts/run_go2w_operator_web.sh
+```
+
+该入口只自动启动或检查 XT16、SLAM 和轻量深度侧车，不应下发导航、重定位、建图或底盘运动命令。
+
+### 2. 静态状态检查
+
+```bash
+bash scripts/go2w_stereo_depth_sidecar.sh health
+PYTHONPATH=src python3 scripts/go2w_agent_entry.py --status --pretty
+```
+
+必须看到：
+
+```text
+local_obstacle.source = stereo_depth
+local_obstacle.stale = false
+local_obstacle.age_ms <= 1000
+local_obstacle.front_confidence >= 0.15
+local_obstacle.left_confidence >= 0.15
+local_obstacle.right_confidence >= 0.15
+```
+
+### 3. 趴下阻断测试
+
+在机器人仍趴下时，将箱体放在右侧近距离范围，确认 UI 的“运动安全门”显示锁定，`/execute on` 被拒绝。移开箱体后也只验证状态恢复，不进行导航。
+
+### 4. 首次短距离运动
+
+只有前三步通过后，才允许在开阔区域、双人值守、遥控器可立即接管的条件下进行 `0.2m` 级别短距离验证。先验证起步、原地转向和主动暂停，再逐步增加距离。
+
+## 禁止事项
+
+- 不允许用手工修改 JSON 距离绕过安全门。
+- 不允许在 D435 摘要过期、ROI 置信度不足、左右存在近障时开启真实执行。
+- 不允许直接使用 `mode=1` 作为默认现场导航模式。
+- 不允许在箱体、桌脚、电缆或人员紧邻机器人时做多点任务。

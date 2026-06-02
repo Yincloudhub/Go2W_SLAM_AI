@@ -60,6 +60,27 @@ Add floorplan v4 auto weak-network eval cases
 
 后续也可以直接用中文提交信息。
 
+## Obsidian GO2W 总览同步
+
+只把 Obsidian 中的 GO2W 项目总览 Markdown 镜像到仓库：
+
+```powershell
+python .\scripts\sync_go2w_obsidian_docs.py --export-overview
+```
+
+仓库内镜像目录：
+
+```text
+docs/obsidian_go2w_overview/
+```
+
+同步边界：
+
+- 只导出 `机器狗/GO2W边缘自治项目总览/*.md`。
+- 不导出 NX 联调目录、个人 vault 配置、插件、图片和压缩包。
+- 导出时会将常见 SSH 和雷达 sudo 密码写法替换为占位符。
+- 提交前仍需要执行 `git diff --check` 并检查暂存区。
+
 ## 推送方式
 
 当前远端：
@@ -91,4 +112,3 @@ git@github-go2w-robot:Yincloudhub/Go2W_SLAM_AI.git
 - 没有提交模型、日志、构建产物和恢复包。
 - 部署说明和实际目录状态一致。
 - 真实导航前有明确的人工确认和回退方案。
-

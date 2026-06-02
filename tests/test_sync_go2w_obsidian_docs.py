@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.sync_go2w_obsidian_docs import END, START, sync_docs
+from scripts.sync_go2w_obsidian_docs import END, START, export_overview, sync_docs
 
 
 class SyncGo2wObsidianDocsTests(unittest.TestCase):
@@ -44,6 +44,34 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             self.assertEqual(
                 (overview / "12-现场录点与晚间测试操作手册.md").read_text(encoding="utf-8"),
                 "source-0\n",
+            )
+
+    def test_export_overview_only_copies_markdown_and_replaces_credentials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            overview = root / "overview"
+            export = root / "export"
+            overview.mkdir()
+            export.mkdir()
+            (overview / "00-总览.md").write_text(
+                "$env:GO2W_SSH_PASSWORD='robot-password'\n"
+                "RADAR_STATION_SUDO_PASSWORD='radar-password'\n"
+                "python snapshot.py --password 123\n",
+                encoding="utf-8",
+            )
+            (overview / "backup.zip").write_bytes(b"not-for-git")
+            (export / "stale.md").write_text("stale\n", encoding="utf-8")
+
+            written = export_overview(overview, export)
+
+            self.assertEqual([path.name for path in written], ["00-总览.md"])
+            self.assertFalse((export / "stale.md").exists())
+            self.assertFalse((export / "backup.zip").exists())
+            self.assertEqual(
+                (export / "00-总览.md").read_text(encoding="utf-8"),
+                "$env:GO2W_SSH_PASSWORD='<现场密码>'\n"
+                "RADAR_STATION_SUDO_PASSWORD='<sudo_password>'\n"
+                "python snapshot.py --password <现场密码>\n",
             )
 
 
