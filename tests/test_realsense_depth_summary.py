@@ -53,6 +53,22 @@ class RealsenseDepthSummaryTests(unittest.TestCase):
         self.assertIsNone(summary["center_distance_m"])
         self.assertEqual(summary["roi_confidence"]["front"], 0.0)
 
+    def test_numpy_input_matches_list_input(self):
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy is optional on the local test host")
+        depth = [[2000 for _ in range(6)] for _ in range(6)]
+        depth[2][2] = 500
+        depth[3][3] = 700
+
+        list_summary = depth_summary.build_depth_summary(depth, timestamp_ms=123, q=10)
+        numpy_summary = depth_summary.build_depth_summary(np.asarray(depth), timestamp_ms=123, q=10)
+
+        self.assertAlmostEqual(numpy_summary["front_clearance_m"], list_summary["front_clearance_m"])
+        self.assertEqual(numpy_summary["roi_confidence"], list_summary["roi_confidence"])
+        self.assertAlmostEqual(numpy_summary["confidence"], list_summary["confidence"])
+
     def test_write_summary_replaces_output_atomically(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "stereo_depth_summary.json"

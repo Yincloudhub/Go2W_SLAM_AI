@@ -49,6 +49,13 @@ def roi_values_m(
     min_m: float,
     max_m: float,
 ) -> list[float]:
+    if hasattr(depth_mm, "shape"):
+        import numpy as np
+
+        region_m = np.asarray(depth_mm)[y0:y1, x0:x1].astype(np.float32, copy=False) * 0.001
+        usable = region_m[(region_m >= min_m) & (region_m <= max_m)]
+        return usable.tolist()
+
     out: list[float] = []
     for row in depth_mm[y0:y1]:
         for raw in row[x0:x1]:
@@ -76,6 +83,14 @@ def roi_percentile_m(
 
 
 def valid_fraction(depth_mm: Sequence[Sequence[float]], *, min_m: float, max_m: float) -> float:
+    if hasattr(depth_mm, "shape"):
+        import numpy as np
+
+        depth_m = np.asarray(depth_mm).astype(np.float32, copy=False) * 0.001
+        if depth_m.size == 0:
+            return 0.0
+        return float(np.count_nonzero((depth_m >= min_m) & (depth_m <= max_m)) / depth_m.size)
+
     total = 0
     valid = 0
     for row in depth_mm:
@@ -169,7 +184,7 @@ def build_depth_summary(
 def load_depth_npy(path: Path) -> Any:
     import numpy as np  # Imported lazily so unit tests do not require NumPy.
 
-    return np.load(path).tolist()
+    return np.load(path)
 
 
 def capture_realsense_depth(*, width: int, height: int, fps: int, frames: int, timeout_ms: int) -> tuple[Any, float]:
@@ -188,7 +203,7 @@ def capture_realsense_depth(*, width: int, height: int, fps: int, frames: int, t
             depth_frame = frameset.get_depth_frame()
         if depth_frame is None:
             raise RuntimeError("no depth frame received")
-        depth = np.asanyarray(depth_frame.get_data()).tolist()
+        depth = np.asanyarray(depth_frame.get_data())
         latency_ms = (time.time() - start) * 1000.0
         return depth, latency_ms
     finally:
@@ -214,7 +229,8 @@ def emit_depth_summary(depth: Any, args: argparse.Namespace, *, latency_ms: Opti
         latency_ms=latency_ms,
     )
     text = write_summary(summary, args.output, pretty=args.pretty)
-    print(text, flush=True)
+    if not getattr(args, "quiet", False):
+        print(text, flush=True)
     return text
 
 
@@ -247,7 +263,7 @@ def run_realsense_stream(args: argparse.Namespace) -> int:
                 depth_frame = frameset.get_depth_frame()
             if depth_frame is None:
                 raise RuntimeError("no depth frame received")
-            depth = np.asanyarray(depth_frame.get_data()).tolist()
+            depth = np.asanyarray(depth_frame.get_data())
             emit_depth_summary(depth, args, latency_ms=(time.time() - sample_start) * 1000.0)
             samples += 1
             if args.loop_interval_s <= 0 or (args.max_samples > 0 and samples >= args.max_samples):
@@ -273,6 +289,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--loop-interval-s", type=float, default=0.0, help="Repeat capture at this interval; 0 keeps one-shot behavior")
     parser.add_argument("--max-samples", type=int, default=1, help="Maximum summaries to emit when looping; 0 means run until stopped")
     parser.add_argument("--pretty", action="store_true")
+    parser.add_argument("--quiet", action="store_true", help="Write the summary without printing every sample")
     return parser
 
 

@@ -12,7 +12,7 @@ PID_FILE="${SERVICE_DIR}/producer.pid"
 LOG_FILE="${SERVICE_DIR}/producer.log"
 PYTHON_BIN="${GO2W_PYTHON:-python3}"
 NICE_LEVEL="${GO2W_STEREO_NICE_LEVEL:-5}"
-LOOP_INTERVAL_S="${GO2W_STEREO_LOOP_INTERVAL_S:-0.2}"
+LOOP_INTERVAL_S="${GO2W_STEREO_LOOP_INTERVAL_S:-0.5}"
 SAFETY_STALE_MS="${GO2W_STEREO_SAFETY_STALE_MS:-1000}"
 INPUT_FPS="${GO2W_STEREO_INPUT_FPS:-15}"
 FRAMES_PER_SAMPLE="${GO2W_STEREO_FRAMES_PER_SAMPLE:-1}"
@@ -118,6 +118,7 @@ start_sidecar() {
     --frames "${FRAMES_PER_SAMPLE}" \
     --loop-interval-s "${LOOP_INTERVAL_S}" \
     --max-samples 0 \
+    --quiet \
     > "${LOG_FILE}" 2>&1 < /dev/null &
   echo "$!" > "${PID_FILE}"
   sleep 2
