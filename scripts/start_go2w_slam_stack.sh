@@ -275,10 +275,12 @@ fail_on_startup_log_error() {
 check_topic_once() {
   local topic="$1"
   local timeout_s="$2"
+  local sample=""
   if ! command -v ros2 >/dev/null 2>&1; then
     return 0
   fi
-  if timeout "${timeout_s}" ros2 topic echo "${topic}" --qos-reliability reliable --no-arr >/dev/null 2>&1; then
+  sample="$(timeout "${timeout_s}" ros2 topic echo "${topic}" --qos-reliability reliable --no-arr 2>/dev/null | sed -n '1{p;q;}')" || true
+  if [[ -n "${sample}" ]]; then
     echo "topic ready: ${topic}"
   else
     echo "warning: topic not confirmed yet: ${topic}" >&2
