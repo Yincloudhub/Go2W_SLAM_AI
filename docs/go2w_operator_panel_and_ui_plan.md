@@ -45,7 +45,7 @@
 在机器人或 Linux/NX 上：
 
 ```bash
-cd ~/go2w_slam_agent/cpp
+cd /home/unitree/Go2W_SLAM_AI/cpp
 cmake -S . -B build
 cmake --build build -j
 ```
@@ -55,15 +55,15 @@ cmake --build build -j
 只看状态：
 
 ```bash
-cd ~/go2w_slam_agent/cpp
-./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --watch 0
+cd /home/unitree/Go2W_SLAM_AI/cpp
+./build/go2w_operator_panel --repo-root /home/unitree/Go2W_SLAM_AI --watch 0
 ```
 
 交互模式：
 
 ```bash
-cd ~/go2w_slam_agent/cpp
-./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --current-node yin_siyuan_station
+cd /home/unitree/Go2W_SLAM_AI/cpp
+./build/go2w_operator_panel --repo-root /home/unitree/Go2W_SLAM_AI --current-node yin_siyuan_station
 ```
 
 进入后可输入：
@@ -82,7 +82,7 @@ cd ~/go2w_slam_agent/cpp
 浏览器 UI：
 
 ```bash
-cd ~/go2w_slam_agent
+cd /home/unitree/Go2W_SLAM_AI
 ./scripts/run_go2w_operator_web.sh
 ```
 

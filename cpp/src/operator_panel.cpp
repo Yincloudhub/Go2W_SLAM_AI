@@ -29,6 +29,11 @@ std::string readAll(std::istream& input)
     return ss.str();
 }
 
+bool isAbsolutePath(const std::string& path)
+{
+    return !path.empty() && path.front() == '/';
+}
+
 std::string fmtDouble(const nlohmann::json& value, int digits = 2)
 {
     if (value.is_null()) return "未知";
@@ -356,10 +361,16 @@ OperatorPanel::OperatorPanel(OperatorPanelConfig config)
 
 nlohmann::json OperatorPanel::loadRegistry() const
 {
-    const std::string path = config_.repo_root + "/configs/maps/go2w_real_site_map_registry.json";
+    const std::string path = registryPath();
     std::ifstream file(path);
     if (!file) return nlohmann::json::object();
     return nlohmann::json::parse(readAll(file));
+}
+
+std::string OperatorPanel::registryPath() const
+{
+    if (isAbsolutePath(config_.registry_path)) return config_.registry_path;
+    return config_.repo_root + "/" + config_.registry_path;
 }
 
 nlohmann::json OperatorPanel::getWorldState() const
@@ -478,7 +489,7 @@ void OperatorPanel::watchWorld(int seconds) const
 
 CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
 {
-    const SemanticRouter router(loadRegistry(), "go2w_real_site");
+    const SemanticRouter router(loadRegistry(), config_.map_id);
     const SemanticRoute route = router.planText(text, config_.nav_speed_mps, config_.nav_mode);
     if (route.matched) {
         return executeSemanticRoute(route);
@@ -496,7 +507,7 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
     const auto* maps = objectAt(registry, {"maps"});
     if (maps && maps->is_array()) {
         for (const auto& map : *maps) {
-            if (!map.is_object() || map.value("map_id", "") != "go2w_real_site") continue;
+            if (!map.is_object() || map.value("map_id", "") != config_.map_id) continue;
             const auto* nodes = objectAt(map, {"topology_nodes"});
             if (!nodes || !nodes->is_array()) continue;
             for (const auto& node : *nodes) {
@@ -595,7 +606,7 @@ CommandResult OperatorPanel::fallbackLlmHttpCommand(const std::string& text) con
 
     std::string route_text = joinStrings(targets, " ");
     if (plan.value("capture_keyframe", false)) route_text += " capture";
-    const SemanticRouter router(loadRegistry(), "go2w_real_site");
+    const SemanticRouter router(loadRegistry(), config_.map_id);
     const SemanticRoute route = router.planText(route_text, config_.nav_speed_mps, config_.nav_mode);
     if (!route.matched) {
         result.exit_code = 4;
@@ -618,6 +629,8 @@ CommandResult OperatorPanel::fallbackPythonCommand(const std::string& text) cons
     cmd << "cd " << shellQuote(config_.repo_root)
         << " && PYTHONPATH=src " << shellQuote(config_.python)
         << " scripts/go2w_agent_entry.py --go-b64 " << shellQuote(encoded)
+        << " --registry " << shellQuote(registryPath())
+        << " --map-id " << shellQuote(config_.map_id)
         << " --human --nav-speed-mps " << config_.nav_speed_mps
         << " --nav-mode " << config_.nav_mode
         << " --arrival-distance-m " << config_.arrival_distance_m
@@ -691,12 +704,11 @@ CommandResult OperatorPanel::relocateAnchor(const std::string& anchor_id, bool c
         return result;
     }
 
-    const std::string map_id = "go2w_real_site";
     const nlohmann::json registry = loadRegistry();
-    const auto* map = findRegistryMap(registry, map_id);
+    const auto* map = findRegistryMap(registry, config_.map_id);
     if (!map) {
         result.exit_code = 2;
-        result.stderr_text = "map not found in registry: " + map_id + "\n";
+        result.stderr_text = "map not found in registry: " + config_.map_id + "\n";
         return result;
     }
     const auto* anchor = findRelocalizationAnchor(*map, target_anchor);
@@ -714,7 +726,7 @@ CommandResult OperatorPanel::relocateAnchor(const std::string& anchor_id, bool c
 
     const auto command = nlohmann::json{
         {"action", "relocate"},
-        {"map_id", map_id},
+        {"map_id", config_.map_id},
         {"map_path", map->value("pcd_path", "/home/unitree/test.pcd")},
         {"anchor_id", anchor->value("anchor_id", target_anchor)},
         {"initial_pose", anchorRelocatePose(*anchor)},

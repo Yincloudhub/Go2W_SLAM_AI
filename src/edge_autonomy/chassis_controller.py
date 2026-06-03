@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .gateway_safety import gateway_allows_navigation
+
 
 @dataclass(frozen=True)
 class GatewayConfig:
@@ -52,22 +54,6 @@ def run_gateway_command(command: dict[str, Any], config: GatewayConfig) -> dict[
         if "accepted" in value:
             return value
     return objects[-1]
-
-
-def gateway_allows_navigation(world_state_result: dict[str, Any]) -> tuple[bool, str]:
-    world_state = world_state_result.get("world_state", {})
-    if not isinstance(world_state, dict):
-        return False, "missing world_state"
-    safety = world_state.get("safety", {})
-    if isinstance(safety, dict) and safety.get("allow_navigation") is not True:
-        return False, f"safety disallows navigation: {safety.get('reason', 'unknown')}"
-    slam_health = world_state.get("slam_health", {})
-    if isinstance(slam_health, dict) and slam_health.get("status") not in (None, "ok"):
-        return False, f"slam health is {slam_health.get('status')}"
-    localization = world_state.get("localization", {})
-    if isinstance(localization, dict) and localization.get("status") not in (None, "localized_or_tracking", "tracking", "localized"):
-        return False, f"localization is {localization.get('status')}"
-    return True, "gateway allows navigation"
 
 
 def pose_distance(pose: dict[str, Any], target_pose: dict[str, Any]) -> float | None:

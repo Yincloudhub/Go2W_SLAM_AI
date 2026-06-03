@@ -14,7 +14,7 @@ nlohmann::json world(double front, double left, double right)
 {
     return {
         {"world_state", {
-            {"current_pose", {{"pose_age_ms", 10}}},
+            {"current_pose", {{"pose", {{"x", 0.0}, {"y", 0.0}, {"yaw", 0.0}}}, {"pose_age_ms", 10}}},
             {"localization", {{"status", "localized"}, {"pose_age_ms", 10}}},
             {"slam_health", {{"status", "ok"}, {"slam_alive", true}, {"localization_alive", true}}},
             {"safety", {{"allow_navigation", true}, {"reason", "ok"}}},
@@ -45,11 +45,24 @@ int main()
 
     auto stale = world(2.0, 2.0, 2.0);
     stale["world_state"]["local_obstacle"]["stale"] = true;
-    require(!gate.evaluateWorldState(stale).allowed, "stale sensor summary should block");
+    require(gate.evaluateWorldState(stale).allowed, "stale sensor summary should not override gateway safety");
 
     auto stub = world(6.0, 6.0, 6.0);
     stub["world_state"]["local_obstacle"]["source"] = "manual_stub";
-    require(!gate.evaluateWorldState(stub).allowed, "manual clearance stub should block");
+    require(gate.evaluateWorldState(stub).allowed, "manual clearance stub should not override gateway safety");
+
+    auto missing_safety = world(2.0, 2.0, 2.0);
+    missing_safety["world_state"].erase("safety");
+    require(!gate.evaluateWorldState(missing_safety).allowed, "missing safety decision should block");
+
+    auto stale_pose = world(2.0, 2.0, 2.0);
+    stale_pose["world_state"]["localization"]["pose_age_ms"] = 2500;
+    require(!gate.evaluateWorldState(stale_pose).allowed, "stale localization pose should block");
+
+    auto degraded_localization = world(2.0, 2.0, 2.0);
+    degraded_localization["world_state"]["localization"]["status"] = "degraded";
+    degraded_localization["world_state"]["localization"]["pose_age_ms"] = 1500;
+    require(gate.evaluateWorldState(degraded_localization).allowed, "degraded localization should follow gateway safety");
 
     std::cout << "go2w_safety_gate_smoke_test=passed\n";
     return 0;

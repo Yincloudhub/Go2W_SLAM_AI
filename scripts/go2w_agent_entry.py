@@ -586,15 +586,16 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
         argv.extend(["--capture-command", args.capture_command])
     if args.no_live_snapshot:
         argv.append("--no-live-snapshot")
-        try:
-            state = get_world_state(args)
-            pose = state.get("world_state", {}).get("current_pose", {}).get("pose", {})
-            argv.extend(["--mock-x", str(float(pose["x"])), "--mock-y", str(float(pose["y"])), "--mock-yaw", str(float(pose.get("yaw", 0.0)))])
-        except Exception:
-            pass
+        if not (args.skip_gateway_check and not args.execute):
+            try:
+                state = get_world_state(args)
+                pose = state.get("world_state", {}).get("current_pose", {}).get("pose", {})
+                argv.extend(["--mock-x", str(float(pose["x"])), "--mock-y", str(float(pose["y"])), "--mock-yaw", str(float(pose.get("yaw", 0.0)))])
+            except Exception:
+                pass
     if args.execute:
         argv.append("--execute")
-    if args.skip_gateway_check:
+    if args.skip_gateway_check and not args.execute:
         argv.append("--skip-gateway-check")
     completed = subprocess.run(argv, text=True, encoding="utf-8", errors="replace", capture_output=True, timeout=args.closed_loop_timeout_s)
     try:
@@ -760,6 +761,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.execute and args.skip_gateway_check:
+        print_json(
+            {
+                "error": "--skip-gateway-check is only allowed for dry-runs; remove it before --execute",
+                "execute": True,
+            },
+            pretty=args.pretty,
+        )
+        return 2
     if args.watch_world:
         return watch_world(args)
 
@@ -812,14 +822,20 @@ def main(argv: list[str] | None = None) -> int:
         output["steps"].append({"step": "ensure_slam", "result": run_ensure_slam(args)})
 
     if args.go or args.go_b64:
-        try:
-            state = get_world_state(args)
-            allowed, reason = gateway_allows_navigation(state)
-        except Exception as exc:  # pragma: no cover - field robustness
+        preflight_checked = not (args.skip_gateway_check and not args.execute)
+        if preflight_checked:
+            try:
+                state = get_world_state(args)
+                allowed, reason = gateway_allows_navigation(state)
+            except Exception as exc:  # pragma: no cover - field robustness
+                state = None
+                allowed, reason = False, f"preflight failed: {exc}"
+            output["steps"].append({"step": "go_preflight", "checked": True, "allowed": allowed, "reason": reason, "result": state})
+        else:
             state = None
-            allowed, reason = False, f"preflight failed: {exc}"
-        output["steps"].append({"step": "go_preflight", "allowed": allowed, "reason": reason, "result": state})
-        if not args.execute and not allowed:
+            allowed, reason = True, "gateway preflight skipped for dry-run"
+            output["steps"].append({"step": "go_preflight", "checked": False, "allowed": None, "reason": reason, "result": None})
+        if not args.execute and preflight_checked and not allowed:
             output["steps"].append({"step": "go_dry_run_preflight_not_enforced", "reason": reason})
         if args.execute and not allowed and not args.no_auto_start_slam:
             ensure_result = run_ensure_slam(args)

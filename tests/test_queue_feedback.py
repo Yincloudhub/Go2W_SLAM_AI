@@ -1,7 +1,15 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 
+from edge_autonomy.map_registry import MapRegistry
 from scripts.run_robot_closed_loop import generate_llm_feedback_result, operator_feedback_message
+from scripts.run_robot_closed_loop import execute_task_queue
+
+
+REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_map_registry.example.json"
 
 
 class FailingBackend:
@@ -10,6 +18,110 @@ class FailingBackend:
 
 
 class QueueFeedbackTests(unittest.TestCase):
+    def test_dry_run_queue_is_not_marked_completed(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        task_queue = {
+            "queue_id": "q-dry",
+            "mode": "sequential",
+            "status": "planned",
+            "source": "semantic_topology",
+            "targets": ["nie_guoli_office_front"],
+            "steps": [
+                {
+                    "task_id": "task_1",
+                    "action": "navigate",
+                    "status": "pending",
+                    "target_node": "nie_guoli_office_front",
+                    "target_name": "office",
+                }
+            ],
+            "communication_policy": {
+                "mode": "normal",
+                "send": ["task_state", "navigation_feedback", "world_state_summary"],
+                "drop": [],
+            },
+        }
+        args = SimpleNamespace(
+            execute=False,
+            skip_gateway_check=True,
+            map_id="test_current_main",
+            nav_mode=None,
+            arrival_monitor_interval_s=1.0,
+        )
+
+        result = execute_task_queue(task_queue, registry=registry, args=args, nav_speed=None)
+
+        self.assertTrue(result["dry_run"])
+        self.assertFalse(result["executed"])
+        self.assertFalse(result["completed"])
+        self.assertIsNone(result["failed_step"])
+        self.assertEqual(result["events"][0]["status"], "dry_run")
+
+    def test_execute_queue_blocks_unverified_topology_target_before_gateway(self) -> None:
+        registry_data = {
+            "version": 1,
+            "default_map_id": "site",
+            "maps": [
+                {
+                    "map_id": "site",
+                    "name": "site",
+                    "status": "real",
+                    "pcd_path": "/tmp/site.pcd",
+                    "topology_path": "/tmp/site.json",
+                    "topology_nodes": [
+                        {
+                            "node_id": "wp_a",
+                            "name": "A",
+                            "tags": ["needs_calibration"],
+                            "pose": {"x": 1.0, "y": 2.0, "yaw": 0.0},
+                        }
+                    ],
+                }
+            ],
+        }
+        task_queue = {
+            "queue_id": "q-block",
+            "mode": "sequential",
+            "status": "planned",
+            "source": "semantic_topology",
+            "targets": ["wp_a"],
+            "communication_policy": {
+                "mode": "normal",
+                "send": ["task_state", "navigation_feedback", "world_state_summary"],
+                "drop": [],
+            },
+            "steps": [
+                {
+                    "task_id": "task_1",
+                    "action": "navigate",
+                    "status": "pending",
+                    "target_node": "wp_a",
+                    "target_name": "A",
+                }
+            ],
+        }
+        args = SimpleNamespace(
+            execute=True,
+            skip_gateway_check=False,
+            map_id="site",
+            nav_mode=None,
+            arrival_monitor_interval_s=1.0,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "registry.json"
+            registry_path.write_text(json.dumps(registry_data), encoding="utf-8")
+            registry = MapRegistry.from_file(registry_path)
+
+            result = execute_task_queue(task_queue, registry=registry, args=args, nav_speed=None)
+
+        self.assertTrue(result["executed"])
+        self.assertFalse(result["completed"])
+        self.assertEqual(result["failed_step"], "task_1")
+        self.assertIn("needs_calibration", result["blocked_reason"])
+        self.assertEqual(result["events"][0]["status"], "blocked")
+        self.assertNotIn("preflight", result["events"][0])
+
     def test_operator_feedback_message_is_ui_and_llm_ready(self) -> None:
         message = operator_feedback_message(
             "progress",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import math
 import os
 import subprocess
 import sys
@@ -26,13 +27,14 @@ except (AttributeError, ValueError):
     pass
 
 from edge_autonomy.llm_context import build_planner_context, plan_to_slam_command  # noqa: E402
+from edge_autonomy.gateway_safety import gateway_allows_navigation  # noqa: E402
 from edge_autonomy.local_llm_planner import (  # noqa: E402
     DEFAULT_SYSTEM_PROMPT,
     LocalCommandBackend,
     build_lightweight_planner_context,
     run_local_llm_planner,
 )
-from edge_autonomy.map_registry import MapRegistry  # noqa: E402
+from edge_autonomy.map_registry import MapProfile, MapRegistry  # noqa: E402
 from edge_autonomy.operator_display import build_operator_display_state  # noqa: E402
 from edge_autonomy.runtime_state import build_runtime_snapshot  # noqa: E402
 from edge_autonomy.runtime_log import build_runtime_log_record  # noqa: E402
@@ -41,10 +43,22 @@ from edge_autonomy.world_state_v1 import build_world_state_v1  # noqa: E402
 from scripts.slam_runtime_snapshot import parse_sections, run_remote_snapshot  # noqa: E402
 
 
-DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_floorplan_v4_map_registry.json"
+DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
+DEFAULT_MAP_ID = "go2w_real_site"
+DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
 SIMULATION_MAP_STATUSES = {"simulation", "simulated", "demo", "synthetic"}
 DEFAULT_MODEL = "/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 DEFAULT_ASK_SCRIPT = "/home/unitree/llm_runtime/scripts/ask_qwen.sh"
+BLOCKING_NAVIGATION_TARGET_TAGS = frozenset(
+    {
+        "disabled",
+        "ui_disabled",
+        "deleted",
+        "needs_calibration",
+        "needs_standing_verification",
+        "requires_standing_verification",
+    }
+)
 DEFAULT_LOCAL_COMMAND = (
     f"MODEL_PATH={DEFAULT_MODEL} {DEFAULT_ASK_SCRIPT} "
     "--ctx 4096 --max-tokens {max_tokens} --system {system} {prompt}"
@@ -102,42 +116,6 @@ def run_gateway_command(
     return objects[-1]
 
 
-def gateway_allows_navigation(world_state_result: dict[str, Any]) -> tuple[bool, str]:
-    world_state = world_state_result.get("world_state", {})
-    if not isinstance(world_state, dict):
-        return False, "missing world_state"
-    safety = world_state.get("safety", {})
-    if isinstance(safety, dict):
-        if safety.get("allow_navigation") is not True:
-            return False, f"safety disallows navigation: {safety.get('reason', 'unknown')}"
-    slam_health = world_state.get("slam_health", {})
-    if isinstance(slam_health, dict) and slam_health.get("status") not in (None, "ok"):
-        return False, f"slam health is {slam_health.get('status')}"
-    localization = world_state.get("localization", {})
-    if isinstance(localization, dict) and localization.get("status") not in (None, "localized_or_tracking", "tracking", "localized"):
-        return False, f"localization is {localization.get('status')}"
-    obstacle = world_state.get("local_obstacle", {})
-    if not isinstance(obstacle, dict):
-        return False, "missing local_obstacle sensor summary"
-    if obstacle.get("source") not in {"stereo_depth", "lidar_pointcloud", "lidar_pointcloud+stereo_depth"}:
-        return False, "local_obstacle is not sensor backed"
-    if obstacle.get("stale") is not False:
-        return False, "local_obstacle sensor summary is stale"
-    age_ms = obstacle.get("age_ms")
-    if not isinstance(age_ms, (int, float)) or isinstance(age_ms, bool) or age_ms < 0 or age_ms > 1000:
-        return False, "local_obstacle sensor summary is too old"
-    if not isinstance(obstacle.get("confidence"), (int, float)) or obstacle["confidence"] <= 0:
-        return False, "local_obstacle confidence is too low"
-    for direction in ("front", "left", "right"):
-        roi_confidence = obstacle.get(f"{direction}_confidence")
-        clearance = obstacle.get(f"{direction}_clearance_m")
-        if not isinstance(roi_confidence, (int, float)) or isinstance(roi_confidence, bool) or roi_confidence < 0.15:
-            return False, f"local_obstacle {direction} ROI confidence is too low"
-        if not isinstance(clearance, (int, float)) or isinstance(clearance, bool) or clearance < 0.8:
-            return False, f"local_obstacle {direction} clearance is unsafe"
-    return True, "gateway allows navigation"
-
-
 def registry_allows_execution(registry: MapRegistry, map_id: str) -> tuple[bool, str]:
     profile = registry.get_map(map_id)
     if profile.status.lower() in SIMULATION_MAP_STATUSES:
@@ -145,6 +123,16 @@ def registry_allows_execution(registry: MapRegistry, map_id: str) -> tuple[bool,
     if not profile.topology_nodes:
         return False, f"map '{profile.map_id}' has no topology nodes"
     return True, "registry allows execution"
+
+
+def topology_target_allows_navigation(profile: MapProfile, node_id_or_alias: str) -> tuple[bool, str]:
+    node = profile.get_node(node_id_or_alias)
+    blocking_tags = sorted(set(node.tags) & BLOCKING_NAVIGATION_TARGET_TAGS)
+    if blocking_tags:
+        return False, f"target '{node.node_id}' is not cleared for real navigation: {', '.join(blocking_tags)}"
+    if not math.isfinite(node.pose.x) or not math.isfinite(node.pose.y):
+        return False, f"target '{node.node_id}' pose x/y is invalid"
+    return True, "topology target allows navigation"
 
 
 def _first_nav_target(plan: dict[str, Any]) -> str | None:
@@ -199,6 +187,7 @@ def build_semantic_trace(
                     "tags": tags_list,
                     "distance_from_robot_m": node.get("distance_from_robot_m"),
                     "needs_calibration": "needs_calibration" in tags_list,
+                    "needs_standing_verification": "needs_standing_verification" in tags_list,
                     "photo_required": "photo_required" in tags_list,
                     "pose": _compact_pose(node.get("pose") if isinstance(node.get("pose"), dict) else None),
                 }
@@ -819,6 +808,50 @@ def execute_task_queue(
             continue
 
         target_node = str(task.get("target_node") or "")
+        if args.execute:
+            try:
+                topology_allowed, topology_reason = topology_target_allows_navigation(profile, target_node)
+            except Exception as exc:
+                topology_allowed = False
+                topology_reason = f"failed to validate topology target {target_node}: {exc}"
+            if not topology_allowed:
+                blocked_reason = topology_reason
+                failed_step = task_id
+                blocked_feedback = [
+                    operator_feedback_message(
+                        "blocked",
+                        f"Topology gate blocked real navigation: {blocked_reason}",
+                        target_node=target_node,
+                        target_name=target_name,
+                        severity="error",
+                    )
+                ]
+                blocked_llm_requests: list[dict[str, Any]] = []
+                blocked_llm_results: list[dict[str, Any]] = []
+                append_llm_feedback(
+                    phase="blocked",
+                    target_node=target_node,
+                    target_name=target_name,
+                    distance_m=None,
+                    reason=blocked_reason,
+                    args=args,
+                    requests=blocked_llm_requests,
+                    results=blocked_llm_results,
+                    operator_feedback=blocked_feedback,
+                )
+                events.append(
+                    {
+                        "task_id": task_id,
+                        "action": action,
+                        "status": "blocked",
+                        "target_node": target_node,
+                        "blocked_reason": blocked_reason,
+                        "operator_feedback": blocked_feedback,
+                        "llm_feedback_requests": blocked_llm_requests,
+                        "llm_feedback_results": blocked_llm_results,
+                    }
+                )
+                break
         try:
             slam_command = profile.navigate_to_node_command(target_node, speed=nav_speed, mode=args.nav_mode)
         except Exception as exc:
@@ -985,7 +1018,8 @@ def execute_task_queue(
     return {
         "queue_id": task_queue.get("queue_id"),
         "executed": bool(args.execute),
-        "completed": failed_step is None,
+        "dry_run": not bool(args.execute),
+        "completed": failed_step is None and bool(args.execute),
         "failed_step": failed_step,
         "blocked_reason": blocked_reason,
         "feedback_policy": feedback_policy,
@@ -1023,8 +1057,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the robot LLM planner with gateway safety gating.")
     parser.add_argument("--command", required=True)
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY))
-    parser.add_argument("--map-id", default="floorplan_demo_v4")
-    parser.add_argument("--map-path", default="/home/unitree/maps/floorplan_demo_v4.pcd")
+    parser.add_argument("--map-id", default=DEFAULT_MAP_ID)
+    parser.add_argument("--map-path", default=DEFAULT_MAP_PATH)
     parser.add_argument("--prompt-mode", choices=["hybrid", "intent", "light", "full"], default="hybrid")
     parser.add_argument("--local-command", default=DEFAULT_LOCAL_COMMAND)
     parser.add_argument("--system", default=DEFAULT_SYSTEM_PROMPT)
@@ -1068,6 +1102,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.execute and args.skip_gateway_check:
+        output = {
+            "command": args.command,
+            "dry_run": False,
+            "planner": None,
+            "gateway": {
+                "checked": False,
+                "allowed": False,
+                "reason": "--skip-gateway-check is only allowed for dry-runs; remove it before --execute",
+            },
+            "execution": {
+                "executed": False,
+                "blocked_reason": "--skip-gateway-check is only allowed for dry-runs; remove it before --execute",
+                "result": None,
+            },
+        }
+        if args.pretty:
+            print(json.dumps(output, ensure_ascii=False, indent=2))
+        else:
+            print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
+        return 2
     registry = MapRegistry.from_file(args.registry)
     registry_allowed, registry_reason = registry_allows_execution(registry, args.map_id)
     if args.execute and not registry_allowed:
@@ -1112,6 +1167,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         gateway_allowed, gateway_reason = gateway_allows_navigation(gateway_state)
 
+    topology_allowed = True
+    topology_reason = "topology target allows navigation"
+    if isinstance(slam_command, dict):
+        target_node = str(slam_command.get("target_node") or "")
+        command_map_id = str(slam_command.get("map_id") or args.map_id)
+        try:
+            topology_allowed, topology_reason = topology_target_allows_navigation(registry.get_map(command_map_id), target_node)
+        except Exception as exc:
+            topology_allowed = False
+            topology_reason = f"failed to validate topology target {target_node}: {exc}"
+
     executed = False
     execution_result = None
     blocked_reason = ""
@@ -1124,6 +1190,8 @@ def main(argv: list[str] | None = None) -> int:
         blocked_reason = "planner did not produce a slam command"
     elif not args.execute:
         blocked_reason = "dry run; pass --execute to send command"
+    elif not topology_allowed:
+        blocked_reason = topology_reason
     elif not gateway_allowed and not args.skip_gateway_check:
         blocked_reason = gateway_reason
     else:
@@ -1150,7 +1218,7 @@ def main(argv: list[str] | None = None) -> int:
         task_phase=task_phase,
         last_execution_result=blocked_reason or ("executed" if executed else ""),
         network_level="normal",
-        motion_allowed=bool(args.execute and registry_allowed and (gateway_allowed or args.skip_gateway_check)),
+        motion_allowed=bool(args.execute and registry_allowed and topology_allowed and (gateway_allowed or args.skip_gateway_check)),
     )
     operator_display = build_operator_display_state(
         world_state_v1,
@@ -1204,6 +1272,10 @@ def main(argv: list[str] | None = None) -> int:
             "reason": registry_reason,
             "registry": args.registry,
             "map_id": args.map_id,
+        },
+        "topology_gate": {
+            "allowed": topology_allowed,
+            "reason": topology_reason,
         },
         "execution": {
             "executed": executed,

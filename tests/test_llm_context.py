@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 from pathlib import Path
 
@@ -8,13 +10,20 @@ from edge_autonomy.map_registry import MapRegistry
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_map_registry.example.json"
 
 
-def make_snapshot(*, x: float = 3.26, y: float = -2.27, ok: bool = True) -> dict:
+def make_snapshot(
+    *,
+    x: float = 3.26,
+    y: float = -2.27,
+    ok: bool = True,
+    health_status: str | None = None,
+    localization_status: str | None = None,
+) -> dict:
     return {
         "timestamp_ms": 123,
         "expected_map_id": "test_current_main",
         "expected_map_path": "/home/unitree/test.pcd",
-        "health_status": "ok" if ok else "failed",
-        "localization_status": "localized_or_tracking" if ok else "relocation_odom_missing",
+        "health_status": health_status or ("ok" if ok else "failed"),
+        "localization_status": localization_status or ("localized_or_tracking" if ok else "relocation_odom_missing"),
         "processes": {"unitree_slam": ok, "xt16_driver": ok},
         "lidar_state": {"alive": ok, "cloud_frequency_hz": 15.0, "cloud_size": 56000, "error_state": 0},
         "live_pointcloud": {"alive": ok, "topic": "/unitree/slam_lidar/points", "width": 56000},
@@ -48,6 +57,18 @@ class LlmContextTests(unittest.TestCase):
     def test_simulate_plan_to_wp1(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)
         context = build_planner_context(make_snapshot(x=1.15, y=-0.15), registry, user_command="去 wp_1")
+        plan = simulate_local_llm_plan(context, registry)
+
+        self.assertEqual(plan["mode"], "mapped_navigation")
+        self.assertEqual(plan["steps"][1]["arguments"]["target_node"], "nie_guoli_office_front")
+
+    def test_simulate_plan_accepts_gateway_localized_status(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        context = build_planner_context(
+            make_snapshot(x=1.15, y=-0.15, localization_status="localized"),
+            registry,
+            user_command="nie_guoli_office_front",
+        )
         plan = simulate_local_llm_plan(context, registry)
 
         self.assertEqual(plan["mode"], "mapped_navigation")

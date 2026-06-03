@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 
-LOCALIZED_STATUSES = {"localized", "localized_or_tracking", "tracking"}
+LOCALIZED_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
 GOOD_SLAM_STATUSES = {"ok", "degraded"}
 TASK_PHASES = {
     "idle",

@@ -11,6 +11,8 @@ void usage(const char* argv0)
     std::cerr << "Usage: " << argv0 << " [options]\n"
               << "Options:\n"
               << "  --repo-root PATH             Repo root, default ..\n"
+              << "  --registry PATH              Map registry path, default configs/maps/go2w_real_site_map_registry.json\n"
+              << "  --map-id MAP_ID              Active semantic map id, default go2w_real_site\n"
               << "  --gateway-client PATH         slam_llm_command_client path\n"
               << "  --start-slam-script PATH      SLAM startup script relative to repo root or absolute\n"
               << "  --start-rviz2-script PATH     RViz2 startup script relative to repo root or absolute\n"
@@ -48,6 +50,10 @@ int main(int argc, char** argv)
         const std::string arg = argv[i];
         if (arg == "--repo-root" && i + 1 < argc) {
             config.repo_root = argv[++i];
+        } else if (arg == "--registry" && i + 1 < argc) {
+            config.registry_path = argv[++i];
+        } else if (arg == "--map-id" && i + 1 < argc) {
+            config.map_id = argv[++i];
         } else if (arg == "--gateway-client" && i + 1 < argc) {
             config.gateway_client = argv[++i];
         } else if (arg == "--start-slam-script" && i + 1 < argc) {

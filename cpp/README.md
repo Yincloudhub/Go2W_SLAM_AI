@@ -60,24 +60,24 @@ It is the first step toward a Qt/RViz2-style UI:
 Run on the robot/NX:
 
 ```bash
-cd ~/go2w_slam_agent/cpp
+cd /home/unitree/Go2W_SLAM_AI/cpp
 cmake -S . -B build
 cmake --build build -j
 
-./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --current-node yin_siyuan_station
+./build/go2w_operator_panel --repo-root /home/unitree/Go2W_SLAM_AI --current-node yin_siyuan_station
 ```
 
 One-command robot-side launch, including LiDAR driver and SLAM startup/check:
 
 ```bash
-cd ~/go2w_slam_agent
+cd /home/unitree/Go2W_SLAM_AI
 ./scripts/run_go2w_operator_ui.sh
 ```
 
 Browser UI launch:
 
 ```bash
-cd ~/go2w_slam_agent
+cd /home/unitree/Go2W_SLAM_AI
 ./scripts/run_go2w_operator_web.sh
 ```
 
@@ -131,7 +131,7 @@ separate calibrated adapter and static validation. See
 Watch-only mode:
 
 ```bash
-./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --watch 0
+./build/go2w_operator_panel --repo-root /home/unitree/Go2W_SLAM_AI --watch 0
 ```
 
 The Qt/RViz2 UI should reuse this command/state boundary instead of directly

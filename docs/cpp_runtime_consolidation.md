@@ -130,7 +130,7 @@ robot-facing control policy.
 2026-05-27 verified on `unitree@192.168.123.18` without sending motion commands:
 
 ```text
-cd /home/unitree/go2w_slam_agent
+cd /home/unitree/Go2W_SLAM_AI
 bash -n scripts/run_go2w_operator_ui.sh
 cd cpp
 cmake -S . -B build
@@ -153,14 +153,14 @@ Result:
 without sending motion or state-changing SLAM commands:
 
 ```text
-cd /home/unitree/go2w_slam_agent
+cd /home/unitree/Go2W_SLAM_AI
 bash -n scripts/run_go2w_operator_ui.sh
 bash -n scripts/start_go2w_rviz2.sh
 
 cd /home/unitree/slam_gateway_refactor
 bash scripts/build_on_go2.sh
 
-cd /home/unitree/go2w_slam_agent/cpp
+cd /home/unitree/Go2W_SLAM_AI/cpp
 cmake -S . -B build
 cmake --build build -j2
 ./build/go2w_world_state_v1_smoke_test
@@ -181,7 +181,7 @@ Result:
 sending motion or state-changing SLAM commands:
 
 ```text
-cd /home/unitree/go2w_slam_agent
+cd /home/unitree/Go2W_SLAM_AI
 bash -n scripts/run_go2w_operator_web.sh
 python3 -m py_compile scripts/go2w_operator_web.py
 python3 scripts/go2w_operator_web.py --self-test

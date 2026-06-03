@@ -101,7 +101,7 @@ depth camera. It captures only a small number of depth frames, computes
 left/front/right ROI clearances, and writes a compact JSON summary:
 
 ```bash
-cd ~/go2w_slam_agent
+cd /home/unitree/Go2W_SLAM_AI
 python3 scripts/realsense_depth_summary.py \
   --output artifacts/stereo_depth_summary.json \
   --frames 3 \

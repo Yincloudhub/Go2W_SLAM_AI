@@ -5,10 +5,11 @@ set -euo pipefail
 # This script intentionally starts only the LiDAR driver and Unitree SLAM backend.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 UNITREE_SLAM_DIR="${UNITREE_SLAM_DIR:-/unitree/module/unitree_slam/bin}"
 CYCLONEDDS_CONFIG="${CYCLONEDDS_CONFIG:-/unitree/module/unitree_slam/config/cyclonedds.xml}"
 SLAM_PARAM_FILE="${SLAM_PARAM_FILE:-/unitree/module/unitree_slam/config/slam_interfaces_server_config/param.yaml}"
-LOG_DIR="${GO2W_SLAM_LOG_DIR:-${HOME}/go2w_slam_agent/artifacts/slam_stack}"
+LOG_DIR="${GO2W_SLAM_LOG_DIR:-${REPO_ROOT}/artifacts/slam_stack}"
 STARTUP_WAIT_S="${GO2W_SLAM_STARTUP_WAIT_S:-8}"
 STABILITY_WAIT_S="${GO2W_SLAM_STABILITY_WAIT_S:-4}"
 

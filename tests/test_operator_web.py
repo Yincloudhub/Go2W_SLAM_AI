@@ -391,6 +391,8 @@ class OperatorWebTests(unittest.TestCase):
             "--interface", "eth0",
             "--current-node", "initial_point",
             "--gateway-startup-wait-s", "1.25",
+            "--registry", "configs/maps/go2w_real_site_map_registry.json",
+            "--map-id", "go2w_real_site",
         ])
         argv = config.panel_argv(execute_enabled=True, weak_link_mode=True, current_node="wp_a")
         self.assertIn("--execute", argv)
@@ -399,6 +401,14 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("/tmp/slam_llm_command_client", argv)
         self.assertIn("--gateway-startup-wait-s", argv)
         self.assertIn("1.25", argv)
+        self.assertIn("--registry", argv)
+        registry_arg = argv[argv.index("--registry") + 1]
+        self.assertEqual(
+            Path(registry_arg),
+            Path("configs/maps/go2w_real_site_map_registry.json"),
+        )
+        self.assertIn("--map-id", argv)
+        self.assertIn("go2w_real_site", argv)
 
     def test_stereo_summary_file_is_bounded_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:

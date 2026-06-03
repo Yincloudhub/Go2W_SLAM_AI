@@ -16,6 +16,8 @@ struct OperatorPanelConfig {
     std::string gateway_client = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client";
     std::string network_interface = "eth0";
     std::string python = "python3";
+    std::string registry_path = "configs/maps/go2w_real_site_map_registry.json";
+    std::string map_id = "go2w_real_site";
     std::string start_slam_script = "scripts/start_go2w_slam_stack.sh";
     std::string start_rviz2_script = "scripts/start_go2w_rviz2.sh";
     std::string llm_http_url = "";
@@ -76,6 +78,7 @@ private:
     std::string formatFullWorldState(const nlohmann::json& result) const;
     std::string formatWeakWorldState(const nlohmann::json& result) const;
     std::string nearestNodeText(const nlohmann::json& result) const;
+    std::string registryPath() const;
     nlohmann::json loadRegistry() const;
     void printHelp() const;
     bool handleSlashCommand(const std::string& line);

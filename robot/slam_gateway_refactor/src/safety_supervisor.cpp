@@ -28,48 +28,44 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
         obstacle.source == "stereo_depth" ||
         obstacle.source == "lidar_pointcloud" ||
         obstacle.source == "lidar_pointcloud+stereo_depth";
-    if (!trusted_obstacle_source || obstacle.stale) {
-        d.allow_navigation = false;
-        d.should_pause = true;
-        d.recommended_mode = "stop";
-        d.reason = "local_obstacle_not_sensor_backed";
-        return d;
+    const bool fresh_obstacle =
+        trusted_obstacle_source && !obstacle.stale && obstacle.age_ms >= 0 && obstacle.age_ms <= 1000;
+    if (fresh_obstacle) {
+        if (obstacle.recommended_action == "stop" || obstacle.recommended_action == "emergency_stop") {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "stop";
+            d.reason = "local_obstacle_recommends_stop";
+            return d;
+        }
+        if (obstacle.recommended_action == "pause") {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "pause";
+            d.reason = "local_obstacle_recommends_pause";
+            return d;
+        }
+
+        if (obstacle.front_confidence >= 0.15 && obstacle.front_clearance_m >= 0.0 && obstacle.front_clearance_m < 0.8) {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "pause";
+            d.reason = "front_obstacle_too_close";
+            return d;
+        }
+
+        if ((obstacle.left_confidence >= 0.15 && obstacle.left_clearance_m >= 0.0 && obstacle.left_clearance_m < 0.8) ||
+            (obstacle.right_confidence >= 0.15 && obstacle.right_clearance_m >= 0.0 && obstacle.right_clearance_m < 0.8)) {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "pause";
+            d.reason = "side_obstacle_too_close";
+            return d;
+        }
     }
 
-    if (obstacle.front_clearance_m < 0.0 || obstacle.left_clearance_m < 0.0 || obstacle.right_clearance_m < 0.0) {
-        d.allow_navigation = false;
-        d.should_pause = true;
-        d.recommended_mode = "stop";
-        d.reason = "local_obstacle_clearance_incomplete";
-        return d;
-    }
-
-    if (obstacle.confidence <= 0.0 || obstacle.front_confidence < 0.15 || obstacle.left_confidence < 0.15 || obstacle.right_confidence < 0.15) {
-        d.allow_navigation = false;
-        d.should_pause = true;
-        d.recommended_mode = "stop";
-        d.reason = "local_obstacle_confidence_too_low";
-        return d;
-    }
-
-    if (obstacle.front_clearance_m >= 0.0 && obstacle.front_clearance_m < 0.8) {
-        d.allow_navigation = false;
-        d.should_pause = true;
-        d.recommended_mode = "pause";
-        d.reason = "front_obstacle_too_close";
-        return d;
-    }
-
-    if ((obstacle.left_clearance_m >= 0.0 && obstacle.left_clearance_m < 0.8) ||
-        (obstacle.right_clearance_m >= 0.0 && obstacle.right_clearance_m < 0.8)) {
-        d.allow_navigation = false;
-        d.should_pause = true;
-        d.recommended_mode = "pause";
-        d.reason = "side_obstacle_too_close";
-        return d;
-    }
-
-    if (health.status == "degraded" || localization.status == "degraded" || obstacle.recommended_action == "go_slow") {
+    if (health.status == "degraded" || localization.status == "degraded" ||
+        (fresh_obstacle && obstacle.recommended_action == "go_slow")) {
         d.allow_navigation = true;
         d.should_pause = false;
         d.recommended_mode = "conservative";

@@ -35,20 +35,45 @@
             "real_site",
             "recorded",
             "startup",
-            "safe_return"
+            "safe_return",
+            "live_verified",
+            "ui_verified"
           ],
           "pose": {
-            "x": -0.43095988035202026,
-            "y": -0.027791710570454597,
-            "z": -0.02838296629488468,
-            "q_x": 0.020804591476917267,
-            "q_y": 0.010898163542151451,
-            "q_z": -0.055615827441215515,
-            "q_w": 0.9981759786605835,
+            "x": -0.39,
+            "y": 0.18,
+            "z": 0.0,
+            "yaw": -0.11,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.05497227502706773,
+            "q_w": 0.9984878812375985,
             "speed": 0.3,
             "mode": 0
           },
-          "description": "来自早期 /home/unitree/topology_points.json 的 wp_0，保留为真实初始返回点。 calibrated from current live pose."
+          "description": "来自早期 /home/unitree/topology_points.json 的 wp_0，保留为真实初始返回点。 calibrated from current live pose. UI verified at 2026-06-02T21:39:35+0800 distance_m=0.130. UI verified at 2026-06-02T21:41:26+0800 distance_m=0.032. UI verified at 2026-06-02T21:44:04+0800 distance_m=0.091. UI verified at 2026-06-02T21:45:44+0800 distance_m=0.213.",
+          "verification": {
+            "verified_at": "2026-06-02T21:45:44+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.213,
+            "current_pose": {
+              "x": -0.39,
+              "y": 0.18,
+              "yaw": -0.11
+            },
+            "previous_pose": {
+              "x": -0.25,
+              "y": 0.02,
+              "z": 0.0,
+              "yaw": -0.04,
+              "q_x": 0.0,
+              "q_y": 0.0,
+              "q_z": -0.01999866669333308,
+              "q_w": 0.9998000066665778,
+              "speed": 0.3,
+              "mode": 0
+            }
+          }
         },
         {
           "node_id": "yin_siyuan_station",
@@ -64,7 +89,8 @@
             "real_site",
             "pcd_annotated",
             "workstation",
-            "needs_calibration"
+            "live_verified",
+            "ui_verified"
           ],
           "pose": {
             "x": 1.9271903991699215,
@@ -77,7 +103,17 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "annotated on test.pcd; needs live calibration"
+          "description": "annotated on test.pcd; needs live calibration UI verified at 2026-06-01T20:13:01+0800 distance_m=0.418.",
+          "verification": {
+            "verified_at": "2026-06-01T20:13:01+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.418,
+            "current_pose": {
+              "x": 1.51,
+              "y": 0.48,
+              "yaw": -0.04
+            }
+          }
         },
         {
           "node_id": "chen_jiayu_station",
@@ -94,8 +130,9 @@
             "workstation",
             "live_calibrated",
             "prone_observed",
-            "needs_standing_verification",
-            "standard_prone_pose"
+            "standard_prone_pose",
+            "live_verified",
+            "ui_verified"
           ],
           "pose": {
             "x": -1.1047908067703247,
@@ -109,7 +146,7 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "Live-calibrated from a localized gateway world-state sample while robot was prone at the standard workstation position on 2026-06-01. The raw prone pose is retained under calibration_observation; navigation pose keeps precise x/y/yaw with flattened z/roll/pitch. Keep standing verification before enabling real navigation to this target.",
+          "description": "Live-calibrated from a localized gateway world-state sample while robot was prone at the standard workstation position on 2026-06-01. The raw prone pose is retained under calibration_observation; navigation pose keeps precise x/y/yaw with flattened z/roll/pitch. Keep standing verification before enabling real navigation to this target. UI verified at 2026-06-01T20:12:00+0800 distance_m=0.223.",
           "calibration_observation": {
             "captured_at": "2026-06-01T14:57:00+08:00",
             "source": "gateway_world_state.rt/slam_info",
@@ -126,7 +163,17 @@
               "q_z": 0.6916059851646423,
               "q_w": 0.7220719456672668,
               "speed": 0.800000011920929,
-              "mode": 1
+              "mode": 0
+            }
+          },
+          "verification": {
+            "verified_at": "2026-06-01T20:12:00+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.223,
+            "current_pose": {
+              "x": -1.16,
+              "y": -0.45,
+              "yaw": 1.55
             }
           }
         },
@@ -144,7 +191,8 @@
             "real_site",
             "pcd_annotated",
             "workstation",
-            "needs_calibration"
+            "live_verified",
+            "ui_verified"
           ],
           "pose": {
             "x": 0.07719039916992188,
@@ -157,7 +205,17 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "annotated on test.pcd; needs live calibration"
+          "description": "annotated on test.pcd; needs live calibration UI verified at 2026-06-01T20:15:51+0800 distance_m=0.219.",
+          "verification": {
+            "verified_at": "2026-06-01T20:15:51+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.219,
+            "current_pose": {
+              "x": -0.01,
+              "y": -4.74,
+              "yaw": 3.1
+            }
+          }
         },
         {
           "node_id": "zhao_bo_office_front",
@@ -177,7 +235,8 @@
             "pcd_annotated",
             "office",
             "photo_required",
-            "needs_calibration"
+            "live_verified",
+            "ui_verified"
           ],
           "pose": {
             "x": 3.077190399169922,
@@ -190,7 +249,17 @@
             "speed": 0.3,
             "mode": 0
           },
-          "description": "annotated on test.pcd; photo required; needs live calibration"
+          "description": "annotated on test.pcd; photo required; needs live calibration UI verified at 2026-06-01T20:15:04+0800 distance_m=0.130.",
+          "verification": {
+            "verified_at": "2026-06-01T20:15:04+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.13,
+            "current_pose": {
+              "x": 3.17,
+              "y": -5.62,
+              "yaw": -0.02
+            }
+          }
         },
         {
           "node_id": "room_701_corridor",
@@ -498,7 +567,7 @@
               "q_z": 0.6916059851646423,
               "q_w": 0.7220719456672668,
               "speed": 0.800000011920929,
-              "mode": 1
+              "mode": 0
             }
           }
         }

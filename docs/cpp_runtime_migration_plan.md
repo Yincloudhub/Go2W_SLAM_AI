@@ -61,7 +61,7 @@ Qt/RViz2 UI 或 C++ TUI
 
 ## 现场验证
 
-机器人端已在 `~/go2w_slam_agent/cpp` 编译通过：
+机器人端已在 `/home/unitree/Go2W_SLAM_AI/cpp` 编译通过：
 
 ```bash
 cmake -S . -B build
@@ -71,7 +71,7 @@ cmake --build build -j2
 C++ 路由干跑验证：
 
 ```bash
-printf 'yin_siyuan_station\n/quit\n' | ./build/go2w_operator_panel --repo-root ~/go2w_slam_agent --current-node initial_point
+printf 'yin_siyuan_station\n/quit\n' | ./build/go2w_operator_panel --repo-root /home/unitree/Go2W_SLAM_AI --current-node initial_point
 ```
 
 输出显示 `C++语义路由：C++ topology route`，并生成 `cpp_queue`。

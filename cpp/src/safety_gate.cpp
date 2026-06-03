@@ -80,7 +80,8 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
     std::string conservative_mode = "slow";
 
     const auto* safety = objectAt(*world, {"safety"});
-    if (safety && safety->is_object() && safety->value("allow_navigation", false) != true) {
+    if (!safety || !safety->is_object()) return blocked("missing safety decision");
+    if (safety->value("allow_navigation", false) != true) {
         return blocked(
             "safety disallows navigation: " + safety->value("reason", std::string("unknown")),
             safety->value("recommended_mode", std::string("stop")));
@@ -89,35 +90,31 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
     const auto* health = objectAt(*world, {"slam_health"});
     if (health && health->is_object()) {
         const std::string status = health->value("status", "");
-        if (!status.empty() && status != "ok") {
-            if (status == "degraded") {
-                conservative_reason = "slam health degraded; conservative navigation only";
-                conservative_mode = "slow";
-            } else {
-                return blocked("slam health is " + status);
-            }
+        if (status == "failed" || status == "lost" || status == "not_started") {
+            return blocked("slam health is " + (status.empty() ? std::string("unknown") : status));
         }
         if (health->contains("slam_alive") && !health->value("slam_alive", false)) return blocked("slam is not alive");
         if (health->contains("localization_alive") && !health->value("localization_alive", false)) return blocked("localization is not alive");
     }
 
     const auto* loc = objectAt(*world, {"localization"});
-    if (loc && loc->is_object()) {
+    if (!loc || !loc->is_object()) return blocked("missing localization");
+    {
         const std::string status = loc->value("status", "");
-        if (!status.empty() && status != "localized_or_tracking" && status != "tracking" && status != "localized") {
-            if (status == "degraded") {
-                if (conservative_reason.empty()) conservative_reason = "localization degraded; conservative navigation only";
-                conservative_mode = "slow";
-            } else {
-                return blocked("localization is " + status);
-            }
+        if (!status.empty() && status != "localized_or_tracking" && status != "tracking" && status != "localized" && status != "degraded") {
+            return blocked("localization is " + status);
         }
-        const double pose_age = loc->value("pose_age_ms", 0.0);
-        if (pose_age < 0.0) return blocked("localization pose is not valid");
+        const double pose_age = loc->value("pose_age_ms", -1.0);
+        if (pose_age < 0.0 || pose_age > 2000.0) return blocked("localization pose is stale or missing");
+        const double confidence = loc->value("confidence", 1.0);
+        if (confidence <= 0.0) return blocked("localization confidence is too low");
     }
 
-    const double current_pose_age = numberAt(*world, {"current_pose", "pose_age_ms"}, 0.0);
-    if (current_pose_age < 0.0) return blocked("current pose is not valid");
+    const auto* current_pose = objectAt(*world, {"current_pose", "pose"});
+    if (!current_pose || !current_pose->is_object()) return blocked("missing current pose");
+    const double pose_x = numberAt(*current_pose, {"x"}, NAN);
+    const double pose_y = numberAt(*current_pose, {"y"}, NAN);
+    if (!std::isfinite(pose_x) || !std::isfinite(pose_y)) return blocked("current pose x/y is invalid");
 
     const auto* navigation = objectAt(*world, {"navigation"});
     if (navigation && navigation->is_object()) {
@@ -131,37 +128,41 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
     }
 
     const auto* obstacle = objectAt(*world, {"local_obstacle"});
-    if (!obstacle || !obstacle->is_object()) return blocked("missing local_obstacle sensor summary");
-    const std::string obstacle_source = obstacle->value("source", "");
-    if (obstacle_source != "stereo_depth" && obstacle_source != "lidar_pointcloud" && obstacle_source != "lidar_pointcloud+stereo_depth") {
-        return blocked("local_obstacle is not sensor backed");
-    }
-    if (obstacle->value("stale", true)) return blocked("local_obstacle sensor summary is stale");
-    const double obstacle_age_ms = obstacle->value("age_ms", -1.0);
-    if (obstacle_age_ms < 0.0 || obstacle_age_ms > 1000.0) return blocked("local_obstacle sensor summary is too old");
-    const double obstacle_confidence = obstacle->value("confidence", 0.0);
-    const double front_confidence = obstacle->value("front_confidence", 0.0);
-    const double left_confidence = obstacle->value("left_confidence", 0.0);
-    const double right_confidence = obstacle->value("right_confidence", 0.0);
-    if (obstacle_confidence <= 0.0 || front_confidence < 0.15 || left_confidence < 0.15 || right_confidence < 0.15) {
-        return blocked("local_obstacle ROI confidence is too low");
-    }
+    if (obstacle && obstacle->is_object()) {
+        const std::string obstacle_source = obstacle->value("source", "");
+        const bool trusted_obstacle_source =
+            obstacle_source == "stereo_depth" ||
+            obstacle_source == "lidar_pointcloud" ||
+            obstacle_source == "lidar_pointcloud+stereo_depth";
+        const double obstacle_age_ms = obstacle->value("age_ms", -1.0);
+        const bool fresh_obstacle = trusted_obstacle_source && !obstacle->value("stale", true) &&
+            obstacle_age_ms >= 0.0 && obstacle_age_ms <= 1000.0;
+        if (fresh_obstacle) {
+            const std::string obstacle_action = stringAt(*world, {"local_obstacle", "recommended_action"});
+            if (obstacle_action == "stop" || obstacle_action == "emergency_stop") {
+                return blocked("local_obstacle recommends " + obstacle_action, "emergency_stop");
+            }
+            if (obstacle_action == "pause") {
+                return blocked("local_obstacle recommends pause", "pause");
+            }
 
-    const double front_clearance = numberAt(*world, {"local_obstacle", "front_clearance_m"}, -1.0);
-    const double left_clearance = numberAt(*world, {"local_obstacle", "left_clearance_m"}, -1.0);
-    const double right_clearance = numberAt(*world, {"local_obstacle", "right_clearance_m"}, -1.0);
-    const std::string obstacle_action = stringAt(*world, {"local_obstacle", "recommended_action"});
-    if (front_clearance < 0.0 || left_clearance < 0.0 || right_clearance < 0.0) {
-        return blocked("local_obstacle clearance is incomplete");
-    }
-    if (front_clearance >= 0.0 && front_clearance < limits_.emergency_clearance_m) {
-        return blocked("front obstacle inside emergency distance", "emergency_stop");
-    }
-    if (left_clearance < limits_.emergency_clearance_m || right_clearance < limits_.emergency_clearance_m) {
-        return blocked("side obstacle inside emergency distance", "pause");
-    }
-    if ((front_clearance >= 0.0 && front_clearance < limits_.pause_clearance_m) || obstacle_action == "pause") {
-        return blocked("front obstacle inside pause distance", "pause");
+            const double front_clearance = numberAt(*world, {"local_obstacle", "front_clearance_m"}, -1.0);
+            const double left_clearance = numberAt(*world, {"local_obstacle", "left_clearance_m"}, -1.0);
+            const double right_clearance = numberAt(*world, {"local_obstacle", "right_clearance_m"}, -1.0);
+            const double front_confidence = obstacle->value("front_confidence", 0.0);
+            const double left_confidence = obstacle->value("left_confidence", 0.0);
+            const double right_confidence = obstacle->value("right_confidence", 0.0);
+            if (front_confidence >= 0.15 && front_clearance >= 0.0 && front_clearance < limits_.emergency_clearance_m) {
+                return blocked("front obstacle inside emergency distance", "emergency_stop");
+            }
+            if ((left_confidence >= 0.15 && left_clearance >= 0.0 && left_clearance < limits_.emergency_clearance_m) ||
+                (right_confidence >= 0.15 && right_clearance >= 0.0 && right_clearance < limits_.emergency_clearance_m)) {
+                return blocked("side obstacle inside emergency distance", "pause");
+            }
+            if (front_confidence >= 0.15 && front_clearance >= 0.0 && front_clearance < limits_.pause_clearance_m) {
+                return blocked("front obstacle inside pause distance", "pause");
+            }
+        }
     }
 
     const auto* risk_events = objectAt(*world, {"risk_events"});

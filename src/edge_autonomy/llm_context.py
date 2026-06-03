@@ -6,6 +6,9 @@ from typing import Any
 from .map_registry import MapProfile, MapRegistry, TopologyNode
 
 
+NAVIGABLE_LOCALIZATION_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
+
+
 def _distance_xy(a: dict[str, float], b: dict[str, float]) -> float:
     return ((a["x"] - b["x"]) ** 2 + (a["y"] - b["y"]) ** 2) ** 0.5
 
@@ -52,7 +55,7 @@ def build_planner_context(
     nearest = nearest_topology_node(profile, pose)
     health_status = str(snapshot.get("health_status", "unknown"))
     localization_status = str(snapshot.get("localization_status", "unknown"))
-    localized = health_status == "ok" and localization_status == "localized_or_tracking" and pose is not None
+    localized = health_status in {"ok", "degraded"} and localization_status in NAVIGABLE_LOCALIZATION_STATUSES and pose is not None
 
     available_nodes = []
     for node in profile.topology_nodes:
@@ -128,7 +131,7 @@ def build_planner_context(
         },
         "planner_rules": [
             "Do not output raw Unitree API IDs.",
-            "Use mapped_navigation only when health_status is ok and localization_status is localized_or_tracking.",
+            "Use mapped_navigation only when SLAM health is navigable, localization is fresh, and a topology node is selected.",
             "Use create_navigation_subgoal with a topology node instead of raw coordinates when possible.",
             "Use /slam_info ctrl_info is_arrived or stateMachine FINISHED as the arrival condition.",
             "Do not request dense pointcloud or raw video for weak-bandwidth planning.",
@@ -182,7 +185,7 @@ def simulate_local_llm_plan(context: dict[str, Any], registry: MapRegistry) -> d
             "requires_human_ack": False,
         }
 
-    if health_status != "ok" or localization_status != "localized_or_tracking" or not localized:
+    if health_status not in {"ok", "degraded"} or localization_status not in NAVIGABLE_LOCALIZATION_STATUSES or not localized:
         return {
             "plan_id": f"mock_plan_{int(time.time() * 1000)}",
             "mode": "safe_hold",

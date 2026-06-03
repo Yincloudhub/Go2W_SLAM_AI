@@ -352,6 +352,7 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
         result.execution = {
             {"queue_id", route.task_queue.value("queue_id", "cpp_queue")},
             {"executed", false},
+            {"dry_run", !config_.execute_enabled},
             {"completed", false},
             {"failed_step", nullptr},
             {"blocked_reason", validation.summary()},
@@ -364,6 +365,7 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
     nlohmann::json execution = {
         {"queue_id", route.task_queue.value("queue_id", "cpp_queue")},
         {"executed", config_.execute_enabled},
+        {"dry_run", !config_.execute_enabled},
         {"completed", false},
         {"failed_step", nullptr},
         {"blocked_reason", ""},
@@ -519,7 +521,7 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
         execution["events"].push_back(event);
     }
 
-    execution["completed"] = true;
+    execution["completed"] = config_.execute_enabled;
     result.exit_code = 0;
     result.execution = execution;
     out << "队列执行完成。\n";

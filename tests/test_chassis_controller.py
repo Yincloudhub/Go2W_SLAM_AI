@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from edge_autonomy.chassis_controller import ChassisController, GatewayConfig
+from edge_autonomy.chassis_controller import ChassisController, GatewayConfig, gateway_allows_navigation
 
 
 class ChassisControllerTests(unittest.TestCase):
@@ -37,6 +37,33 @@ class ChassisControllerTests(unittest.TestCase):
         self.assertTrue(result["multi_target"])
         self.assertEqual(result["selected"]["node_id"], "room701")
         self.assertEqual([item["node_id"] for item in result["matches"]], ["room701", "station"])
+
+    def test_preflight_trusts_gateway_safety_when_obstacle_advisory_is_manual(self) -> None:
+        allowed, reason = gateway_allows_navigation(
+            {
+                "world_state": {
+                    "safety": {"allow_navigation": True, "reason": "ok"},
+                    "slam_health": {"status": "ok", "slam_alive": True, "localization_alive": True},
+                    "localization": {"status": "localized", "confidence": 0.9, "pose_age_ms": 100},
+                    "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
+                    "local_obstacle": {
+                        "source": "manual_stub",
+                        "stale": True,
+                        "age_ms": -1,
+                        "confidence": 0.0,
+                        "front_confidence": 0.0,
+                        "left_confidence": 0.0,
+                        "right_confidence": 0.0,
+                        "front_clearance_m": 6.0,
+                        "left_clearance_m": 6.0,
+                        "right_clearance_m": 6.0,
+                    },
+                }
+            }
+        )
+
+        self.assertTrue(allowed, reason)
+        self.assertIn("gateway allows navigation", reason)
 
 
 if __name__ == "__main__":

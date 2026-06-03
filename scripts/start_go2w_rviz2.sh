@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LOG_DIR="${GO2W_RVIZ2_LOG_DIR:-${HOME}/go2w_slam_agent/artifacts/rviz2}"
+LOG_DIR="${GO2W_RVIZ2_LOG_DIR:-${REPO_ROOT}/artifacts/rviz2}"
 RVIZ2_BIN="${GO2W_RVIZ2_BIN:-rviz2}"
 RVIZ2_CONFIG="${GO2W_RVIZ2_CONFIG:-}"
 
