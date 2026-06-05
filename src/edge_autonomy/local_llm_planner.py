@@ -34,6 +34,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "Your entire response must start with '{' and end with '}'. "
     "Do not repeat the input. Do not output markdown, comments, natural-language explanation, raw Unitree API ids, or cmd_vel. "
     "Use only registered tools. Safety rules override user requests. "
+    "Use capability_contract when present: ready or available conditional capabilities may be planned; not_wired capabilities must become human_confirm or safe_hold, never a fake topology node. "
     "The top-level keys must be exactly: plan_id, mode, confidence, reason, steps, communication_policy, requires_human_ack. "
     "Each step must have exactly: step_id, tool, arguments. "
     "communication_policy must be an object with mode, send, drop, and reason. "
@@ -64,8 +65,10 @@ Hard rules:
 - Do not navigate when localization is lost or SLAM is not usable.
 - Do not navigate into critical human/crowd risk.
 - Do not output raw Unitree API ids such as 1102, 1201, or 1202.
+- Use capability_contract if present. Capabilities marked not_wired, such as relative_motion or raw_base_control, must not be planned as executable actions.
 
 Decision priority, apply in this order before choosing steps:
+0. Requested capability not wired: if the user asks for a not_wired capability, mode must be human_confirm or safe_hold, include request_human_confirm, and do not create_navigation_subgoal unless a registered topology node was clearly requested.
 1. Unknown target / missing topology node: if the requested target is absent from semantic topology node_id values, mode must be human_confirm, include request_human_confirm, and do not create_navigation_subgoal.
 2. Already at target: if distance_to_requested_target_m <= arrival_distance_m, mode must be safe_hold, include hold_position, and do not create_navigation_subgoal.
 3. Low battery: if battery_percent < low_battery_percent and the task is not charging_point or emergency, mode must be human_confirm with request_human_confirm, or navigate only to charging_point. If the user explicitly asks to return to charging_point, use mapped_navigation to charging_point with wait_until.
@@ -118,6 +121,7 @@ communication_policy must include exactly mode, send, drop, reason.
 Normal communication_policy is {{"mode":"normal","send":["task_state","navigation_feedback","world_state_summary"],"drop":[],"reason":"normal link"}}.
 
 Priority rules:
+0. If capability_contract marks the requested capability not_wired: human_confirm with request_human_confirm. Do not fake a topology node.
 1. If slam_ok is false or localized is false: safe_hold with hold_position.
 2. If target_node is unknown or not in candidates: human_confirm with request_human_confirm. Do not navigate.
 3. If distance_to_requested_target_m <= arrival_distance_m: safe_hold with hold_position. Do not navigate.
@@ -314,6 +318,7 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
         "weak_bandwidth_kbps": weak_bandwidth,
         "weak_bandwidth": isinstance(bandwidth, (int, float)) and isinstance(weak_bandwidth, (int, float)) and float(bandwidth) < float(weak_bandwidth),
         "candidates": candidates,
+        "capability_contract": planner_context.get("capability_contract"),
     }
 
 

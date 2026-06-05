@@ -3,6 +3,7 @@ import unittest
 from edge_autonomy.local_llm_planner import (
     apply_context_policy_overrides,
     build_lightweight_planner_context,
+    build_lightweight_planner_prompt,
     build_task_queue_from_context,
     deterministic_intent_from_context,
     extract_json_object,
@@ -97,6 +98,7 @@ class LocalLlmPlannerTests(unittest.TestCase):
     def test_target_matching_uses_command_order_not_registry_order(self) -> None:
         context = {
             "user_command": "go room701 then return station",
+            "capability_contract": {"not_wired": [{"name": "relative_motion"}]},
             "world_state_summary": {
                 "map": {"map_id": "test_current_main"},
                 "robot": {"localized": True},
@@ -127,6 +129,24 @@ class LocalLlmPlannerTests(unittest.TestCase):
         self.assertEqual(light["requested_target_guess"], "room701")
         self.assertTrue(light["multi_target"])
         self.assertEqual([item["node_id"] for item in light["matched_targets"]], ["room701", "station"])
+        self.assertEqual(light["capability_contract"]["not_wired"][0]["name"], "relative_motion")
+
+    def test_lightweight_prompt_mentions_capability_contract(self) -> None:
+        context = {
+            "user_command": "forward 10 meters and capture",
+            "capability_contract": {"not_wired": [{"name": "relative_motion"}]},
+            "world_state_summary": {
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {"available_nodes": []},
+            },
+        }
+
+        prompt = build_lightweight_planner_prompt(context)
+
+        self.assertIn("capability_contract", prompt)
+        self.assertIn("relative_motion", prompt)
+        self.assertIn("not_wired", prompt)
 
     def test_multi_target_command_builds_sequential_task_queue(self) -> None:
         context = {

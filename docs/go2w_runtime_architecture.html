@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GO2W 当前代码架构与运行链路</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #5e6b7a;
+      --line: #cfd8e3;
+      --line-strong: #7c8da0;
+      --blue: #2f6f9f;
+      --green: #23745a;
+      --amber: #9a6700;
+      --red: #9f2f2f;
+      --violet: #6b4fa3;
+      --slate: #34475c;
+      --soft-blue: #e9f2f8;
+      --soft-green: #e8f5ef;
+      --soft-amber: #fff6dd;
+      --soft-red: #fbe9e9;
+      --soft-violet: #f0ecf8;
+      --shadow: 0 10px 28px rgba(31, 41, 51, 0.08);
+      --radius: 8px;
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 40px 0 14px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    code {
+      background: #eef2f6;
+      border: 1px solid #dce4ed;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.94em;
+    }
+
+    pre {
+      overflow: auto;
+      background: #101820;
+      color: #e9eef5;
+      border-radius: 6px;
+      padding: 14px;
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      max-width: 920px;
+    }
+
+    .fact-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .fact {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      background: #fbfcfd;
+      min-height: 88px;
+    }
+
+    .fact strong {
+      display: block;
+      color: var(--slate);
+      margin-bottom: 6px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .fact span {
+      display: block;
+      overflow-wrap: anywhere;
+      font-size: 14px;
+    }
+
+    .section {
+      margin-top: 24px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+
+    .note {
+      border-left: 4px solid var(--blue);
+      background: var(--soft-blue);
+      border-radius: 4px;
+      padding: 12px 14px;
+      color: #243b53;
+      margin: 12px 0;
+    }
+
+    .warning {
+      border-left-color: var(--amber);
+      background: var(--soft-amber);
+    }
+
+    .danger {
+      border-left-color: var(--red);
+      background: var(--soft-red);
+    }
+
+    .diagram-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfd;
+      padding: 12px;
+    }
+
+    .svg-diagram {
+      min-width: 1120px;
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .module {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      background: #fbfcfd;
+      min-height: 180px;
+    }
+
+    .module.cpp {
+      background: var(--soft-blue);
+      border-color: #b7d5e8;
+    }
+
+    .module.py {
+      background: var(--soft-green);
+      border-color: #b9ddce;
+    }
+
+    .module.gateway {
+      background: var(--soft-amber);
+      border-color: #ead391;
+    }
+
+    .module.map {
+      background: var(--soft-violet);
+      border-color: #d6c8ed;
+    }
+
+    .tag {
+      display: inline-block;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      margin: 0 4px 6px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 0;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #eef2f6;
+      color: var(--slate);
+      font-weight: 650;
+    }
+
+    td:first-child {
+      width: 26%;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .sequence {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 14px;
+      margin: 16px 0;
+      align-items: stretch;
+    }
+
+    .seq-title {
+      border-radius: 6px;
+      background: #eef2f6;
+      border: 1px solid var(--line);
+      padding: 12px;
+      font-weight: 650;
+      color: var(--slate);
+    }
+
+    .seq-steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #fff;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      max-width: 260px;
+      overflow-wrap: anywhere;
+    }
+
+    .arrow {
+      color: var(--line-strong);
+      font-weight: 700;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(0, 0, 0, 0.18);
+    }
+
+    .swatch.cpp {
+      background: var(--soft-blue);
+    }
+
+    .swatch.py {
+      background: var(--soft-green);
+    }
+
+    .swatch.gateway {
+      background: var(--soft-amber);
+    }
+
+    .swatch.map {
+      background: var(--soft-violet);
+    }
+
+    .swatch.stop {
+      background: var(--soft-red);
+    }
+
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .toc a {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 10px;
+      background: #fff;
+      color: var(--slate);
+    }
+
+    .compact-list {
+      margin: 6px 0 0 18px;
+      padding: 0;
+    }
+
+    .compact-list li {
+      margin: 4px 0;
+    }
+
+    @media (max-width: 980px) {
+      .fact-grid,
+      .module-grid,
+      .sequence {
+        grid-template-columns: 1fr;
+      }
+
+      .seq-steps {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      .arrow {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>GO2W 当前代码架构与运行链路</h1>
+      <p class="subtitle">
+        这份文档描述当前已收敛后的代码结构：只保留 <code>/home/unitree/Go2W_SLAM_AI</code> 作为机器人端主工程；
+        C++ 负责实时热路径，Python 负责地图工具、离线检查和 fallback；底层 <code>slam_gateway_refactor</code> 负责 Unitree SLAM/SDK 适配。
+      </p>
+      <div class="fact-grid">
+        <div class="fact">
+          <strong>机器人主目录</strong>
+          <span><code>/home/unitree/Go2W_SLAM_AI</code></span>
+        </div>
+        <div class="fact">
+          <strong>当前 commit</strong>
+          <span><code>85b510c</code> Consolidate GO2W runtime map ownership</span>
+        </div>
+        <div class="fact">
+          <strong>唯一实机地图 registry</strong>
+          <span><code>configs/maps/go2w_real_site_map_registry.json</code></span>
+        </div>
+        <div class="fact">
+          <strong>旧目录状态</strong>
+          <span><code>/home/unitree/go2w_slam_agent</code> 已归档，不再作为入口</span>
+        </div>
+      </div>
+      <nav class="toc">
+        <a href="#overview">总览流程图</a>
+        <a href="#ownership">模块职责</a>
+        <a href="#runtime">执行链路</a>
+        <a href="#safety">安全链路</a>
+        <a href="#map">地图链路</a>
+        <a href="#sequences">详细序列</a>
+        <a href="#files">文件索引</a>
+        <a href="#verify">验证命令</a>
+        <a href="go2w_next_phase_review.html">下一阶段评审</a>
+      </nav>
+    </header>
+
+    <section id="overview" class="section">
+      <h2>1. 总览流程图</h2>
+      <p>
+        下面是当前主链路。实机控制从 operator UI/web 进入 C++ operator core，然后通过 C++ GatewayClient 调
+        <code>slam_llm_command_client</code>，再进入独立的 Unitree SLAM gateway。地图语义只由主 repo 的 registry 拥有。
+      </p>
+      <div class="diagram-wrap">
+        <svg class="svg-diagram" viewBox="0 0 1320 760" role="img" aria-label="GO2W 当前代码架构总览流程图">
+          <defs>
+            <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#2f6f9f"></path>
+            </marker>
+            <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#23745a"></path>
+            </marker>
+            <marker id="arrowAmber" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#9a6700"></path>
+            </marker>
+            <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#9f2f2f"></path>
+            </marker>
+            <style>
+              .lane { fill: #fff; stroke: #cfd8e3; stroke-width: 1.5; }
+              .lane-title { font: 700 15px Segoe UI, Microsoft YaHei, sans-serif; fill: #34475c; }
+              .box { stroke-width: 1.4; rx: 8; ry: 8; }
+              .box-title { font: 700 14px Segoe UI, Microsoft YaHei, sans-serif; fill: #1f2933; }
+              .box-text { font: 12px Segoe UI, Microsoft YaHei, sans-serif; fill: #405263; }
+              .flow { fill: none; stroke-width: 2.2; }
+              .flow-thin { fill: none; stroke-width: 1.6; stroke-dasharray: 6 5; }
+            </style>
+          </defs>
+
+          <rect class="lane" x="20" y="20" width="1280" height="110"></rect>
+          <text class="lane-title" x="38" y="48">入口层: operator / web / shell</text>
+          <rect class="box" x="40" y="68" width="195" height="44" fill="#eef2f6" stroke="#9fb0c2"></rect>
+          <text class="box-title" x="58" y="88">用户</text>
+          <text class="box-text" x="58" y="105">浏览器 / 终端 / SSH</text>
+          <rect class="box" x="290" y="58" width="235" height="64" fill="#eef2f6" stroke="#9fb0c2"></rect>
+          <text class="box-title" x="306" y="82">run_go2w_operator_web.sh</text>
+          <text class="box-text" x="306" y="101">设置 repo、registry、map-id</text>
+          <rect class="box" x="575" y="58" width="230" height="64" fill="#eef2f6" stroke="#9fb0c2"></rect>
+          <text class="box-title" x="592" y="82">go2w_operator_web.py</text>
+          <text class="box-text" x="592" y="101">薄 Web shell，短生命周期调用 C++</text>
+          <rect class="box" x="860" y="58" width="230" height="64" fill="#eef2f6" stroke="#9fb0c2"></rect>
+          <text class="box-title" x="876" y="82">run_go2w_operator_ui.sh</text>
+          <text class="box-text" x="876" y="101">终端 UI，直接启动 C++ panel</text>
+
+          <rect class="lane" x="20" y="160" width="1280" height="176"></rect>
+          <text class="lane-title" x="38" y="188">C++ 热路径: operator core</text>
+          <rect class="box" x="90" y="218" width="220" height="72" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="box-title" x="108" y="242">go2w_operator_panel</text>
+          <text class="box-text" x="108" y="262">operator_panel.cpp</text>
+          <text class="box-text" x="108" y="279">唯一热路径控制面</text>
+          <rect class="box" x="365" y="204" width="190" height="58" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="box-title" x="382" y="227">SemanticRouter</text>
+          <text class="box-text" x="382" y="246">中文/别名匹配 node_id</text>
+          <rect class="box" x="365" y="274" width="190" height="50" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="box-title" x="382" y="296">LLM HTTP fallback</text>
+          <text class="box-text" x="382" y="315">仅允许 registered_node_id</text>
+          <rect class="box" x="610" y="204" width="190" height="58" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="box-title" x="627" y="227">TaskQueueValidator</text>
+          <text class="box-text" x="627" y="246">检查队列结构和动作</text>
+          <rect class="box" x="610" y="274" width="190" height="50" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="box-title" x="627" y="296">SafetyGate</text>
+          <text class="box-text" x="627" y="315">本地确定性安全策略</text>
+          <rect class="box" x="855" y="218" width="205" height="72" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="box-title" x="872" y="242">QueueExecutor</text>
+          <text class="box-text" x="872" y="262">执行 / arrival feedback</text>
+          <text class="box-text" x="872" y="279">默认 dry-run，需显式 execute</text>
+          <rect class="box" x="1110" y="218" width="160" height="72" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="box-title" x="1128" y="242">GatewayClient</text>
+          <text class="box-text" x="1128" y="262">fork/pipe 调用</text>
+          <text class="box-text" x="1128" y="279">短生命周期 client</text>
+
+          <rect class="lane" x="20" y="366" width="1280" height="118"></rect>
+          <text class="lane-title" x="38" y="394">地图与状态数据: 单一语义源 + 有界感知摘要</text>
+          <rect class="box" x="60" y="420" width="290" height="44" fill="#f0ecf8" stroke="#b9a7dd"></rect>
+          <text class="box-title" x="78" y="440">go2w_real_site_map_registry.json</text>
+          <text class="box-text" x="78" y="457">topology / aliases / anchors / pcd_path</text>
+          <rect class="box" x="420" y="420" width="230" height="44" fill="#f0ecf8" stroke="#b9a7dd"></rect>
+          <text class="box-title" x="438" y="440">/home/unitree/test.pcd</text>
+          <text class="box-text" x="438" y="457">Unitree SLAM 实际 PCD</text>
+          <rect class="box" x="710" y="420" width="260" height="44" fill="#f0ecf8" stroke="#b9a7dd"></rect>
+          <text class="box-title" x="728" y="440">/home/unitree/topology_points.json</text>
+          <text class="box-text" x="728" y="457">Unitree waypoint runtime file</text>
+          <rect class="box" x="1030" y="420" width="220" height="44" fill="#e8f5ef" stroke="#9dcdb8"></rect>
+          <text class="box-title" x="1048" y="440">artifacts/*summary.json</text>
+          <text class="box-text" x="1048" y="457">stereo / DeepYOLO / edge summaries</text>
+
+          <rect class="lane" x="20" y="514" width="1280" height="118"></rect>
+          <text class="lane-title" x="38" y="542">底层执行层: 独立 SLAM gateway + Unitree 服务</text>
+          <rect class="box" x="110" y="568" width="260" height="44" fill="#fff6dd" stroke="#d9ba5f"></rect>
+          <text class="box-title" x="128" y="588">slam_llm_command_client</text>
+          <text class="box-text" x="128" y="605">/home/unitree/slam_gateway_refactor/build</text>
+          <rect class="box" x="450" y="568" width="220" height="44" fill="#fff6dd" stroke="#d9ba5f"></rect>
+          <text class="box-title" x="468" y="588">SlamGateway</text>
+          <text class="box-text" x="468" y="605">Unitree SDK / ROS2 services</text>
+          <rect class="box" x="750" y="568" width="220" height="44" fill="#fff6dd" stroke="#d9ba5f"></rect>
+          <text class="box-title" x="768" y="588">SafetySupervisor</text>
+          <text class="box-text" x="768" y="605">SLAM 权威安全判断</text>
+          <rect class="box" x="1050" y="568" width="185" height="44" fill="#fff6dd" stroke="#d9ba5f"></rect>
+          <text class="box-title" x="1068" y="588">Unitree SLAM / chassis</text>
+          <text class="box-text" x="1068" y="605">relocate / navigate / pause</text>
+
+          <rect class="lane" x="20" y="662" width="1280" height="72"></rect>
+          <text class="lane-title" x="38" y="690">Python 辅助层: 工具、离线、fallback、测试对齐</text>
+          <rect class="box" x="70" y="704" width="230" height="24" fill="#e8f5ef" stroke="#9dcdb8"></rect>
+          <text class="box-text" x="86" y="722">map_registry.py / llm_context.py</text>
+          <rect class="box" x="350" y="704" width="260" height="24" fill="#e8f5ef" stroke="#9dcdb8"></rect>
+          <text class="box-text" x="366" y="722">go2w_agent_entry.py / run_robot_closed_loop.py</text>
+          <rect class="box" x="660" y="704" width="230" height="24" fill="#e8f5ef" stroke="#9dcdb8"></rect>
+          <text class="box-text" x="676" y="722">apply_pcd_annotations.py / annotation HTML</text>
+          <rect class="box" x="940" y="704" width="240" height="24" fill="#e8f5ef" stroke="#9dcdb8"></rect>
+          <text class="box-text" x="956" y="722">unit tests / simulation / eval tooling</text>
+
+          <path class="flow" d="M235 90 L290 90" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M525 90 L575 90" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M690 122 L260 218" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M975 122 L260 218" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M310 254 L365 233" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M310 265 L365 299" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M555 233 L610 233" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M555 299 L610 299" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M800 299 L855 254" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M1060 254 L1110 254" stroke="#2f6f9f" marker-end="url(#arrowBlue)"></path>
+          <path class="flow" d="M1190 290 L240 568" stroke="#9a6700" marker-end="url(#arrowAmber)"></path>
+          <path class="flow" d="M370 590 L450 590" stroke="#9a6700" marker-end="url(#arrowAmber)"></path>
+          <path class="flow" d="M670 590 L750 590" stroke="#9a6700" marker-end="url(#arrowAmber)"></path>
+          <path class="flow" d="M970 590 L1050 590" stroke="#9a6700" marker-end="url(#arrowAmber)"></path>
+          <path class="flow-thin" d="M205 420 L200 290" stroke="#6b4fa3" marker-end="url(#arrowGreen)"></path>
+          <path class="flow-thin" d="M535 420 L1170 290" stroke="#6b4fa3" marker-end="url(#arrowGreen)"></path>
+          <path class="flow-thin" d="M840 420 L470 568" stroke="#6b4fa3" marker-end="url(#arrowGreen)"></path>
+          <path class="flow-thin" d="M1140 464 L705 274" stroke="#23745a" marker-end="url(#arrowGreen)"></path>
+          <path class="flow-thin" d="M860 568 C820 520 830 350 690 262" stroke="#9f2f2f" marker-end="url(#arrowRed)"></path>
+        </svg>
+      </div>
+      <div class="legend">
+        <span><i class="swatch cpp"></i>C++ 热路径</span>
+        <span><i class="swatch py"></i>Python 辅助/工具</span>
+        <span><i class="swatch gateway"></i>Unitree gateway</span>
+        <span><i class="swatch map"></i>地图/状态数据</span>
+        <span><i class="swatch stop"></i>安全阻断反馈</span>
+      </div>
+    </section>
+
+    <section id="ownership" class="section">
+      <h2>2. 模块职责边界</h2>
+      <div class="module-grid">
+        <div class="module cpp">
+          <h3>C++ 热路径 <code>cpp/</code></h3>
+          <span class="tag">实时控制</span><span class="tag">SafetyGate</span><span class="tag">QueueExecutor</span>
+          <p>现场默认运行 owner。负责 operator panel、状态格式化、语义路由、队列验证、安全门、执行反馈和 gateway 调用。</p>
+          <ul class="compact-list">
+            <li><code>operator_panel.cpp</code> 是 operator 控制面。</li>
+            <li><code>safety_gate.cpp</code> 是 C++ 确定性安全策略。</li>
+            <li><code>queue_executor.cpp</code> 负责执行和反馈。</li>
+          </ul>
+        </div>
+        <div class="module py">
+          <h3>Python 辅助 <code>src/</code> + <code>scripts/</code></h3>
+          <span class="tag">工具</span><span class="tag">离线</span><span class="tag">fallback</span>
+          <p>不再作为默认热路径 owner。负责地图工具、LLM fallback、离线评估、测试对齐、PCD 标注、Web shell。</p>
+          <ul class="compact-list">
+            <li><code>gateway_safety.py</code> 提供 Python 共享安全门。</li>
+            <li><code>map_registry.py</code> 负责 registry 解析和命令生成。</li>
+            <li><code>go2w_operator_web.py</code> 是薄 Web shell。</li>
+          </ul>
+        </div>
+        <div class="module gateway">
+          <h3>独立网关 <code>slam_gateway_refactor</code></h3>
+          <span class="tag">Unitree SDK</span><span class="tag">SLAM</span><span class="tag">真实执行</span>
+          <p>位于 <code>/home/unitree/slam_gateway_refactor</code>。接收具体 JSON 命令，调用 Unitree SLAM/SDK 服务，不拥有语义地图。</p>
+          <ul class="compact-list">
+            <li><code>slam_llm_command_client</code> 是上层调用入口。</li>
+            <li><code>SlamGateway</code> 调 SLAM service。</li>
+            <li><code>SafetySupervisor</code> 输出权威安全判断。</li>
+          </ul>
+        </div>
+        <div class="module map">
+          <h3>地图权威 <code>configs/maps</code></h3>
+          <span class="tag">单一源</span><span class="tag">go2w_real_site</span>
+          <p>当前只有主 repo 的 real-site registry 是权威。旧目录已归档，不再有第二份 registry。</p>
+          <ul class="compact-list">
+            <li><code>pcd_path=/home/unitree/test.pcd</code></li>
+            <li><code>topology_path=/home/unitree/topology_points.json</code></li>
+            <li>7 个拓扑点，8 个重定位锚点。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="note">
+        新增 live robot 执行策略时，优先落在 C++。Python 可以做同契约测试、离线验证和 fallback，但不再变成第二套运行控制中枢。
+      </div>
+    </section>
+
+    <section id="runtime" class="section">
+      <h2>3. 实机执行链路</h2>
+      <p>当前有两个入口：终端 UI 和浏览器 UI。浏览器 UI 不直接控制机器人，它只把命令交给短生命周期 C++ panel。</p>
+
+      <div class="sequence">
+        <div class="seq-title">浏览器 UI 启动</div>
+        <div class="seq-steps">
+          <div class="step"><code>cd /home/unitree/Go2W_SLAM_AI</code></div><span class="arrow">→</span>
+          <div class="step"><code>scripts/run_go2w_operator_web.sh</code></div><span class="arrow">→</span>
+          <div class="step"><code>go2w_operator_web.py</code></div><span class="arrow">→</span>
+          <div class="step">每次状态/命令 spawn <code>go2w_operator_panel</code></div>
+        </div>
+      </div>
+
+      <div class="sequence">
+        <div class="seq-title">终端 UI 启动</div>
+        <div class="seq-steps">
+          <div class="step"><code>scripts/run_go2w_operator_ui.sh</code></div><span class="arrow">→</span>
+          <div class="step"><code>go2w_operator_panel --repo-root ... --registry ... --map-id go2w_real_site</code></div><span class="arrow">→</span>
+          <div class="step">C++ panel 进入交互模式</div>
+        </div>
+      </div>
+
+      <div class="sequence">
+        <div class="seq-title">真实导航命令</div>
+        <div class="seq-steps">
+          <div class="step">用户输入中文/节点名</div><span class="arrow">→</span>
+          <div class="step">C++ <code>SemanticRouter</code> 匹配 registry</div><span class="arrow">→</span>
+          <div class="step">生成 task queue</div><span class="arrow">→</span>
+          <div class="step"><code>SafetyGate</code> + gateway world_state</div><span class="arrow">→</span>
+          <div class="step"><code>QueueExecutor</code></div><span class="arrow">→</span>
+          <div class="step"><code>slam_llm_command_client</code></div><span class="arrow">→</span>
+          <div class="step">Unitree SLAM / chassis</div>
+        </div>
+      </div>
+
+      <div class="warning note">
+        默认是 dry-run 或需要显式确认。<code>/execute on</code>、mapping、topology 写入、relocate 都是明确 operator 动作，不会因为 UI 打开自动执行。
+      </div>
+    </section>
+
+    <section id="safety" class="section">
+      <h2>4. 安全链路</h2>
+      <p>
+        安全逻辑分三层：registry/topology 静态门、gateway/SLAM 权威门、本地局部感知辅助门。关键调整是：
+        不再要求“周围全部安全读数齐全”才允许重定位或执行；只要 SLAM/gateway 的权威安全状态允许，并且当前定位/位姿有效即可继续。
+        局部障碍只在新鲜、可信、明确危险时阻断。
+      </p>
+      <div class="diagram-wrap">
+        <svg class="svg-diagram" viewBox="0 0 1320 520" role="img" aria-label="GO2W 安全门流程图">
+          <defs>
+            <marker id="arrowS" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#34475c"></path>
+            </marker>
+            <style>
+              .sbox { stroke-width: 1.5; rx: 8; ry: 8; }
+              .stitle { font: 700 14px Segoe UI, Microsoft YaHei, sans-serif; fill: #1f2933; }
+              .stext { font: 12px Segoe UI, Microsoft YaHei, sans-serif; fill: #405263; }
+              .sflow { fill: none; stroke: #34475c; stroke-width: 2.1; marker-end: url(#arrowS); }
+            </style>
+          </defs>
+          <rect class="sbox" x="40" y="80" width="170" height="74" fill="#eef2f6" stroke="#9fb0c2"></rect>
+          <text class="stitle" x="58" y="106">输入命令</text>
+          <text class="stext" x="58" y="126">中文 / node_id / anchor</text>
+          <text class="stext" x="58" y="143">默认不直接运动</text>
+
+          <rect class="sbox" x="270" y="80" width="190" height="74" fill="#f0ecf8" stroke="#b9a7dd"></rect>
+          <text class="stitle" x="288" y="106">Registry Gate</text>
+          <text class="stext" x="288" y="126">必须是 real map</text>
+          <text class="stext" x="288" y="143">map_id=go2w_real_site</text>
+
+          <rect class="sbox" x="520" y="80" width="210" height="74" fill="#f0ecf8" stroke="#b9a7dd"></rect>
+          <text class="stitle" x="538" y="106">Topology Target Gate</text>
+          <text class="stext" x="538" y="126">禁止 disabled / deleted</text>
+          <text class="stext" x="538" y="143">禁止未校准真实导航目标</text>
+
+          <rect class="sbox" x="790" y="80" width="210" height="74" fill="#fff6dd" stroke="#d9ba5f"></rect>
+          <text class="stitle" x="808" y="106">Gateway / SLAM Gate</text>
+          <text class="stext" x="808" y="126">safety.allow_navigation=true</text>
+          <text class="stext" x="808" y="143">SLAM 权威判断</text>
+
+          <rect class="sbox" x="1060" y="80" width="210" height="74" fill="#e8f5ef" stroke="#9dcdb8"></rect>
+          <text class="stitle" x="1078" y="106">Localization Gate</text>
+          <text class="stext" x="1078" y="126">localized/tracking/degraded</text>
+          <text class="stext" x="1078" y="143">pose_age_ms 有效</text>
+
+          <rect class="sbox" x="410" y="250" width="250" height="90" fill="#e9f2f8" stroke="#8fbfdb"></rect>
+          <text class="stitle" x="428" y="276">Local Obstacle Advisory</text>
+          <text class="stext" x="428" y="296">不是硬性要求“全方向安全”</text>
+          <text class="stext" x="428" y="314">只在 fresh + trusted + 明确危险时阻断</text>
+
+          <rect class="sbox" x="730" y="250" width="220" height="90" fill="#fbe9e9" stroke="#dc9f9f"></rect>
+          <text class="stitle" x="748" y="276">Block / Hold</text>
+          <text class="stext" x="748" y="296">安全不允许、定位失效</text>
+          <text class="stext" x="748" y="314">目标未验证、障碍明确危险</text>
+
+          <rect class="sbox" x="1020" y="250" width="190" height="90" fill="#e8f5ef" stroke="#9dcdb8"></rect>
+          <text class="stitle" x="1038" y="276">Execute / Dry-run</text>
+          <text class="stext" x="1038" y="296">execute=true 才发真实命令</text>
+          <text class="stext" x="1038" y="314">否则只输出计划和反馈</text>
+
+          <path class="sflow" d="M210 117 L270 117"></path>
+          <path class="sflow" d="M460 117 L520 117"></path>
+          <path class="sflow" d="M730 117 L790 117"></path>
+          <path class="sflow" d="M1000 117 L1060 117"></path>
+          <path class="sflow" d="M1165 154 C1165 205 1115 225 1115 250"></path>
+          <path class="sflow" d="M895 154 C850 205 630 212 535 250"></path>
+          <path class="sflow" d="M660 295 L730 295"></path>
+          <path class="sflow" d="M950 295 L1020 295"></path>
+          <path class="sflow" d="M625 154 C690 205 815 210 840 250"></path>
+        </svg>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>安全点</th>
+            <th>当前规则</th>
+            <th>实现位置</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Registry gate</td>
+            <td>真实执行时 map 不能是 demo/simulation；当前默认 <code>go2w_real_site</code>。</td>
+            <td><code>scripts/run_robot_closed_loop.py</code>、<code>cpp/src/operator_panel.cpp</code></td>
+          </tr>
+          <tr>
+            <td>Topology target gate</td>
+            <td>目标点带 <code>disabled</code>、<code>deleted</code>、<code>needs_calibration</code> 等阻断标签时不能真实导航。</td>
+            <td><code>scripts/run_robot_closed_loop.py</code>、C++ task queue safety</td>
+          </tr>
+          <tr>
+            <td>Gateway/SLAM gate</td>
+            <td><code>world_state.safety.allow_navigation</code> 是硬门，SLAM/gateway 是真实执行权威。</td>
+            <td><code>src/edge_autonomy/gateway_safety.py</code>、<code>cpp/src/safety_gate.cpp</code>、<code>robot/.../safety_supervisor.cpp</code></td>
+          </tr>
+          <tr>
+            <td>Localization gate</td>
+            <td>接受 <code>localized</code>、<code>localized_or_tracking</code>、<code>tracking</code>、<code>degraded</code>，但位姿不能过期或无效。</td>
+            <td><code>world_state_v1.py</code>、<code>gateway_safety.py</code>、C++ WorldState v1</td>
+          </tr>
+          <tr>
+            <td>Local obstacle advisory</td>
+            <td>局部感知不是“必须全方向安全”的前置条件；只有新鲜可信且明确危险时阻断。</td>
+            <td><code>gateway_safety.py</code>、<code>safety_gate.cpp</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="map" class="section">
+      <h2>5. 地图链路与单一权威</h2>
+      <p>现在不再保留两份 real-site 地图。旧路径已经归档，真实地图只在主工程中维护。</p>
+      <table>
+        <thead>
+          <tr>
+            <th>对象</th>
+            <th>当前状态</th>
+            <th>用途</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>/home/unitree/Go2W_SLAM_AI</code></td>
+            <td>唯一机器人端主工程，git HEAD <code>85b510c</code>。</td>
+            <td>启动 UI、构建 C++、运行测试、维护地图 registry。</td>
+          </tr>
+          <tr>
+            <td><code>/home/unitree/go2w_slam_agent</code></td>
+            <td>已移动到 <code>/home/unitree/_archive/go2w_slam_agent_20260603_172326</code>。</td>
+            <td>历史备份，不作为运行入口。</td>
+          </tr>
+          <tr>
+            <td><code>go2w_real_site_map_registry.json</code></td>
+            <td>唯一实机语义地图；hash <code>d0b42f0a9c326a7e4b88ba377b4c09ca2d81bf461adcbd627caeb199653b693c</code>。</td>
+            <td>拓扑点、别名、重定位锚点、PCD 和 topology runtime 文件绑定。</td>
+          </tr>
+          <tr>
+            <td><code>/home/unitree/test.pcd</code></td>
+            <td>Unitree SLAM 实际 PCD。</td>
+            <td>底层 relocate / map loading。</td>
+          </tr>
+          <tr>
+            <td><code>/home/unitree/topology_points.json</code></td>
+            <td>Unitree waypoint runtime 文件。</td>
+            <td>gateway/manual waypoint runtime 兼容。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note warning">
+        <code>go2w_floorplan_v4_map_registry.json</code> 和 visio demo registry 保留为训练、演示、评估数据。实机启动脚本和默认参数不再指向它们。
+      </div>
+    </section>
+
+    <section id="sequences" class="section">
+      <h2>6. 详细序列图</h2>
+
+      <div class="sequence">
+        <div class="seq-title">A. 状态刷新</div>
+        <div class="seq-steps">
+          <div class="step">Browser <code>/api/status</code></div><span class="arrow">→</span>
+          <div class="step"><code>go2w_operator_web.py</code></div><span class="arrow">→</span>
+          <div class="step">spawn <code>go2w_operator_panel --watch</code></div><span class="arrow">→</span>
+          <div class="step"><code>GatewayClient get_world_state</code></div><span class="arrow">→</span>
+          <div class="step">gateway world_state</div><span class="arrow">→</span>
+          <div class="step">WorldState v1 + OperatorDisplay</div><span class="arrow">→</span>
+          <div class="step">浏览器显示 compact 状态</div>
+        </div>
+      </div>
+
+      <div class="sequence">
+        <div class="seq-title">B. 中文拓扑导航</div>
+        <div class="seq-steps">
+          <div class="step">输入“去赵博办公室门口”</div><span class="arrow">→</span>
+          <div class="step">C++ 读取 registry</div><span class="arrow">→</span>
+          <div class="step"><code>SemanticRouter</code> 匹配 aliases</div><span class="arrow">→</span>
+          <div class="step">生成 <code>navigate_to_node</code> queue</div><span class="arrow">→</span>
+          <div class="step">SafetyGate</div><span class="arrow">→</span>
+          <div class="step">GatewayClient send JSON</div><span class="arrow">→</span>
+          <div class="step">SLAM/chassis 执行</div>
+        </div>
+      </div>
+
+      <div class="sequence">
+        <div class="seq-title">C. LLM fallback</div>
+        <div class="seq-steps">
+          <div class="step">C++ router 未匹配</div><span class="arrow">→</span>
+          <div class="step">C++ HTTP LLM 或 Python fallback</div><span class="arrow">→</span>
+          <div class="step">LLM 只能返回 registered node_id</div><span class="arrow">→</span>
+          <div class="step">重新进入 SemanticRouter</div><span class="arrow">→</span>
+          <div class="step">不能直接输出坐标/API id</div>
+        </div>
+      </div>
+
+      <div class="sequence">
+        <div class="seq-title">D. 重定位</div>
+        <div class="seq-steps">
+          <div class="step"><code>/relocate ANCHOR confirm</code></div><span class="arrow">→</span>
+          <div class="step">从 registry 取 anchor pose</div><span class="arrow">→</span>
+          <div class="step">构造 <code>relocate</code> JSON</div><span class="arrow">→</span>
+          <div class="step">GatewayClient</div><span class="arrow">→</span>
+          <div class="step">Unitree start_relocation</div>
+        </div>
+      </div>
+
+      <div class="sequence">
+        <div class="seq-title">E. 拓扑点写入</div>
+        <div class="seq-steps">
+          <div class="step"><code>/topology preview NAME</code></div><span class="arrow">→</span>
+          <div class="step">只读当前 pose 和定位状态</div><span class="arrow">→</span>
+          <div class="step"><code>/topology add NAME confirm</code></div><span class="arrow">→</span>
+          <div class="step">需要 fresh localization</div><span class="arrow">→</span>
+          <div class="step">gateway 写入 waypoint</div><span class="arrow">→</span>
+          <div class="step">Web registry 同步标签/验证信息</div>
+        </div>
+      </div>
+
+      <div class="sequence">
+        <div class="seq-title">F. SLAM 启动</div>
+        <div class="seq-steps">
+          <div class="step"><code>start_go2w_slam_stack.sh</code></div><span class="arrow">→</span>
+          <div class="step">检查 CycloneDDS/interface</div><span class="arrow">→</span>
+          <div class="step">启动 <code>xt16_driver</code></div><span class="arrow">→</span>
+          <div class="step">启动 <code>unitree_slam</code></div><span class="arrow">→</span>
+          <div class="step">检查 topic / fatal log</div><span class="arrow">→</span>
+          <div class="step">可选 stereo depth sidecar</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="files" class="section">
+      <h2>7. 关键文件索引</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>文件/目录</th>
+            <th>职责</th>
+            <th>是否热路径</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>scripts/run_go2w_operator_web.sh</code></td>
+            <td>浏览器 UI 启动 wrapper，设置 repo、registry、map-id、gateway client。</td>
+            <td>入口 wrapper</td>
+          </tr>
+          <tr>
+            <td><code>scripts/go2w_operator_web.py</code></td>
+            <td>薄 Web shell，保存 UI/session 状态，状态和命令都交回 C++ panel。</td>
+            <td>低频 shell</td>
+          </tr>
+          <tr>
+            <td><code>scripts/run_go2w_operator_ui.sh</code></td>
+            <td>终端 UI 启动 wrapper，直接进入 C++ panel。</td>
+            <td>入口 wrapper</td>
+          </tr>
+          <tr>
+            <td><code>cpp/src/operator_panel.cpp</code></td>
+            <td>operator 交互、world_state 查询、semantic route、fallback、relocate、queue 执行。</td>
+            <td>是</td>
+          </tr>
+          <tr>
+            <td><code>cpp/src/semantic_router.cpp</code></td>
+            <td>把中文、别名、node_id 映射为注册拓扑目标。</td>
+            <td>是</td>
+          </tr>
+          <tr>
+            <td><code>cpp/src/safety_gate.cpp</code></td>
+            <td>C++ 确定性安全策略，和 gateway safety 结果一起决定是否真实执行。</td>
+            <td>是</td>
+          </tr>
+          <tr>
+            <td><code>cpp/src/queue_executor.cpp</code></td>
+            <td>执行 task queue，生成 arrival feedback、operator feedback、LLM feedback。</td>
+            <td>是</td>
+          </tr>
+          <tr>
+            <td><code>cpp/src/gateway_client.cpp</code></td>
+            <td>无 shell 临时文件的短生命周期 gateway client 调用。</td>
+            <td>是</td>
+          </tr>
+          <tr>
+            <td><code>src/edge_autonomy/gateway_safety.py</code></td>
+            <td>Python 共享安全门，供 agent/closed-loop/chassis controller 使用。</td>
+            <td>fallback/测试</td>
+          </tr>
+          <tr>
+            <td><code>scripts/run_robot_closed_loop.py</code></td>
+            <td>Python closed-loop 和本地 LLM fallback。真实执行前仍走 registry/topology/gateway 安全门。</td>
+            <td>fallback</td>
+          </tr>
+          <tr>
+            <td><code>src/edge_autonomy/map_registry.py</code></td>
+            <td>加载 registry，生成 relocate/navigate JSON，导出 Unitree topology。</td>
+            <td>工具/测试</td>
+          </tr>
+          <tr>
+            <td><code>robot/slam_gateway_refactor/src/*</code></td>
+            <td>Unitree SDK/SLAM 适配层源码，同步到 <code>/home/unitree/slam_gateway_refactor</code> 构建。</td>
+            <td>底层执行</td>
+          </tr>
+          <tr>
+            <td><code>scripts/check_go2w_runtime_layout.py</code></td>
+            <td>检查主 repo、legacy 路径、real-site registry、PCD/topology 绑定是否符合当前架构。</td>
+            <td>验证工具</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verify" class="section">
+      <h2>8. 验证和日常入口</h2>
+      <p>机器人端日常只从主目录启动。</p>
+      <pre><code>cd /home/unitree/Go2W_SLAM_AI
+./scripts/run_go2w_operator_web.sh</code></pre>
+      <p>结构和地图检查：</p>
+      <pre><code>cd /home/unitree/Go2W_SLAM_AI
+python3 scripts/check_go2w_runtime_layout.py
+python3 scripts/check_go2w_json_text.py configs/maps/go2w_real_site_map_registry.json</code></pre>
+      <p>测试和构建：</p>
+      <pre><code>cd /home/unitree/Go2W_SLAM_AI
+PYTHONPATH=src python3 -m unittest discover -s tests
+cmake -S cpp -B cpp/build
+cmake --build cpp/build -j$(nproc)
+cd cpp/build
+./go2w_safety_gate_smoke_test
+./go2w_semantic_router_smoke_test
+./go2w_world_state_v1_smoke_test
+./go2w_edge_perception_smoke_test</code></pre>
+      <div class="note danger">
+        不要再从 <code>/home/unitree/go2w_slam_agent</code> 启动。该路径已经归档，保留只是为了历史回滚参考。
+      </div>
+    </section>
+  </div>
+</body>
+</html>

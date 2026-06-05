@@ -132,7 +132,8 @@
             "prone_observed",
             "standard_prone_pose",
             "live_verified",
-            "ui_verified"
+            "ui_verified",
+            "needs_standing_verification"
           ],
           "pose": {
             "x": -1.1047908067703247,

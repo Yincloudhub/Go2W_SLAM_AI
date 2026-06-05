@@ -14,6 +14,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+#include <vector>
 
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -111,6 +112,72 @@ std::string trimAscii(const std::string& value)
     if (first == std::string::npos) return "";
     const auto last = value.find_last_not_of(" \t\r\n");
     return value.substr(first, last - first + 1);
+}
+
+std::string lowerAscii(std::string value)
+{
+    for (char& ch : value) {
+        if (ch >= 'A' && ch <= 'Z') ch = static_cast<char>(ch - 'A' + 'a');
+    }
+    return value;
+}
+
+bool containsAny(const std::string& text, const std::vector<std::string>& terms)
+{
+    for (const auto& term : terms) {
+        if (!term.empty() && text.find(term) != std::string::npos) return true;
+    }
+    return false;
+}
+
+bool isAsciiDigit(char ch)
+{
+    return ch >= '0' && ch <= '9';
+}
+
+bool containsMetricDistanceAscii(const std::string& text)
+{
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (!isAsciiDigit(text[i])) continue;
+        std::size_t j = i + 1;
+        while (j < text.size() && (isAsciiDigit(text[j]) || text[j] == '.')) ++j;
+        while (j < text.size() && (text[j] == ' ' || text[j] == '\t')) ++j;
+        if (j < text.size() && text[j] == 'm') return true;
+    }
+    return false;
+}
+
+std::string requestedNotWiredCapability(const std::string& text)
+{
+    const std::string lower = lowerAscii(text);
+    if (containsAny(lower, {"cmd_vel", "slam_operate", "raw_base_control"})) {
+        return "raw_base_control";
+    }
+    if (containsAny(lower, {"mapless_scout", "without slam", "no slam", "odom only", "odom-only"}) ||
+        containsAny(text, {"不开SLAM", "不用SLAM", "不启用SLAM", "未知区域", "探索未知"})) {
+        return "mapless_scout";
+    }
+    const bool motion_word =
+        containsAny(lower, {"forward", "ahead", "straight"}) ||
+        containsAny(text, {"前进", "向前", "往前", "直走"});
+    const bool distance_word =
+        containsAny(lower, {" meter", " meters", " metre", " metres", "m "}) ||
+        containsMetricDistanceAscii(lower) ||
+        containsAny(text, {"米"});
+    if (motion_word && distance_word) return "relative_motion";
+    return "";
+}
+
+CommandResult unsupportedCapabilityResult(const std::string& capability)
+{
+    CommandResult result;
+    result.exit_code = 4;
+    std::ostringstream out;
+    out << "capability_guard: " << capability
+        << " is not wired for real execution; no command sent. "
+        << "Use a registered topology target or dry-run a future capability contract.\n";
+    result.stdout_text = out.str();
+    return result;
 }
 
 std::string joinStrings(const std::vector<std::string>& values, const std::string& sep)
@@ -489,6 +556,11 @@ void OperatorPanel::watchWorld(int seconds) const
 
 CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
 {
+    const std::string not_wired_capability = requestedNotWiredCapability(text);
+    if (!not_wired_capability.empty()) {
+        return unsupportedCapabilityResult(not_wired_capability);
+    }
+
     const SemanticRouter router(loadRegistry(), config_.map_id);
     const SemanticRoute route = router.planText(text, config_.nav_speed_mps, config_.nav_mode);
     if (route.matched) {
@@ -538,6 +610,7 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
         "{\"reply\":\"short Chinese operator reply\",\"targets\":[\"node_id\"],\"capture_keyframe\":false}. "
         "Preserve the user's target order for multi-stop tasks. Set capture_keyframe=true only when the user asks for a photo or inspection image. "
         "Do not output coordinates, speeds, Unitree API ids, markdown, or extra text. Never claim that the robot arrived before runtime feedback says so. "
+        "Use capability_contract: ready or available conditional capabilities may be planned; not_wired capabilities such as relative_motion, mapless_scout, or raw_base_control must return empty targets with one short clarification reply. "
         "Perception entries with available=false are diagnostic only and must not affect the plan. "
         "If the command is unclear or a requested place is not registered, return targets as an empty array and ask one short clarification question in reply.";
     nlohmann::json perception = {
@@ -545,12 +618,46 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
         {"deepyolo_semantics", loadFreshPerceptionForLlm(config_.repo_root + "/artifacts/vision_semantic_summary.json", 3000)},
         {"edge_node", loadEdgePerceptionSummary(config_.repo_root + "/artifacts/edge_perception_summary.json", 3000)},
     };
+    nlohmann::json capability_contract = {
+        {"planning_style", "capability_bounded_topology_selection"},
+        {"ready", nlohmann::json::array({"hold_position", "request_clarification", "registered_topology_dry_run"})},
+        {"conditional", nlohmann::json::array({
+            {
+                {"name", "mapped_topology_navigation"},
+                {"available", true},
+                {"requires", nlohmann::json::array({"registered_topology_node", "SafetyGate_allow", "SLAM_Gateway_accept"})},
+                {"fallback", "empty_targets_with_clarification"},
+            },
+            {
+                {"name", "capture_keyframe"},
+                {"available", true},
+                {"status", "semantic_event_until_camera_command_configured"},
+                {"fallback", "record_semantic_keyframe_event"},
+            },
+        })},
+        {"not_wired", nlohmann::json::array({
+            {
+                {"name", "relative_motion"},
+                {"examples", nlohmann::json::array({"forward_10m_photo", "odom_only_drive"})},
+                {"fallback", "empty_targets_with_clarification"},
+            },
+            {
+                {"name", "mapless_scout"},
+                {"fallback", "empty_targets_with_clarification"},
+            },
+            {
+                {"name", "raw_base_control"},
+                {"fallback", "reject"},
+            },
+        })},
+    };
 
     nlohmann::json user_payload = {
         {"command", text},
         {"current_node", config_.current_node},
         {"execute_enabled", config_.execute_enabled},
         {"candidates", candidates},
+        {"capability_contract", capability_contract},
         {"perception", perception},
     };
     return {

@@ -40,6 +40,8 @@ class LlmContextTests(unittest.TestCase):
         self.assertTrue(context["world_state_summary"]["robot"]["localized"])
         self.assertEqual(context["world_state_summary"]["robot"]["nearest_node"]["node_id"], "nie_guoli_office_front")
         self.assertIn("navigate_to_verified_node", context["world_state_summary"]["allowed_actions"])
+        self.assertEqual(context["capability_contract"]["planning_style"], "capability_bounded_task_planning")
+        self.assertIn("relative_motion", {item["name"] for item in context["capability_contract"]["not_wired"]})
 
     def test_simulate_plan_return_to_start(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)
@@ -121,6 +123,16 @@ class LlmContextTests(unittest.TestCase):
 
         self.assertEqual(plan["mode"], "safe_hold")
         self.assertTrue(plan["requires_human_ack"])
+        self.assertIsNone(plan_to_slam_command(plan, registry))
+
+    def test_simulate_relative_motion_requests_human_confirm(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        context = build_planner_context(make_snapshot(), registry, user_command="前进十米去拍照")
+        plan = simulate_local_llm_plan(context, registry)
+
+        self.assertEqual(plan["mode"], "human_confirm")
+        self.assertEqual(plan["steps"][0]["tool"], "request_human_confirm")
+        self.assertEqual(plan["steps"][0]["arguments"]["missing_capability"], "relative_motion")
         self.assertIsNone(plan_to_slam_command(plan, registry))
 
 

@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GO2W 下一阶段代码与模块评审</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --paper: #ffffff;
+      --ink: #202832;
+      --muted: #607080;
+      --line: #d2dbe5;
+      --blue: #276d95;
+      --green: #1f7a5a;
+      --amber: #956b00;
+      --red: #a23a3a;
+      --purple: #61509a;
+      --teal: #1f7f82;
+      --soft-blue: #e8f2f7;
+      --soft-green: #e6f4ee;
+      --soft-amber: #fff5d8;
+      --soft-red: #fae9e8;
+      --soft-purple: #f0edf7;
+      --shadow: 0 10px 28px rgba(32, 40, 50, 0.08);
+      --radius: 8px;
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.58;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    code {
+      background: #eef2f6;
+      border: 1px solid #dce4ed;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: 0.94em;
+    }
+
+    .page {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header,
+    section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    header {
+      padding: 24px;
+    }
+
+    section {
+      margin-top: 22px;
+      padding: 22px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+      overflow-wrap: anywhere;
+    }
+
+    th {
+      background: #f1f4f7;
+      color: #334252;
+      font-weight: 650;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      max-width: 1040px;
+    }
+
+    .top-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .pill,
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 3px 9px;
+      border: 1px solid var(--line);
+      background: #f7f9fb;
+      color: #324357;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .status.ok {
+      background: var(--soft-green);
+      border-color: #b8dfcf;
+      color: var(--green);
+    }
+
+    .status.warn {
+      background: var(--soft-amber);
+      border-color: #ead38e;
+      color: var(--amber);
+    }
+
+    .status.bad {
+      background: var(--soft-red);
+      border-color: #ebc0bd;
+      color: var(--red);
+    }
+
+    .status.info {
+      background: var(--soft-blue);
+      border-color: #bad7e7;
+      color: var(--blue);
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid.cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.cols-3 {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 14px;
+      background: #fbfcfd;
+      min-height: 100px;
+    }
+
+    .note {
+      border-left: 4px solid var(--blue);
+      background: var(--soft-blue);
+      border-radius: 4px;
+      padding: 12px 14px;
+      margin: 12px 0;
+    }
+
+    .note.warning {
+      border-left-color: var(--amber);
+      background: var(--soft-amber);
+    }
+
+    .note.danger {
+      border-left-color: var(--red);
+      background: var(--soft-red);
+    }
+
+    .note.good {
+      border-left-color: var(--green);
+      background: var(--soft-green);
+    }
+
+    .flow {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fbfcfd;
+      padding: 16px;
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(142px, 1fr));
+      gap: 10px;
+      min-width: 1120px;
+      align-items: stretch;
+    }
+
+    .node {
+      position: relative;
+      border: 1px solid #bfcbd7;
+      border-radius: 7px;
+      background: #fff;
+      padding: 11px;
+      min-height: 108px;
+    }
+
+    .node strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #26384b;
+    }
+
+    .node small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .node:after {
+      content: ">";
+      position: absolute;
+      top: 38px;
+      right: -13px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .node:last-child:after {
+      content: "";
+    }
+
+    .node.blue {
+      background: var(--soft-blue);
+      border-color: #aacfe1;
+    }
+
+    .node.green {
+      background: var(--soft-green);
+      border-color: #b3decf;
+    }
+
+    .node.amber {
+      background: var(--soft-amber);
+      border-color: #e6d08a;
+    }
+
+    .node.red {
+      background: var(--soft-red);
+      border-color: #e8b9b6;
+    }
+
+    .node.purple {
+      background: var(--soft-purple);
+      border-color: #cec4e7;
+    }
+
+    .rank {
+      display: inline-block;
+      min-width: 34px;
+      text-align: center;
+      border-radius: 5px;
+      padding: 2px 6px;
+      background: #edf1f4;
+      color: #334252;
+      font-weight: 650;
+      font-size: 12px;
+    }
+
+    .rank.p0 {
+      background: var(--soft-red);
+      color: var(--red);
+    }
+
+    .rank.p1 {
+      background: var(--soft-amber);
+      color: var(--amber);
+    }
+
+    .rank.p2 {
+      background: var(--soft-blue);
+      color: var(--blue);
+    }
+
+    .two-line {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .source-list {
+      columns: 2;
+      column-gap: 28px;
+    }
+
+    @media (max-width: 960px) {
+      .page {
+        padding: 12px;
+      }
+
+      .grid.cols-2,
+      .grid.cols-3 {
+        grid-template-columns: 1fr;
+      }
+
+      .source-list {
+        columns: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>GO2W 下一阶段代码与模块评审</h1>
+      <p class="subtitle">基于当前仓库代码、规划文档、三个 subagent 只读 review 以及外部 3D SLAM/雷达资料核对。目标是确认现有闭环是否符合规划，并把安全、定位、传感器、UI/LLM、TI 雷达分支的下一步边界梳理清楚。</p>
+      <div class="top-links">
+        <span class="pill">生成时间：2026-06-05</span>
+        <span class="pill">本地仓库：<code>E:\GO2W_0</code></span>
+        <span class="pill">主运行目录：<code>/home/unitree/Go2W_SLAM_AI</code></span>
+        <span class="pill">地图 registry：<code>configs/maps/go2w_real_site_map_registry.json</code></span>
+        <a class="pill" href="go2w_runtime_architecture.html">返回当前运行架构图</a>
+      </div>
+    </header>
+
+    <section>
+      <h2>总判断</h2>
+      <div class="grid cols-3">
+        <div class="card">
+          <h3><span class="status ok">闭环成立</span></h3>
+          <p>当前主链路符合规划：中文任务和 UI 输入进入 C++ operator core，目标必须来自 registry，SafetyGate/QueueExecutor 在发车前和运行中做拦截，底层通过 SLAM Gateway 调 Unitree SLAM/Navigation。</p>
+        </div>
+        <div class="card">
+          <h3><span class="status warn">安全仍有缺口</span></h3>
+          <p>XT16 点云近场安全还是 stub，LiDAR/IMU/odom health 仍是 phase-1 默认值。Python 执行路径的运行中 pause/watchdog 弱于 C++，应避免作为主要真实执行入口。</p>
+        </div>
+        <div class="card">
+          <h3><span class="status info">下一阶段重点</span></h3>
+          <p>不要先替换 SLAM 主闭环。先补 XT16 点云几何摘要、真实拍照工具、结构化 UI/LLM 结果展示，再设计受限的 odom/IMU 相对运动分支。</p>
+        </div>
+      </div>
+      <div class="note good">
+        已落地修正：<code>chen_jiayu_station</code> 的描述要求站立验证，但缺少机器可读 tag。本次已为该 topology node 添加 <code>needs_standing_verification</code>，Python 执行 gate 验证会阻断该点真实导航。
+      </div>
+    </section>
+
+    <section>
+      <h2>当前闭环流程</h2>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="node blue">
+            <strong>Operator UI/Web</strong>
+            <small>显示状态、输入中文任务、切换 dry-run/execute、弱网模式、SLAM 管理。</small>
+          </div>
+          <div class="node purple">
+            <strong>C++ Operator Panel</strong>
+            <small>主入口。优先确定性语义路由，必要时 HTTP LLM 或 Python fallback。</small>
+          </div>
+          <div class="node">
+            <strong>Map Registry</strong>
+            <small>唯一可执行目标来源。PCD、拓扑点、重定位 anchor、tags 统一在这里。</small>
+          </div>
+          <div class="node amber">
+            <strong>SafetyGate</strong>
+            <small>检查 SLAM health、localization、current pose、target、battery、fresh trusted obstacle。</small>
+          </div>
+          <div class="node green">
+            <strong>QueueExecutor</strong>
+            <small>顺序执行 navigate/report/capture 事件，运行中轮询 world_state，异常 best-effort pause。</small>
+          </div>
+          <div class="node red">
+            <strong>SLAM Gateway</strong>
+            <small>封装 Unitree relocate/navigate/pause/resume/get_world_state，gateway 侧再做 safety。</small>
+          </div>
+          <div class="node blue">
+            <strong>Unitree SLAM</strong>
+            <small>负责实际几何定位、重定位、路径导航、导航反馈。</small>
+          </div>
+        </div>
+      </div>
+      <div class="note">
+        对用户之前的定位疑问：当前逻辑不是“周围都安全才允许重定位和真实执行”。重定位依赖 SLAM/anchor/pose；真实导航只把新鲜、可信的障碍摘要作为阻断条件。没有 D435/点云摘要时不应被误解为“全环境必须安全”，但在 XT16 近场安全接好前，真实执行仍需要额外保守。
+      </div>
+    </section>
+
+    <section>
+      <h2>架构对照规划文档</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:18%">规划目标</th>
+            <th style="width:16%">当前状态</th>
+            <th>判断</th>
+            <th>需要调整</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SLAM 只负责几何定位和导航反馈</td>
+            <td><span class="status ok">符合</span></td>
+            <td>Unitree SLAM 仍是底层主闭环，上层通过 gateway 读写状态和发目标。</td>
+            <td>不要短期替换为新 3D SLAM。新项目先做旁路可视化/离线评估。</td>
+          </tr>
+          <tr>
+            <td>Registry 是唯一可执行目标来源</td>
+            <td><span class="status ok">基本符合</span></td>
+            <td>C++ LLM prompt 和 SemanticRouter 都限制到 registered node_id。</td>
+            <td>继续把所有待验证状态写成 tag，不能只写在 description。</td>
+          </tr>
+          <tr>
+            <td>实时安全闭环不经过 LLM</td>
+            <td><span class="status ok">符合</span></td>
+            <td>SafetyGate、QueueExecutor、Gateway SafetySupervisor 都不依赖 LLM。</td>
+            <td>统一三套安全阈值的 golden tests，防止 C++/Python/gateway 漂移。</td>
+          </tr>
+          <tr>
+            <td>LiDAR/IMU/Odom 高低频状态进入 WorldState</td>
+            <td><span class="status warn">部分完成</span></td>
+            <td>SLAM pose 已进入，D435 摘要已进入，XT16 近场几何和 IMU/Odom health 仍未真实接线。</td>
+            <td>P0 接 XT16 <code>lidar_pointcloud</code> LocalObstacleSummary；P1 接真实 health topics。</td>
+          </tr>
+          <tr>
+            <td>UI/LLM 展示任务级决策</td>
+            <td><span class="status warn">可见但不充分</span></td>
+            <td>UI 有状态和控制台，但 planner/task_queue/operator_feedback/LLM source 还没有一等结构化展示。</td>
+            <td>新增任务链路面板：planner route、队列 step、blocked reason、artifact path、LLM 反馈。</td>
+          </tr>
+          <tr>
+            <td>多传感器扩展不抢主控资源</td>
+            <td><span class="status ok">边界清楚</span></td>
+            <td>D435/DeepYOLO/TI 都按 summary sidecar 设计，raw data 不进 LLM。</td>
+            <td>给 stereo/semantic summary 加 size limit 和字段白名单，像 edge loader 一样硬化。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>安全与定位 Review</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:8%">优先级</th>
+            <th style="width:25%">问题</th>
+            <th>证据</th>
+            <th>处理建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="rank p0">P0</span></td>
+            <td>XT16 点云近场安全尚未接入主安全源</td>
+            <td><code>SlamGateway</code> 初始化时仍调用 <code>setManualClearance(6.0,...)</code>，<code>LidarGeometryPerception</code> 目前读取 D435 summary 或 fallback。</td>
+            <td>实现 XT16 ROI clearance 和简单几何检测，输出 <code>source="lidar_pointcloud"</code>；D435 只做保守融合，不能放宽 LiDAR 阻断。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p0">P0</span></td>
+            <td>站立验证/未校准状态要全部机器化</td>
+            <td>本次发现 <code>chen_jiayu_station</code> 描述写明需站立验证，但 tag 缺失；已补 <code>needs_standing_verification</code>。</td>
+            <td>增加 registry lint：description/status/anchor 出现 standing verification 时，topology node 必须有 blocking tag。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p0">P0</span></td>
+            <td>Python <code>--execute</code> 路径弱于 C++</td>
+            <td>C++ QueueExecutor 在运行中 safety block、连续 gateway 错误、timeout 都 best-effort pause；Python 队列路径部分场景只返回失败。</td>
+            <td>真实执行入口以 C++ 为主。若保留 Python execute，必须补齐所有异常分支 pause 和 watchdog。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p1">P1</span></td>
+            <td>C++/Python/Gateway 三套 safety 阈值会漂移</td>
+            <td>C++ front pause 使用 <code>pause_clearance_m=1.5</code>，Python/gateway 主要以 <code>0.8</code> 为阻断阈值。</td>
+            <td>抽一组 golden vectors：degraded localization、front 1.0m、stale obstacle、missing safety decision，三套实现必须一致或显式解释差异。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p1">P1</span></td>
+            <td>LiDAR/IMU/Odom health 仍是默认 true</td>
+            <td><code>getSlamHealth()</code> 中 LiDAR/IMU/Odom health 当前是 phase-1 assumption。</td>
+            <td>接真实 topic heartbeat 和 timestamp，UI 上拆分显示 <code>slam_alive</code>、<code>localization_alive</code>、<code>lidar_alive</code>、<code>imu_alive</code>、<code>odom_alive</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>点云柱体检测方案</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>建议做，但先做轻量几何</h3>
+          <p>第一版不要上 PointPillars/CenterPoint 这类训练模型。更合适的是裁剪前方/侧方 ROI、地面去除、欧式聚类、估算高度/半径/长宽比，多帧稳定后输出 <code>person_like</code>、<code>pole_like</code>、<code>static_obstacle</code>。</p>
+        </div>
+        <div class="card">
+          <h3>接入点</h3>
+          <p>应接到 <code>robot/slam_gateway_refactor/src/lidar_geometry_perception.cpp</code>，输出 <code>LocalObstacleSummary</code>，source 为 <code>lidar_pointcloud</code>。不要走 generic <code>edge_perception_summary.json</code> 做安全，因为 generic loader 明确 <code>safety_wired=false</code>。</p>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:12%">阶段</th>
+            <th>输入</th>
+            <th>输出</th>
+            <th>安全地位</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>P0 诊断</td>
+            <td>离线 PCD 或低频 PointCloud2 摘要</td>
+            <td><code>artifacts/lidar_geometry_summary.json</code> 和 UI 可视化</td>
+            <td>只展示和记录，不授权运动。</td>
+          </tr>
+          <tr>
+            <td>P1 安全摘要</td>
+            <td>XT16 实时点云 ROI</td>
+            <td><code>LocalObstacleSummary</code>：front/left/right clearance、confidence、recommended_action</td>
+            <td>可以阻断、暂停、限速，但不能放宽其他安全门。</td>
+          </tr>
+          <tr>
+            <td>P2 语义增强</td>
+            <td>多帧 track 和柱状目标</td>
+            <td><code>risk_events</code>、<code>objects</code>、<code>inspect_area</code> 建议</td>
+            <td>给 UI/LLM 报告和巡检建议，仍不直接控制底盘。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>3D SLAM 与可视化选型</h2>
+      <div class="note warning">
+        结论：当前阶段没有必要替换 Unitree SLAM 主闭环。最实用的做法是把 3D SLAM/可视化作为 sidecar 或离线评估，用来做三维地图展示、RGB-D 关键帧回放、点云标注辅助和比赛展示材料。
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:15%">项目</th>
+            <th style="width:21%">特点</th>
+            <th style="width:22%">可用于 GO2W 的位置</th>
+            <th>建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><a href="https://github.com/introlab/rtabmap">RTAB-Map</a> / <a href="https://github.com/introlab/rtabmap_ros">rtabmap_ros</a></td>
+            <td>成熟 RGB-D、Stereo、LiDAR 图优化和 3D map 工具链，ROS 生态完善。</td>
+            <td>旁路 3D 可视化、RGB-D 关键帧、点云和拓扑点展示。</td>
+            <td><span class="status ok">优先评估</span>，不进实时安全主链，先离线或低频 sidecar。</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/isl-org/Open3D">Open3D</a></td>
+            <td>点云加载、降采样、聚类、RANSAC、可视化和离线处理方便。</td>
+            <td>PCD 审核工具、柱体检测原型、HTML/截图素材生成。</td>
+            <td><span class="status ok">马上可用</span>，适合先做轻量点云检测和标注辅助。</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/hku-mars/FAST-LIVO2">FAST-LIVO2</a></td>
+            <td>紧耦合 LiDAR-Inertial-Visual odometry，研究能力强。</td>
+            <td>二期对比实验，评估 LiDAR+Camera+IMU 的轨迹稳定性。</td>
+            <td><span class="status warn">二期研究</span>，集成成本高，不适合短期主线。</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/MIT-SPARK/Kimera">Kimera</a></td>
+            <td>VIO、3D mesh、语义场景图方向清楚。</td>
+            <td>语义 3D 地图、答辩展示和研究扩展。</td>
+            <td><span class="status warn">研究展示</span>，先不接运动闭环。</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/UZ-SLAMLab/ORB_SLAM3">ORB-SLAM3</a></td>
+            <td>视觉、视觉惯性、多地图 SLAM，RGB-D/stereo/monocular 方向成熟。</td>
+            <td>纯视觉/VIO 对比，D435/RGB 轨迹实验。</td>
+            <td><span class="status warn">不做主线</span>，室内弱纹理和部署集成成本较高。</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/TixiaoShan/LIO-SAM">LIO-SAM</a></td>
+            <td>LiDAR-Inertial smoothing and mapping，ROS 生态常见。</td>
+            <td>离线评估 XT16+IMU 的建图/轨迹质量。</td>
+            <td><span class="status info">可作对照</span>，但不替换当前 Unitree SLAM。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>UI 与 LLM 下一步</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>当前问题</h3>
+          <ul>
+            <li>UI 主要展示 stdout/stderr 和状态摘要，结构化 planner/task_queue/LLM feedback 没有成为独立区域。</li>
+            <li>操作者不容易看出本次规划来源是 deterministic route、C++ HTTP LLM、Python fallback，还是 dry-run 模板。</li>
+            <li><code>capture_keyframe</code> 在 C++ 主链只是语义事件；Python 有 <code>--capture-command</code>，但 Web/C++ 主链未完整透传。</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>建议改法</h3>
+          <ul>
+            <li>新增能力矩阵：拓扑导航、真实拍照、相对运动、SLAM-off、TI 雷达、DeepYOLO、D435、XT16 安全摘要。</li>
+            <li>新增任务链路面板：planner route、queue_id、当前 step、下一 step、blocked reason、artifact path。</li>
+            <li>LLM prompt 注入当前工具边界。没实现的能力必须明确回复“不支持真实执行，需要 dry-run 或人工确认”。</li>
+          </ul>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:20%">能力</th>
+            <th style="width:16%">当前状态</th>
+            <th>UI/LLM 应显示</th>
+            <th>下一步</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>已登记拓扑点导航</td>
+            <td><span class="status ok">可用</span></td>
+            <td>目标名、node_id、距离、needs_calibration、preflight、速度、mode。</td>
+            <td>继续主线打磨。</td>
+          </tr>
+          <tr>
+            <td>拓扑点拍照</td>
+            <td><span class="status warn">部分</span></td>
+            <td>是否配置真实 camera command，图像路径，run_id。</td>
+            <td>P0 端到端接 <code>capture_keyframe</code>。</td>
+          </tr>
+          <tr>
+            <td>前进十米拍照</td>
+            <td><span class="status bad">未实现</span></td>
+            <td>当前应返回 unsupported 或 human_confirm，不允许模型伪造坐标。</td>
+            <td>P1 设计 <code>relative_motion</code> IR 和执行器。</td>
+          </tr>
+          <tr>
+            <td>SLAM-off odom/IMU 模式</td>
+            <td><span class="status bad">未实现</span></td>
+            <td>显示为实验分支，必须 dry-run，真实执行需现场确认和短步长。</td>
+            <td>P1/P2，先 <code>0.5m</code> 分段，不直接开放 10m。</td>
+          </tr>
+          <tr>
+            <td>TI 生命体征候选</td>
+            <td><span class="status info">规划中</span></td>
+            <td>显示“疑似微动/呼吸样候选”，不要显示“确认有人/确认存活”。</td>
+            <td>作为 TI branch，semantic-only。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>LLM 策略与 LoRA 判断</h2>
+      <div class="grid cols-3">
+        <div class="card">
+          <h3><span class="status ok">安全不是 prompt-only</span></h3>
+          <p>真实运动仍由 registry、SemanticRouter、TaskQueue、SafetyGate、QueueExecutor 和 SLAM Gateway 约束。LLM 即使输出错误，也不能绕过已注册目标和执行前安全门。</p>
+        </div>
+        <div class="card">
+          <h3><span class="status warn">智能层偏窄</span></h3>
+          <p>当前 C++ HTTP LLM schema 主要是 <code>reply + targets[] + capture_keyframe</code>，会让系统看起来像“从候选拓扑点里检索”。拓扑点越多，这种感觉越明显。</p>
+        </div>
+        <div class="card">
+          <h3><span class="status info">LoRA 暂不主线</span></h3>
+          <p>LoRA 可以后续学习格式和策略偏好，但当前优先级低于 schema 约束、validator、capability contract、评估样本和 UI 可解释性。</p>
+        </div>
+      </div>
+      <div class="note good">
+        本轮已推进：新增 <code>capability_contract</code>，把 <code>mapped_topology_navigation</code>、<code>capture_keyframe</code>、<code>relative_motion</code>、<code>mapless_scout</code>、<code>raw_base_control</code> 的 ready/conditional/not_wired 状态显式交给 Python planner 和 C++ HTTP LLM；C++ panel 也增加未接线能力硬拦截，遇到相对运动、mapless scout 或 raw base control 请求时直接不下发命令。
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:20%">层级</th>
+            <th style="width:22%">应该负责</th>
+            <th>不应该负责</th>
+            <th>当前建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Prompt</td>
+            <td>短硬约束、输出 schema、工具白名单、能力边界。</td>
+            <td>不承载安全裁决，不背地图坐标，不靠长篇规则穷举所有场景。</td>
+            <td>保留，但从“禁止列表”升级为 <code>capability_contract</code>。</td>
+          </tr>
+          <tr>
+            <td>规则/Validator</td>
+            <td>目标必须注册、任务队列合法、未校准点阻断、上下文策略覆盖。</td>
+            <td>不做自然语言语义泛化。</td>
+            <td>继续作为第一责任层，补 safety golden vectors。</td>
+          </tr>
+          <tr>
+            <td>Registry/RAG</td>
+            <td>运行时注入 node_id、中文名、aliases、tags、photo_required、needs_calibration。</td>
+            <td>不训练进模型长期记忆。</td>
+            <td>继续唯一事实源，避免地图知识固化到 LoRA。</td>
+          </tr>
+          <tr>
+            <td>LLM</td>
+            <td>意图归纳、歧义澄清、任务级排序、解释阻断原因。</td>
+            <td>不输出坐标、速度、cmd_vel、raw Unitree API，不参与实时控制。</td>
+            <td>增强 intent schema，例如 <code>mode/confidence/reason/unsupported_capability/clarification/targets</code>。</td>
+          </tr>
+          <tr>
+            <td>LoRA</td>
+            <td>学习稳定 JSON、策略偏好、中文指令归一化、弱网/低电/未知目标响应。</td>
+            <td>不学习安全阈值、地图坐标、传感器底层控制。</td>
+            <td>等 schema+validator+hybrid 在评估集上仍不达标，再做 A/B/C 对比。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Odom/IMU 相对运动分支</h2>
+      <div class="note danger">
+        “不开 SLAM 前进十米去拍照”现在不能真实执行。正确路线不是绕过安全层，而是新增一个受限工具：先支持 dry-run 和短距离分段，再由 odom/IMU、深度/点云 guard、watchdog 共同约束。
+      </div>
+      <div class="flow">
+        <div class="flow-row">
+          <div class="node blue">
+            <strong>用户任务</strong>
+            <small>“前进十米拍照”</small>
+          </div>
+          <div class="node purple">
+            <strong>CapabilityRegistry</strong>
+            <small>检查是否启用 relative_motion、camera、depth/lidar guard。</small>
+          </div>
+          <div class="node amber">
+            <strong>Task IR</strong>
+            <small><code>relative_motion(distance_m, heading_mode, max_step_m)</code></small>
+          </div>
+          <div class="node red">
+            <strong>Safety Preflight</strong>
+            <small>定位状态、障碍摘要、里程计/IMU freshness、人工确认。</small>
+          </div>
+          <div class="node green">
+            <strong>Segment Executor</strong>
+            <small>每段 0.3-0.5m，低速，持续 watchdog，不满足则 pause/stop。</small>
+          </div>
+          <div class="node blue">
+            <strong>Capture</strong>
+            <small>到达或中止后按策略拍照，写入 artifact。</small>
+          </div>
+          <div class="node">
+            <strong>Report</strong>
+            <small>返回移动距离、漂移估计、风险、图片路径。</small>
+          </div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:12%">阶段</th>
+            <th>真实执行策略</th>
+            <th>验收条件</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>P0</td>
+            <td>只允许 dry-run，LLM 能识别但返回“能力未启用”。</td>
+            <td>smoke case：<code>前进十米拍照</code> 不生成拓扑导航，也不伪造目标点。</td>
+          </tr>
+          <tr>
+            <td>P1</td>
+            <td>实现 <code>relative_motion</code> schema 和 executor stub，实机只允许 <code>&lt;=0.5m</code> 分段。</td>
+            <td>每段前后都有 world_state/odom timestamp 和 safety sample，失败必 pause。</td>
+          </tr>
+          <tr>
+            <td>P2</td>
+            <td>组合成 <code>inspect_forward(distance_m)</code>，允许多段累积，但总距离、速度、漂移上限写死。</td>
+            <td>10m 任务也表现为 20 个短步，任意段异常都停止并报告。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>TI 雷达分支规划</h2>
+      <div class="grid cols-2">
+        <div class="card">
+          <h3>边界</h3>
+          <p>AWR2243 等 TI mmWave 方案适合作为外接 NX 侧处理链。raw ADC、雷达点云、track、生命体征估计留在 NX；GO2W 主机只接收 bounded summary。生命体征结果在 UI 中表述为“疑似微动/呼吸样候选”。</p>
+        </div>
+        <div class="card">
+          <h3>不做的事</h3>
+          <p>不把雷达 raw data 发给 LLM，不把雷达候选当医学结论，不让 TI 雷达解除 XT16/D435/SLAM 阻断，不在外参/时间同步/故障注入前接入 SafetyGate 授权运动。</p>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:18%">模块</th>
+            <th>输入/输出</th>
+            <th>接入方式</th>
+            <th>安全地位</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>TI NX Radar Node</td>
+            <td>AWR2243 raw/point cloud/track/vital-sign estimate -> bounded summary。</td>
+            <td>写 <code>artifacts/edge_perception_summary.json</code> 或后续 MQTT/DDS/HTTP。</td>
+            <td>semantic-only。</td>
+          </tr>
+          <tr>
+            <td>GO2W Edge Loader</td>
+            <td>schema_version、timestamp、health、policy、observations、events。</td>
+            <td>沿用 <code>cpp/src/edge_perception.cpp</code>，size limit 256 KiB。</td>
+            <td><code>safety_wired=false</code>。</td>
+          </tr>
+          <tr>
+            <td>UI/LLM</td>
+            <td>显示候选、range、azimuth、confidence、age。</td>
+            <td>作为巡检证据和任务报告，不作为底盘命令。</td>
+            <td>只增加谨慎。</td>
+          </tr>
+          <tr>
+            <td>未来安全 adapter</td>
+            <td>雷达外参、时间同步、静态障碍和多径测试。</td>
+            <td>独立 adapter，不能走 generic edge loader。</td>
+            <td>仅在充分测试后允许阻断，不允许放宽。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>建议执行清单</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:8%">优先级</th>
+            <th style="width:24%">任务</th>
+            <th style="width:32%">主要文件/模块</th>
+            <th>验收</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="rank p0">P0</span></td>
+            <td>补 registry 安全 lint 和 C++/Python gate 测试</td>
+            <td><code>configs/maps/go2w_real_site_map_registry.json</code>、<code>scripts/run_robot_closed_loop.py</code>、<code>cpp/src/semantic_router.cpp</code></td>
+            <td>所有 needs_calibration/standing verification 点真实执行前都被拦，且 UI 解释清楚。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p0">P0</span></td>
+            <td>XT16 点云近场摘要</td>
+            <td><code>robot/slam_gateway_refactor/src/lidar_geometry_perception.cpp</code></td>
+            <td>输出 <code>lidar_pointcloud</code> LocalObstacleSummary，fresh/stale/blocked direction 可见。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p0">P0</span></td>
+            <td>真实拍照工具端到端</td>
+            <td><code>cpp/src/queue_executor.cpp</code>、<code>scripts/run_robot_closed_loop.py</code>、<code>scripts/go2w_operator_web.py</code></td>
+            <td><code>capture_keyframe</code> 保存图片并写 image_path/run_id/target_node。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p1">P1</span></td>
+            <td>UI 结构化任务展示</td>
+            <td><code>scripts/go2w_operator_ui.html</code>、<code>scripts/go2w_operator_web.py</code></td>
+            <td>页面显示 planner source、task queue、current step、blocked reason、LLM feedback。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p1">P1</span></td>
+            <td>相对运动 IR 和 dry-run</td>
+            <td><code>src/edge_autonomy/llm_context.py</code>、<code>cpp/src/task_queue_validator.cpp</code>、<code>cpp/src/queue_executor.cpp</code></td>
+            <td><code>前进十米拍照</code> 能明确生成 unsupported 或 dry-run relative_motion，不生成伪拓扑点。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p2">P2</span></td>
+            <td>3D map sidecar</td>
+            <td>RTAB-Map/Open3D sidecar scripts，artifact HTML/PNG。</td>
+            <td>能展示 PCD、拓扑点、D435 keyframes，不影响 Unitree SLAM 主链。</td>
+          </tr>
+          <tr>
+            <td><span class="rank p2">P2</span></td>
+            <td>TI radar branch</td>
+            <td><code>docs/edge_perception_node_contract.md</code>、<code>cpp/src/edge_perception.cpp</code>、NX sidecar。</td>
+            <td>summary schema 稳定，UI 显示候选，不参与运动授权。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>本次验证</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:26%">检查项</th>
+            <th style="width:16%">结果</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>JSON 语法校验</td>
+            <td><span class="status ok">通过</span></td>
+            <td><code>python -m json.tool configs\maps\go2w_real_site_map_registry.json</code></td>
+          </tr>
+          <tr>
+            <td>地图 registry CLI 读取</td>
+            <td><span class="status ok">通过</span></td>
+            <td><code>map_registry_cli.py show --map-id go2w_real_site</code> 可正常读取。</td>
+          </tr>
+          <tr>
+            <td>Python 执行 gate</td>
+            <td><span class="status ok">通过</span></td>
+            <td><code>topology_target_allows_navigation(..., "chen_jiayu_station")</code> 返回 false，原因为 <code>needs_standing_verification</code>。</td>
+          </tr>
+          <tr>
+            <td>Python map registry 单测</td>
+            <td><span class="status ok">通过</span></td>
+            <td><code>PYTHONPATH=src python -m unittest tests.test_map_registry</code>，7 tests OK。</td>
+          </tr>
+          <tr>
+            <td>C++ smoke test</td>
+            <td><span class="status warn">未跑</span></td>
+            <td>当前 Windows 环境没有 <code>cmake</code> 命令。后续应在机器人或 Linux 构建环境跑 <code>semantic_router_smoke_test</code> 和 <code>safety_gate_smoke_test</code>。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>外部资料</h2>
+      <ul class="source-list">
+        <li><a href="https://github.com/introlab/rtabmap">RTAB-Map GitHub</a></li>
+        <li><a href="https://github.com/introlab/rtabmap_ros">rtabmap_ros GitHub</a></li>
+        <li><a href="https://github.com/isl-org/Open3D">Open3D GitHub</a></li>
+        <li><a href="https://www.open3d.org/docs/latest/">Open3D Documentation</a></li>
+        <li><a href="https://github.com/hku-mars/FAST-LIVO2">FAST-LIVO2 GitHub</a></li>
+        <li><a href="https://github.com/MIT-SPARK/Kimera">Kimera GitHub</a></li>
+        <li><a href="https://github.com/UZ-SLAMLab/ORB_SLAM3">ORB-SLAM3 GitHub</a></li>
+        <li><a href="https://github.com/TixiaoShan/LIO-SAM">LIO-SAM GitHub</a></li>
+        <li><a href="https://www.ti.com/product/AWR2243">TI AWR2243 Product Page</a></li>
+        <li><a href="https://www.ti.com/tool/MMWAVE-SDK">TI mmWave SDK</a></li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

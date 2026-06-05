@@ -7,6 +7,16 @@ from .map_registry import MapProfile, MapRegistry, TopologyNode
 
 
 NAVIGABLE_LOCALIZATION_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
+RELATIVE_MOTION_TERMS = (
+    "\u524d\u8fdb",
+    "\u5411\u524d",
+    "\u5f80\u524d",
+    "\u76f4\u8d70",
+    "forward",
+    "ahead",
+    "straight",
+)
+DISTANCE_TERMS = ("\u7c73", "meter", "meters", "metre", "metres")
 
 
 def _distance_xy(a: dict[str, float], b: dict[str, float]) -> float:
@@ -40,6 +50,64 @@ def nearest_topology_node(profile: MapProfile, pose: dict[str, float] | None) ->
         "name": best_node.name,
         "distance_m": _distance_xy(pose, _node_pose_xy(best_node)),
         "node_type": best_node.node_type,
+    }
+
+
+def command_requests_relative_motion(user_command: str) -> bool:
+    command = user_command.lower()
+    return any(term in command for term in RELATIVE_MOTION_TERMS) and any(term in command for term in DISTANCE_TERMS)
+
+
+def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> dict[str, Any]:
+    capture_configured = bool(snapshot.get("capture_command_configured") or snapshot.get("camera_capture_configured"))
+    return {
+        "schema_version": 1,
+        "planning_style": "capability_bounded_task_planning",
+        "ready": [
+            {
+                "name": "hold_position",
+                "tools": ["hold_position"],
+                "authority": "operator_core",
+            },
+            {
+                "name": "request_human_confirm",
+                "tools": ["request_human_confirm"],
+                "authority": "operator_core",
+            },
+        ],
+        "conditional": [
+            {
+                "name": "mapped_topology_navigation",
+                "tools": ["create_navigation_subgoal", "wait_until"],
+                "available": localized,
+                "requires": ["registered_topology_node", "fresh_localization", "SafetyGate_allow", "SLAM_Gateway_accept"],
+                "fallback": "human_confirm_or_safe_hold",
+            },
+            {
+                "name": "capture_keyframe",
+                "tools": ["capture_keyframe"],
+                "available": capture_configured,
+                "status": "ready" if capture_configured else "semantic_event_only",
+                "fallback": "record_semantic_keyframe_event",
+            },
+        ],
+        "not_wired": [
+            {
+                "name": "relative_motion",
+                "examples": ["forward_10m_photo", "odom_only_drive"],
+                "fallback": "human_confirm",
+            },
+            {
+                "name": "mapless_scout",
+                "examples": ["explore_unknown_area_without_registered_node"],
+                "fallback": "human_confirm",
+            },
+            {
+                "name": "raw_base_control",
+                "examples": ["cmd_vel", "raw_Unitree_API"],
+                "fallback": "reject",
+            },
+        ],
     }
 
 
@@ -82,6 +150,7 @@ def build_planner_context(
     allowed_actions = ["hold_position", "request_human_confirm"]
     if localized:
         allowed_actions.extend(["navigate_to_verified_node", "pause_navigation"])
+    capability_contract = build_capability_contract(localized=localized, snapshot=snapshot)
 
     lidar = snapshot.get("lidar_state", {})
     pointcloud = snapshot.get("live_pointcloud", {})
@@ -129,6 +198,7 @@ def build_planner_context(
             },
             "allowed_actions": allowed_actions,
         },
+        "capability_contract": capability_contract,
         "planner_rules": [
             "Do not output raw Unitree API IDs.",
             "Use mapped_navigation only when SLAM health is navigable, localization is fresh, and a topology node is selected.",
@@ -192,6 +262,27 @@ def simulate_local_llm_plan(context: dict[str, Any], registry: MapRegistry) -> d
             "confidence": 0.9,
             "reason": "SLAM or localization is not reliable enough for mapped navigation",
             "steps": [{"step_id": "hold_1", "tool": "hold_position", "arguments": {"health_status": health_status, "localization_status": localization_status}}],
+            "communication_policy": communication_policy,
+            "requires_human_ack": True,
+        }
+
+    if command_requests_relative_motion(user_command):
+        return {
+            "plan_id": f"mock_plan_{int(time.time() * 1000)}",
+            "mode": "human_confirm",
+            "confidence": 0.78,
+            "reason": "relative_motion is not wired for real execution",
+            "steps": [
+                {
+                    "step_id": "ask_1",
+                    "tool": "request_human_confirm",
+                    "arguments": {
+                        "message": "\u76f8\u5bf9\u8fd0\u52a8\u8fd8\u672a\u63a5\u5165\u771f\u5b9e\u6267\u884c\uff0c\u8bf7\u9009\u62e9\u5df2\u767b\u8bb0\u62d3\u6251\u70b9\u6216\u4ec5\u8fdb\u884c\u5e72\u8dd1\u3002",
+                        "missing_capability": "relative_motion",
+                        "available_actions": summary.get("allowed_actions", []),
+                    },
+                }
+            ],
             "communication_policy": communication_policy,
             "requires_human_ack": True,
         }
