@@ -67,6 +67,14 @@ target_link_libraries(go2w_safety_gate_smoke_test PRIVATE go2w_plan_executor_cor
 
 add_test(NAME go2w_safety_gate_smoke_test COMMAND go2w_safety_gate_smoke_test)
 
+add_executable(go2w_queue_executor_smoke_test
+    src/queue_executor_smoke_test.cpp
+)
+
+target_link_libraries(go2w_queue_executor_smoke_test PRIVATE go2w_plan_executor_core)
+
+add_test(NAME go2w_queue_executor_smoke_test COMMAND go2w_queue_executor_smoke_test)
+
 add_executable(go2w_edge_perception_smoke_test
     src/edge_perception_smoke_test.cpp
 )

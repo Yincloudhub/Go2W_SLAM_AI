@@ -16,6 +16,7 @@ void usage(const char* argv0)
               << "  --gateway-client PATH         slam_llm_command_client path\n"
               << "  --start-slam-script PATH      SLAM startup script relative to repo root or absolute\n"
               << "  --start-rviz2-script PATH     RViz2 startup script relative to repo root or absolute\n"
+              << "  --capture-command COMMAND     Bash command for capture_keyframe, default GO2W_CAPTURE_COMMAND\n"
               << "  --ensure-slam-on-start        Start/check LiDAR driver and SLAM before opening panel\n"
               << "  --interface IFACE             Network interface, default eth0\n"
               << "  --gateway-timeout-s SECONDS   Gateway command timeout, default 30\n"
@@ -44,6 +45,9 @@ void usage(const char* argv0)
 int main(int argc, char** argv)
 {
     go2w::OperatorPanelConfig config;
+    if (const char* capture = std::getenv("GO2W_CAPTURE_COMMAND")) {
+        if (*capture) config.capture_command = capture;
+    }
     int watch_seconds = -1;
 
     for (int i = 1; i < argc; ++i) {
@@ -60,6 +64,8 @@ int main(int argc, char** argv)
             config.start_slam_script = argv[++i];
         } else if (arg == "--start-rviz2-script" && i + 1 < argc) {
             config.start_rviz2_script = argv[++i];
+        } else if (arg == "--capture-command" && i + 1 < argc) {
+            config.capture_command = argv[++i];
         } else if (arg == "--ensure-slam-on-start") {
             config.ensure_slam_on_start = true;
         } else if (arg == "--interface" && i + 1 < argc) {

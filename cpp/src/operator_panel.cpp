@@ -465,6 +465,7 @@ nlohmann::json OperatorPanel::buildPanelWorldState(const nlohmann::json& result)
             {"motion_allowed", config_.execute_enabled},
             {"network_level", config_.weak_link_mode ? "weak" : "normal"},
             {"task_phase", "idle"},
+            {"capture_configured", !config_.capture_command.empty()},
         });
 }
 
@@ -630,8 +631,8 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
             },
             {
                 {"name", "capture_keyframe"},
-                {"available", true},
-                {"status", "semantic_event_until_camera_command_configured"},
+                {"available", !config_.capture_command.empty()},
+                {"status", config_.capture_command.empty() ? "semantic_event_only" : "ready"},
                 {"fallback", "record_semantic_keyframe_event"},
             },
         })},
@@ -746,6 +747,7 @@ CommandResult OperatorPanel::fallbackPythonCommand(const std::string& text) cons
     if (config_.execute_enabled) cmd << " --execute";
     if (!config_.execute_enabled) cmd << " --dry-run";
     if (!config_.current_node.empty()) cmd << " --current-node " << shellQuote(config_.current_node);
+    if (!config_.capture_command.empty()) cmd << " --capture-command " << shellQuote(config_.capture_command);
     return runShellCommandWithInput(cmd.str(), "");
 }
 
@@ -951,8 +953,10 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
     }
 
     QueueExecutorConfig executor_config;
+    executor_config.repo_root = config_.repo_root;
     executor_config.gateway_client = config_.gateway_client;
     executor_config.network_interface = config_.network_interface;
+    executor_config.capture_command = config_.capture_command;
     executor_config.gateway_timeout_s = config_.gateway_timeout_s;
     executor_config.gateway_startup_wait_s = config_.gateway_startup_wait_s;
     executor_config.arrival_distance_m = config_.arrival_distance_m;

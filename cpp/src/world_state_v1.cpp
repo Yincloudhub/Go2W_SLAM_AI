@@ -84,12 +84,12 @@ std::string obstacleStatus(const nlohmann::json& front_clearance)
     return "clear";
 }
 
-nlohmann::json availableTools(bool localized, bool motion_allowed, bool map_loaded)
+nlohmann::json availableTools(bool localized, bool motion_allowed, bool map_loaded, bool capture_configured)
 {
     nlohmann::json tools = {"safe_hold", "ask_human_confirm", "semantic_report", "cancel_task"};
     if (!localized) tools.push_back("request_relocalization");
     if (map_loaded) {
-        tools.push_back("capture_keyframe");
+        tools.push_back(capture_configured ? "capture_keyframe" : "record_keyframe_event");
         tools.push_back("speak");
     }
     if (localized && motion_allowed) {
@@ -185,6 +185,10 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
     if (map_id.empty()) map_id = stringAt(runtime_or_gateway, {"expected_map_id"}, "");
     if (map_id.empty()) map_id = stringAt(world, {"current_pose", "map_id"}, "unknown");
     const bool map_loaded = !map_id.empty() && map_id != "unknown";
+    const bool capture_configured =
+        options.value("capture_configured", false) ||
+        boolAt(runtime_or_gateway, {"capture_command_configured"}, false) ||
+        boolAt(runtime_or_gateway, {"camera_capture_configured"}, false);
 
     bool safety_allow = boolAt(world, {"safety", "allow_navigation"}, localized);
     if (options.contains("motion_allowed") && options.at("motion_allowed").is_boolean()) {
@@ -237,7 +241,11 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
         {"task_phase", task_phase},
         {"last_execution_result", options.value("last_execution_result", std::string(""))},
         {"motion_allowed", localized && safety_allow},
-        {"available_tools", availableTools(localized, safety_allow, map_loaded)},
+        {"available_tools", availableTools(localized, safety_allow, map_loaded, capture_configured)},
+        {"capture_keyframe", {
+            {"configured", capture_configured},
+            {"mode", capture_configured ? std::string("image_capture") : std::string("semantic_event_only")},
+        }},
         {"source_health", {
             {"slam_status", slam_status.empty() ? std::string("unknown") : slam_status},
             {"localization_status", loc_status.empty() ? std::string("unknown") : loc_status},

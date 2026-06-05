@@ -46,7 +46,21 @@ class WorldStateV1Tests(unittest.TestCase):
         self.assertEqual(world["task_phase"], "planning")
         self.assertEqual(world["network_level"], "weak")
         self.assertIn("navigate", world["available_tools"])
+        self.assertIn("record_keyframe_event", world["available_tools"])
+        self.assertNotIn("capture_keyframe", world["available_tools"])
         self.assertIn("request_relocalization", build_world_state_v1(make_snapshot(False))["available_tools"])
+
+    def test_capture_tool_requires_configured_command(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        snapshot = make_snapshot()
+        snapshot["capture_command_configured"] = True
+        context = build_planner_context(snapshot, registry, user_command="photo")
+
+        world = build_world_state_v1(snapshot, planner_context=context)
+
+        self.assertIn("capture_keyframe", world["available_tools"])
+        self.assertNotIn("record_keyframe_event", world["available_tools"])
+        self.assertTrue(world["capture_keyframe"]["configured"])
 
     def test_gateway_safety_blocks_motion_tools(self) -> None:
         gateway = {

@@ -10,6 +10,15 @@ void require(bool condition, const std::string& message)
     if (!condition) throw std::runtime_error(message);
 }
 
+bool arrayContainsString(const nlohmann::json& values, const std::string& expected)
+{
+    if (!values.is_array()) return false;
+    for (const auto& value : values) {
+        if (value.is_string() && value.get<std::string>() == expected) return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 int main()
@@ -48,6 +57,11 @@ int main()
     require(world.value("motion_allowed", false), "motion should be allowed");
     require(world.value("obstacle_status", std::string("")) == "clear", "obstacle status mismatch");
     require(world.contains("available_tools") && world.at("available_tools").is_array(), "missing available tools");
+    require(arrayContainsString(world.at("available_tools"), "record_keyframe_event"), "unconfigured capture should be semantic event only");
+    require(!arrayContainsString(world.at("available_tools"), "capture_keyframe"), "unconfigured capture should not advertise image capture");
+    const auto world_with_capture = go2w::buildWorldStateV1(gateway, {{"capture_configured", true}});
+    require(arrayContainsString(world_with_capture.at("available_tools"), "capture_keyframe"), "configured capture should be advertised");
+    require(world_with_capture.at("capture_keyframe").value("configured", false), "configured capture state should be visible");
     require(world.at("perception_summaries").at(0).value("source", std::string("")) == "nx_ti_radar", "edge summary mismatch");
 
     const nlohmann::json task_queue = {

@@ -644,7 +644,7 @@
           <ul>
             <li>UI 主要展示 stdout/stderr 和状态摘要，结构化 planner/task_queue/LLM feedback 没有成为独立区域。</li>
             <li>操作者不容易看出本次规划来源是 deterministic route、C++ HTTP LLM、Python fallback，还是 dry-run 模板。</li>
-            <li><code>capture_keyframe</code> 在 C++ 主链只是语义事件；Python 有 <code>--capture-command</code>，但 Web/C++ 主链未完整透传。</li>
+            <li><code>capture_keyframe</code> 已有统一命令入口；未配置时只记录语义事件，配置 <code>GO2W_CAPTURE_COMMAND</code> 或 <code>--capture-command</code> 后保存图片、sidecar 和结构化结果。</li>
           </ul>
         </div>
         <div class="card">
@@ -905,8 +905,8 @@
           <tr>
             <td><span class="rank p0">P0</span></td>
             <td>真实拍照工具端到端</td>
-            <td><code>cpp/src/queue_executor.cpp</code>、<code>scripts/run_robot_closed_loop.py</code>、<code>scripts/go2w_operator_web.py</code></td>
-            <td><code>capture_keyframe</code> 保存图片并写 image_path/run_id/target_node。</td>
+            <td><code>scripts/capture_keyframe.py</code>、<code>cpp/src/queue_executor.cpp</code>、<code>scripts/run_robot_closed_loop.py</code></td>
+            <td>已推进：<code>capture_keyframe</code> 配置真实命令后保存图片并写 <code>image_path</code>/<code>run_id</code>/<code>target_node</code>；未配置时 UI 标为 <code>semantic_event_only</code>。</td>
           </tr>
           <tr>
             <td><span class="rank p1">P1</span></td>

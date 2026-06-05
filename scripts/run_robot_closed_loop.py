@@ -713,6 +713,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
 
 def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     target_node = str(task.get("target_node") or "")
+    target_name = str(task.get("target_name") or target_node)
     if not args.capture_command:
         return {
             "captured": False,
@@ -721,6 +722,8 @@ def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict
         }
     env = os.environ.copy()
     env["GO2W_TARGET_NODE"] = target_node
+    env["GO2W_TARGET_NAME"] = target_name
+    env.setdefault("GO2W_RUN_ID", time.strftime("run_%Y%m%d_%H%M%S"))
     completed = subprocess.run(
         ["bash", "-lc", args.capture_command],
         text=True,
@@ -730,13 +733,30 @@ def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict
         timeout=args.timeout_s,
         env=env,
     )
-    return {
+    result = {
         "captured": completed.returncode == 0,
         "target_node": target_node,
+        "target_name": target_name,
         "returncode": completed.returncode,
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }
+    for line in reversed(completed.stdout.splitlines()):
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            result["payload"] = payload
+            if "captured" in payload:
+                result["captured"] = bool(payload.get("captured"))
+            for key in ("image_path", "sidecar_path", "run_id", "timestamp_ms", "source", "reason", "image_bytes"):
+                if key in payload:
+                    result[key] = payload[key]
+            break
+    if completed.returncode != 0 and not result.get("reason"):
+        result["reason"] = "capture command failed"
+    return result
 
 
 def execute_task_queue(
@@ -786,11 +806,12 @@ def execute_task_queue(
             continue
         if action == "capture_keyframe":
             result = run_capture_keyframe(task, args) if args.execute else {"captured": False, "reason": "dry run; capture not executed", "target_node": task.get("target_node")}
+            capture_failed = bool(args.execute and args.capture_command and not result.get("captured"))
             events.append(
                 {
                     "task_id": task_id,
                     "action": action,
-                    "status": "ok",
+                    "status": "failed" if capture_failed else "ok",
                     "result": result,
                     "operator_feedback": [
                         operator_feedback_message(
@@ -802,6 +823,10 @@ def execute_task_queue(
                     ],
                 }
             )
+            if capture_failed:
+                blocked_reason = str(result.get("reason") or "capture_keyframe failed")
+                failed_step = task_id
+                break
             continue
         if action != "navigate":
             events.append({"task_id": task_id, "action": action, "status": "skipped", "reason": "unsupported task action"})
@@ -1094,7 +1119,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-feedback-events", type=int, default=120)
     parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
-    parser.add_argument("--capture-command", default="", help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
+    parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")
     return parser
@@ -1139,6 +1164,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
         return 2
     snapshot = build_snapshot(args)
+    snapshot["capture_command_configured"] = bool(args.capture_command)
     planner_context = build_planner_context(snapshot, registry, user_command=args.command, map_id=args.map_id)
 
     result = run_local_llm_planner(

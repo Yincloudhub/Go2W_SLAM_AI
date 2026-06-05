@@ -115,6 +115,15 @@ def _current_node(planner_context: dict[str, Any] | None) -> str | None:
     return None
 
 
+def _capture_configured(planner_context: dict[str, Any] | None, runtime_or_gateway: dict[str, Any]) -> bool:
+    conditional = _path(planner_context or {}, ["capability_contract", "conditional"], [])
+    if isinstance(conditional, list):
+        for item in conditional:
+            if isinstance(item, dict) and item.get("name") == "capture_keyframe":
+                return bool(item.get("available"))
+    return bool(runtime_or_gateway.get("capture_command_configured") or runtime_or_gateway.get("camera_capture_configured"))
+
+
 def obstacle_status(front_clearance_m: float | None) -> str:
     if front_clearance_m is None:
         return "unknown"
@@ -136,12 +145,13 @@ def _normalize_perception_summary(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _available_tools(*, localized: bool, motion_allowed: bool, map_loaded: bool) -> list[str]:
+def _available_tools(*, localized: bool, motion_allowed: bool, map_loaded: bool, capture_configured: bool) -> list[str]:
     tools = ["safe_hold", "ask_human_confirm", "semantic_report", "cancel_task"]
     if not localized:
         tools.append("request_relocalization")
     if map_loaded:
-        tools.extend(["capture_keyframe", "speak"])
+        tools.append("capture_keyframe" if capture_configured else "record_keyframe_event")
+        tools.append("speak")
     if localized and motion_allowed:
         tools.extend(["navigate", "patrol_route", "inspect_area", "return_to_base"])
     return tools
@@ -205,6 +215,7 @@ def build_world_state_v1(
         or "unknown"
     )
     map_loaded = bool(map_id and map_id != "unknown")
+    capture_configured = _capture_configured(planner_context, runtime_or_gateway)
     safety = _path(gateway_world, ["safety"], {})
     safety_allow = _as_bool(safety.get("allow_navigation") if isinstance(safety, dict) else None, localized)
     final_motion_allowed = safety_allow if motion_allowed is None else bool(motion_allowed)
@@ -249,7 +260,16 @@ def build_world_state_v1(
         "task_phase": phase,
         "last_execution_result": last_execution_result,
         "motion_allowed": bool(final_motion_allowed and localized),
-        "available_tools": _available_tools(localized=localized, motion_allowed=bool(final_motion_allowed), map_loaded=map_loaded),
+        "available_tools": _available_tools(
+            localized=localized,
+            motion_allowed=bool(final_motion_allowed),
+            map_loaded=map_loaded,
+            capture_configured=capture_configured,
+        ),
+        "capture_keyframe": {
+            "configured": capture_configured,
+            "mode": "image_capture" if capture_configured else "semantic_event_only",
+        },
         "source_health": {
             "slam_status": slam_status or "unknown",
             "localization_status": loc_status or "unknown",

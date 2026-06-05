@@ -43,6 +43,18 @@ class LlmContextTests(unittest.TestCase):
         self.assertEqual(context["capability_contract"]["planning_style"], "capability_bounded_task_planning")
         self.assertIn("relative_motion", {item["name"] for item in context["capability_contract"]["not_wired"]})
 
+    def test_capture_keyframe_capability_reflects_configured_command(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        snapshot = make_snapshot()
+        snapshot["capture_command_configured"] = True
+        context = build_planner_context(snapshot, registry, user_command="photo")
+        capture = next(
+            item for item in context["capability_contract"]["conditional"] if item["name"] == "capture_keyframe"
+        )
+
+        self.assertTrue(capture["available"])
+        self.assertEqual(capture["status"], "ready")
+
     def test_simulate_plan_return_to_start(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)
         context = build_planner_context(make_snapshot(), registry, user_command="回到起点")

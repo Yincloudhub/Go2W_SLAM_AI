@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import subprocess
 import sys
 import time
@@ -730,7 +731,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-feedback-events", type=int, default=120)
     parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
-    parser.add_argument("--capture-command", default="", help="Optional bash command for queued capture_keyframe steps.")
+    parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for queued capture_keyframe steps.")
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
     parser.add_argument("--relocate", action="store_true", help="Start relocation before planning/execution.")
     parser.add_argument("--status", action="store_true", help="Print gateway world_state.")

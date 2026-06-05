@@ -20,6 +20,7 @@ struct OperatorPanelConfig {
     std::string map_id = "go2w_real_site";
     std::string start_slam_script = "scripts/start_go2w_slam_stack.sh";
     std::string start_rviz2_script = "scripts/start_go2w_rviz2.sh";
+    std::string capture_command = "";
     std::string llm_http_url = "";
     std::string llm_http_model = "local";
     std::string current_node = "";

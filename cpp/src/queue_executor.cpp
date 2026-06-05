@@ -1,14 +1,21 @@
 #include "go2w/queue_executor.hpp"
 #include "go2w/task_queue_validator.hpp"
 
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <iomanip>
 #include <map>
 #include <ostream>
 #include <sstream>
 #include <thread>
 #include <utility>
+
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 namespace go2w {
 namespace {
@@ -59,6 +66,109 @@ std::chrono::steady_clock::duration secondsDuration(double value, double fallbac
 std::string displayName(const std::string& target_node, const std::string& target_name)
 {
     return target_name.empty() ? target_node : target_name;
+}
+
+std::string shellQuoteLocal(const std::string& value)
+{
+    std::string quoted = "'";
+    for (const char ch : value) {
+        if (ch == '\'') {
+            quoted += "'\\''";
+        } else {
+            quoted += ch;
+        }
+    }
+    quoted += "'";
+    return quoted;
+}
+
+int shellStatusCode(int status)
+{
+#ifdef _WIN32
+    return status;
+#else
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+    return status;
+#endif
+}
+
+struct ShellCaptureResult {
+    int exit_code = 127;
+    std::string output;
+};
+
+ShellCaptureResult runShellCapture(const std::string& command)
+{
+    ShellCaptureResult result;
+    std::array<char, 4096> buffer{};
+    FILE* pipe = popen((command + " 2>&1").c_str(), "r");
+    if (!pipe) {
+        result.output = "failed to start shell command";
+        return result;
+    }
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+        result.output += buffer.data();
+        if (result.output.size() > 65536) {
+            result.output += "\n[truncated]\n";
+            break;
+        }
+    }
+    result.exit_code = shellStatusCode(pclose(pipe));
+    return result;
+}
+
+nlohmann::json parseJsonLine(const std::string& text)
+{
+    std::istringstream stream(text);
+    std::string line;
+    nlohmann::json parsed;
+    while (std::getline(stream, line)) {
+        const auto first = line.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos || line[first] != '{') continue;
+        try {
+            auto value = nlohmann::json::parse(line.substr(first));
+            if (value.is_object()) parsed = std::move(value);
+        } catch (...) {
+        }
+    }
+    return parsed;
+}
+
+nlohmann::json runCaptureCommand(
+    const QueueExecutorConfig& config,
+    const std::string& queue_id,
+    const std::string& target_node,
+    const std::string& target_name)
+{
+    const int timeout_s = config.gateway_timeout_s > 0 ? config.gateway_timeout_s : 30;
+    std::ostringstream command;
+    command << "cd " << shellQuoteLocal(config.repo_root)
+            << " && GO2W_TARGET_NODE=" << shellQuoteLocal(target_node)
+            << " GO2W_TARGET_NAME=" << shellQuoteLocal(target_name)
+            << " GO2W_RUN_ID=" << shellQuoteLocal(queue_id.empty() ? "cpp_queue" : queue_id)
+            << " GO2W_REPO_ROOT=" << shellQuoteLocal(config.repo_root)
+            << " timeout " << timeout_s << "s bash -lc " << shellQuoteLocal(config.capture_command);
+
+    const ShellCaptureResult shell = runShellCapture(command.str());
+    nlohmann::json result = {
+        {"captured", false},
+        {"target_node", target_node},
+        {"target_name", target_name},
+        {"returncode", shell.exit_code},
+        {"stdout", shell.output},
+    };
+
+    const nlohmann::json payload = parseJsonLine(shell.output);
+    if (payload.is_object()) {
+        result["payload"] = payload;
+        if (payload.contains("captured")) result["captured"] = payload.value("captured", false);
+        for (const char* key : {"image_path", "sidecar_path", "run_id", "timestamp_ms", "source", "reason", "image_bytes"}) {
+            if (payload.contains(key)) result[key] = payload.at(key);
+        }
+    }
+    if (shell.exit_code != 0 && !result.contains("reason")) result["reason"] = "capture command failed";
+    return result;
 }
 
 nlohmann::json feedbackMessage(
@@ -405,14 +515,34 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
         };
 
         if (action == "capture_keyframe") {
-            event["status"] = "ok";
-            event["result"] = {
+            const bool capture_configured = !config_.capture_command.empty();
+            nlohmann::json capture_result = {
                 {"captured", false},
                 {"target_node", target_node},
                 {"reason", config_.execute_enabled ? "capture command not configured; recorded semantic keyframe event only" : "dry run; capture not executed"},
             };
+            if (config_.execute_enabled && capture_configured) {
+                capture_result = runCaptureCommand(config_, execution.value("queue_id", "cpp_queue"), target_node, target_name);
+            }
+            const bool capture_failed = config_.execute_enabled && capture_configured && !capture_result.value("captured", false);
+            event["status"] = capture_failed ? "failed" : "ok";
+            event["result"] = capture_result;
             execution["events"].push_back(event);
-            out << "  capture_keyframe：当前C++原型记录语义事件，真实相机命令下一步接入。\n";
+            if (capture_failed) {
+                const std::string reason = capture_result.value("reason", "capture_keyframe failed");
+                execution["failed_step"] = step_id;
+                execution["blocked_reason"] = reason;
+                result.exit_code = 5;
+                result.execution = execution;
+                out << "  capture_keyframe failed: " << reason << "\n";
+                result.stdout_text = out.str();
+                return result;
+            }
+            if (capture_result.value("captured", false)) {
+                out << "  capture_keyframe image_path=" << capture_result.value("image_path", "") << "\n";
+            } else {
+                out << "  capture_keyframe semantic_event_only\n";
+            }
             continue;
         }
         if (action == "report") {
