@@ -181,6 +181,7 @@ class WebConfig:
     gateway_client: str
     start_slam_script: str
     start_rviz2_script: str
+    capture_command: str = ""
     network_interface: str = "eth0"
     current_node: str = "initial_point"
     host: str = "127.0.0.1"
@@ -232,6 +233,8 @@ class WebConfig:
         if self.llm_http_url:
             argv.extend(["--llm-http-url", self.llm_http_url])
             argv.extend(["--llm-http-model", self.llm_http_model])
+        if self.capture_command:
+            argv.extend(["--capture-command", self.capture_command])
         if execute_enabled:
             argv.append("--execute")
         if weak_link_mode:
@@ -405,6 +408,7 @@ class OperatorWebApp:
         result["stereo_motion_guard"] = self.stereo_motion_guard()
         result["semantic_summary"] = self.semantic_summary()
         result["edge_summary"] = self.edge_summary()
+        result["capabilities"] = self.capabilities()
         with self.lock:
             result["state"] = self.state.snapshot()
         return result
@@ -502,6 +506,7 @@ class OperatorWebApp:
         result["stereo_motion_guard"] = self.stereo_motion_guard()
         result["semantic_summary"] = self.semantic_summary()
         result["edge_summary"] = self.edge_summary()
+        result["capabilities"] = self.capabilities()
         with self.lock:
             result["state"] = self.state.snapshot()
             self.state.remember(line, result)
@@ -748,6 +753,26 @@ class OperatorWebApp:
     def state_snapshot(self) -> Dict[str, Any]:
         with self.lock:
             return self.state.snapshot()
+
+    def capabilities(self) -> Dict[str, Any]:
+        capture_ready = bool(self.config.capture_command)
+        return {
+            "capture_keyframe": {
+                "configured": capture_ready,
+                "status": "ready" if capture_ready else "semantic_event_only",
+                "real_execution": capture_ready,
+            },
+            "relative_motion": {
+                "configured": False,
+                "status": "not_wired",
+                "real_execution": False,
+            },
+            "mapless_scout": {
+                "configured": False,
+                "status": "not_wired",
+                "real_execution": False,
+            },
+        }
 
     def stereo_summary(self) -> Dict[str, Any]:
         path = self.config.stereo_summary_path
@@ -1091,6 +1116,8 @@ INDEX_HTML = r"""<!doctype html>
           <div class="metric"><label>安全原因</label><strong id="m-safety">-</strong></div>
           <div class="metric"><label>双目前方/中心</label><strong id="m-stereo-front">unavailable</strong></div>
           <div class="metric"><label>双目置信/年龄</label><strong id="m-stereo-health">unavailable</strong></div>
+          <div class="metric"><label>Keyframe</label><strong id="m-capture">semantic_event_only</strong></div>
+          <div class="metric"><label>Not wired</label><strong id="m-notwired">relative_motion</strong></div>
         </div>
       </section>
 
@@ -1211,6 +1238,16 @@ INDEX_HTML = r"""<!doctype html>
       $("history").innerHTML = items.join("") || "<div>暂无任务历史</div>";
     }
 
+    function updateCapabilities(capabilities) {
+      const caps = capabilities || {};
+      const capture = caps.capture_keyframe || {};
+      $("m-capture").textContent = capture.configured ? "ready" : (capture.status || "semantic_event_only");
+      const notWired = Object.entries(caps)
+        .filter(([, value]) => value && value.status === "not_wired")
+        .map(([name]) => name);
+      $("m-notwired").textContent = notWired.join(", ") || "none";
+    }
+
     function updateStereo(stereo) {
       if (!stereo || !stereo.available || !stereo.data) {
         $("m-stereo-front").textContent = "unavailable";
@@ -1280,6 +1317,7 @@ INDEX_HTML = r"""<!doctype html>
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
+        updateCapabilities(result.capabilities);
         updateStereo(result.stereo_summary);
         updateSemantic(result.semantic_summary);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
@@ -1303,6 +1341,7 @@ INDEX_HTML = r"""<!doctype html>
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
+        updateCapabilities(result.capabilities);
         updateStereo(result.stereo_summary);
         updateSemantic(result.semantic_summary);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
@@ -1482,6 +1521,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--gateway-client", default=env.get("GO2W_GATEWAY_CLIENT", "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"))
     parser.add_argument("--start-slam-script", default=env.get("GO2W_START_SLAM_SCRIPT", ""))
     parser.add_argument("--start-rviz2-script", default=env.get("GO2W_START_RVIZ2_SCRIPT", ""))
+    parser.add_argument("--capture-command", default=env.get("GO2W_CAPTURE_COMMAND", ""))
     parser.add_argument("--interface", default=env.get("GO2W_NETWORK_INTERFACE", "eth0"))
     parser.add_argument("--current-node", default=env.get("GO2W_CURRENT_NODE", "initial_point"))
     parser.add_argument("--host", default=env.get("GO2W_WEB_HOST", "127.0.0.1"))
@@ -1518,6 +1558,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         gateway_client=args.gateway_client,
         start_slam_script=start_slam_script,
         start_rviz2_script=start_rviz2_script,
+        capture_command=args.capture_command,
         network_interface=args.interface,
         current_node=args.current_node,
         host=args.host,

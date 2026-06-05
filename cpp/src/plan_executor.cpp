@@ -19,6 +19,7 @@ const std::set<std::string> kTools = {
     "create_navigation_subgoal",
     "wait_until",
     "capture_keyframe",
+    "relative_motion_preview",
     "start_mapless_scout",
     "request_human_confirm",
     "hold_position",

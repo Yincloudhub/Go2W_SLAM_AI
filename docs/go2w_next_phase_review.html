@@ -361,7 +361,7 @@
   <div class="page">
     <header>
       <h1>GO2W 下一阶段代码与模块评审</h1>
-      <p class="subtitle">基于当前仓库代码、规划文档、三个 subagent 只读 review 以及外部 3D SLAM/雷达资料核对。目标是确认现有闭环是否符合规划，并把安全、定位、传感器、UI/LLM、TI 雷达分支的下一步边界梳理清楚。</p>
+      <p class="subtitle">基于当前仓库代码、规划文档、既有 review 结论以及本轮本地代码核对。目标是确认现有闭环是否符合规划，并把安全、定位、传感器、UI/LLM、TI 雷达分支的下一步边界梳理清楚。</p>
       <div class="top-links">
         <span class="pill">生成时间：2026-06-05</span>
         <span class="pill">本地仓库：<code>E:\GO2W_0</code></span>
@@ -380,15 +380,15 @@
         </div>
         <div class="card">
           <h3><span class="status warn">安全仍有缺口</span></h3>
-          <p>XT16 点云近场安全还是 stub，LiDAR/IMU/odom health 仍是 phase-1 默认值。Python 执行路径的运行中 pause/watchdog 弱于 C++，应避免作为主要真实执行入口。</p>
+          <p>LiDAR summary 已能进入 gateway safety，但 raw XT16 PointCloud2 到 summary 的实时几何检测仍需补齐；IMU/odom health 仍是 phase-1 默认值。Python 执行路径的运行中 pause/watchdog 弱于 C++，应避免作为主要真实执行入口。</p>
         </div>
         <div class="card">
           <h3><span class="status info">下一阶段重点</span></h3>
-          <p>不要先替换 SLAM 主闭环。先补 XT16 点云几何摘要、真实拍照工具、结构化 UI/LLM 结果展示，再设计受限的 odom/IMU 相对运动分支。</p>
+          <p>不要先替换 SLAM 主闭环。继续补 raw XT16 点云几何检测、结构化任务链路展示、真实 health topic，再把 odom/IMU 相对运动保持在 dry-run/stub 分支内推进。</p>
         </div>
       </div>
       <div class="note good">
-        已落地修正：<code>chen_jiayu_station</code> 的描述要求站立验证，但缺少机器可读 tag。本次已为该 topology node 添加 <code>needs_standing_verification</code>，Python 执行 gate 验证会阻断该点真实导航。
+        已落地修正：<code>chen_jiayu_station</code> 的描述要求站立验证，但缺少机器可读 tag。本次已为该 topology node 添加 <code>needs_standing_verification</code>；另外 <code>capture_keyframe</code> 已统一为可配置真实命令，<code>relative_motion</code> 已改为 <code>relative_motion_preview</code> dry-run only，不会生成真实运动命令。
       </div>
     </section>
 
@@ -464,14 +464,14 @@
           <tr>
             <td>LiDAR/IMU/Odom 高低频状态进入 WorldState</td>
             <td><span class="status warn">部分完成</span></td>
-            <td>SLAM pose 已进入，D435 摘要已进入，XT16 近场几何和 IMU/Odom health 仍未真实接线。</td>
-            <td>P0 接 XT16 <code>lidar_pointcloud</code> LocalObstacleSummary；P1 接真实 health topics。</td>
+            <td>SLAM pose 已进入；LiDAR/stereo summary 已能作为 <code>LocalObstacleSummary</code> 被 gateway safety 消费；raw XT16 几何检测和 IMU/Odom health 仍未真实接线。</td>
+            <td>下一步补 raw PointCloud2 ROI/聚类生产器；P1 接真实 health topics。</td>
           </tr>
           <tr>
             <td>UI/LLM 展示任务级决策</td>
-            <td><span class="status warn">可见但不充分</span></td>
-            <td>UI 有状态和控制台，但 planner/task_queue/operator_feedback/LLM source 还没有一等结构化展示。</td>
-            <td>新增任务链路面板：planner route、队列 step、blocked reason、artifact path、LLM 反馈。</td>
+            <td><span class="status warn">进行中</span></td>
+            <td>UI 已显示 Keyframe 配置状态和 not wired 能力；planner/task_queue/operator_feedback/LLM source 还没有一等结构化展示。</td>
+            <td>继续新增任务链路面板：planner route、队列 step、blocked reason、artifact path、LLM 反馈。</td>
           </tr>
           <tr>
             <td>多传感器扩展不抢主控资源</td>
@@ -674,15 +674,15 @@
           </tr>
           <tr>
             <td>拓扑点拍照</td>
-            <td><span class="status warn">部分</span></td>
-            <td>是否配置真实 camera command，图像路径，run_id。</td>
-            <td>P0 端到端接 <code>capture_keyframe</code>。</td>
+            <td><span class="status ok">可配置</span></td>
+            <td><code>GO2W_CAPTURE_COMMAND</code>/<code>--capture-command</code>、图像路径、run_id、target_node；未配置时显示 <code>semantic_event_only</code>。</td>
+            <td>继续接真实相机命令和现场路径权限。</td>
           </tr>
           <tr>
             <td>前进十米拍照</td>
-            <td><span class="status bad">未实现</span></td>
-            <td>当前应返回 unsupported 或 human_confirm，不允许模型伪造坐标。</td>
-            <td>P1 设计 <code>relative_motion</code> IR 和执行器。</td>
+            <td><span class="status warn">dry-run only</span></td>
+            <td>返回 <code>relative_motion_preview</code> + <code>request_human_confirm</code>，包含距离、拍照意图、所需传感器和 <code>real_execution=false</code>。</td>
+            <td>真实执行仍未接线，不生成拓扑导航或底盘命令。</td>
           </tr>
           <tr>
             <td>SLAM-off odom/IMU 模式</td>
@@ -811,12 +811,12 @@
         <tbody>
           <tr>
             <td>P0</td>
-            <td>只允许 dry-run，LLM 能识别但返回“能力未启用”。</td>
-            <td>smoke case：<code>前进十米拍照</code> 不生成拓扑导航，也不伪造目标点。</td>
+            <td>已接入 dry-run preview，LLM/本地 planner 能识别但返回 <code>relative_motion_preview</code>。</td>
+            <td>smoke case：<code>前进十米拍照</code> 不生成拓扑导航，也不伪造目标点；真实执行固定阻断。</td>
           </tr>
           <tr>
             <td>P1</td>
-            <td>实现 <code>relative_motion</code> schema 和 executor stub，实机只允许 <code>&lt;=0.5m</code> 分段。</td>
+            <td>下一步实现 executor stub 和传感器 health 采样，实机只允许 <code>&lt;=0.5m</code> 分段。</td>
             <td>每段前后都有 world_state/odom timestamp 和 safety sample，失败必 pause。</td>
           </tr>
           <tr>
@@ -917,8 +917,8 @@
           <tr>
             <td><span class="rank p1">P1</span></td>
             <td>相对运动 IR 和 dry-run</td>
-            <td><code>src/edge_autonomy/llm_context.py</code>、<code>cpp/src/task_queue_validator.cpp</code>、<code>cpp/src/queue_executor.cpp</code></td>
-            <td><code>前进十米拍照</code> 能明确生成 unsupported 或 dry-run relative_motion，不生成伪拓扑点。</td>
+            <td><code>src/edge_autonomy/llm_context.py</code>、<code>src/edge_autonomy/local_llm_planner.py</code>、<code>schemas/local_llm_plan.schema.json</code>、<code>cpp/src/operator_panel.cpp</code></td>
+            <td>已推进：<code>前进十米拍照</code> 生成 <code>relative_motion_preview</code> dry-run schema；<code>real_execution=false</code>，不生成伪拓扑点或真实运动队列。</td>
           </tr>
           <tr>
             <td><span class="rank p2">P2</span></td>

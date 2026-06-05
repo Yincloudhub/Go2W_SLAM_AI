@@ -11,6 +11,7 @@ from edge_autonomy.local_llm_planner import (
     validate_context_policy,
     validate_execution_contract,
     validate_local_llm_plan,
+    run_local_llm_planner,
 )
 from edge_autonomy.task_queue import validate_task_queue
 
@@ -147,6 +148,63 @@ class LocalLlmPlannerTests(unittest.TestCase):
         self.assertIn("capability_contract", prompt)
         self.assertIn("relative_motion", prompt)
         self.assertIn("not_wired", prompt)
+
+    def test_relative_motion_is_preview_only_even_if_model_tries_navigation(self) -> None:
+        context = {
+            "user_command": "forward 10 meters and capture",
+            "capability_contract": {"not_wired": [{"name": "relative_motion"}]},
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {
+                    "available_nodes": [
+                        {
+                            "node_id": "room701",
+                            "name": "room701",
+                            "aliases": ["room701"],
+                            "tags": [],
+                            "distance_from_robot_m": 5.0,
+                        }
+                    ]
+                },
+            },
+        }
+        plan = make_plan()
+
+        fixed = apply_context_policy_overrides(plan, context)
+
+        self.assertEqual(fixed["mode"], "human_confirm")
+        self.assertEqual([step["tool"] for step in fixed["steps"]], ["relative_motion_preview", "request_human_confirm"])
+        self.assertEqual(fixed["steps"][0]["arguments"]["requested_distance_m"], 10.0)
+        self.assertFalse(fixed["steps"][0]["arguments"]["real_execution"])
+        validate_local_llm_plan(fixed)
+        validate_execution_contract(fixed)
+        validate_context_policy(fixed, context)
+
+    def test_relative_motion_hybrid_path_does_not_call_llm_backend(self) -> None:
+        class RaisingBackend:
+            def generate(self, prompt: str, *, system_prompt: str, max_tokens: int, timeout_s: int) -> str:
+                raise AssertionError("relative motion preview should be deterministic")
+
+        context = {
+            "user_command": "前进十米去拍照",
+            "capability_contract": {"not_wired": [{"name": "relative_motion"}]},
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": False},
+                "slam": {"health_status": "failed"},
+                "topology": {"available_nodes": []},
+            },
+        }
+
+        result = run_local_llm_planner(context, RaisingBackend(), prompt_mode="hybrid")
+
+        self.assertEqual(result.elapsed_s, 0.0)
+        self.assertEqual(result.plan["mode"], "human_confirm")
+        self.assertEqual(result.plan["steps"][0]["tool"], "relative_motion_preview")
+        self.assertEqual(result.plan["steps"][0]["arguments"]["requested_distance_m"], 10.0)
+        self.assertIsNone(result.task_queue)
 
     def test_multi_target_command_builds_sequential_task_queue(self) -> None:
         context = {

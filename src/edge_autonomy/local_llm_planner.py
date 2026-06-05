@@ -9,6 +9,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .llm_context import command_requests_relative_motion, relative_motion_preview_from_command
 from .task_queue import validate_task_queue
 
 
@@ -19,6 +20,7 @@ PLAN_TOOLS = {
     "create_navigation_subgoal",
     "wait_until",
     "capture_keyframe",
+    "relative_motion_preview",
     "start_mapless_scout",
     "request_human_confirm",
     "hold_position",
@@ -35,6 +37,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "Do not repeat the input. Do not output markdown, comments, natural-language explanation, raw Unitree API ids, or cmd_vel. "
     "Use only registered tools. Safety rules override user requests. "
     "Use capability_contract when present: ready or available conditional capabilities may be planned; not_wired capabilities must become human_confirm or safe_hold, never a fake topology node. "
+    "relative_motion_preview is dry-run only and must never be treated as executable motion. "
     "The top-level keys must be exactly: plan_id, mode, confidence, reason, steps, communication_policy, requires_human_ack. "
     "Each step must have exactly: step_id, tool, arguments. "
     "communication_policy must be an object with mode, send, drop, and reason. "
@@ -65,7 +68,7 @@ Hard rules:
 - Do not navigate when localization is lost or SLAM is not usable.
 - Do not navigate into critical human/crowd risk.
 - Do not output raw Unitree API ids such as 1102, 1201, or 1202.
-- Use capability_contract if present. Capabilities marked not_wired, such as relative_motion or raw_base_control, must not be planned as executable actions.
+- Use capability_contract if present. Capabilities marked not_wired, such as relative_motion or raw_base_control, must not be planned as executable actions. You may use relative_motion_preview only as a dry-run explanation step before request_human_confirm.
 
 Decision priority, apply in this order before choosing steps:
 0. Requested capability not wired: if the user asks for a not_wired capability, mode must be human_confirm or safe_hold, include request_human_confirm, and do not create_navigation_subgoal unless a registered topology node was clearly requested.
@@ -110,7 +113,7 @@ LIGHTWEIGHT_PROMPT_TEMPLATE = """Return one compact JSON object with exactly the
 plan_id, mode, confidence, reason, steps, communication_policy, requires_human_ack.
 
 Allowed modes: mapped_navigation, safe_hold, human_confirm, mapless_scout.
-Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, request_human_confirm, hold_position.
+Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, request_human_confirm, hold_position.
 Each step must have exactly: step_id, tool, arguments.
 Use short strings. Top-level reason must be under 12 words.
 Do not put reason, distance, pose, speed, or photo_required inside step arguments.
@@ -121,7 +124,7 @@ communication_policy must include exactly mode, send, drop, reason.
 Normal communication_policy is {{"mode":"normal","send":["task_state","navigation_feedback","world_state_summary"],"drop":[],"reason":"normal link"}}.
 
 Priority rules:
-0. If capability_contract marks the requested capability not_wired: human_confirm with request_human_confirm. Do not fake a topology node.
+0. If capability_contract marks the requested capability not_wired: human_confirm with request_human_confirm. Do not fake a topology node. For relative_motion, include one relative_motion_preview step first; it is dry-run only.
 1. If slam_ok is false or localized is false: safe_hold with hold_position.
 2. If target_node is unknown or not in candidates: human_confirm with request_human_confirm. Do not navigate.
 3. If distance_to_requested_target_m <= arrival_distance_m: safe_hold with hold_position. Do not navigate.
@@ -319,6 +322,8 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
         "weak_bandwidth": isinstance(bandwidth, (int, float)) and isinstance(weak_bandwidth, (int, float)) and float(bandwidth) < float(weak_bandwidth),
         "candidates": candidates,
         "capability_contract": planner_context.get("capability_contract"),
+        "relative_motion_request": planner_context.get("relative_motion_request")
+        or (summary.get("relative_motion_request") if isinstance(summary, dict) else None),
     }
 
 
@@ -341,6 +346,66 @@ CAPTURE_TERMS = (
 def command_requests_capture(user_command: str) -> bool:
     command = user_command.lower()
     return any(term.lower() in command for term in CAPTURE_TERMS)
+
+
+def _context_requests_relative_motion(planner_context: dict[str, Any]) -> bool:
+    user_command = str(planner_context.get("user_command", ""))
+    return command_requests_relative_motion(user_command)
+
+
+def build_relative_motion_preview_plan(planner_context: dict[str, Any]) -> dict[str, Any]:
+    light_context = build_lightweight_planner_context(planner_context)
+    user_command = str(planner_context.get("user_command", ""))
+    preview = (
+        light_context.get("relative_motion_request")
+        if isinstance(light_context.get("relative_motion_request"), dict)
+        else None
+    )
+    if preview is None:
+        preview = relative_motion_preview_from_command(user_command) or {
+            "capability": "relative_motion",
+            "tool": "relative_motion_preview",
+            "status": "dry_run_only",
+            "real_execution": False,
+            "requested_direction": "forward",
+            "requested_distance_m": None,
+            "capture_requested": command_requests_capture(user_command),
+            "safety_requirements": [
+                "odometry_or_visual_inertial_tracking",
+                "fresh_local_obstacle_summary",
+                "operator_confirmed_recovery_policy",
+                "hard_stop_on_gateway_or_obstacle_reject",
+            ],
+            "blocked_reason": "relative_motion is not wired for real execution",
+        }
+    preview = deepcopy(preview)
+    preview["real_execution"] = False
+    preview["status"] = "dry_run_only"
+    communication_policy = _weak_communication_policy() if light_context.get("weak_bandwidth") else _normal_communication_policy()
+    return {
+        "plan_id": f"relative_preview_{int(time.time() * 1000)}",
+        "mode": "human_confirm",
+        "confidence": 0.9,
+        "reason": "relative_motion preview only; real execution is blocked",
+        "steps": [
+            {
+                "step_id": "preview_1",
+                "tool": "relative_motion_preview",
+                "arguments": preview,
+            },
+            {
+                "step_id": "ask_1",
+                "tool": "request_human_confirm",
+                "arguments": {
+                    "missing_capability": "relative_motion",
+                    "dry_run_only": True,
+                    "message": "relative_motion is preview-only; choose a registered topology node for real navigation.",
+                },
+            },
+        ],
+        "communication_policy": communication_policy,
+        "requires_human_ack": True,
+    }
 
 
 def build_task_queue_from_context(planner_context: dict[str, Any]) -> dict[str, Any] | None:
@@ -570,6 +635,15 @@ def intent_to_local_plan(intent: dict[str, Any], planner_context: dict[str, Any]
 
 def deterministic_intent_from_context(planner_context: dict[str, Any]) -> dict[str, Any] | None:
     light_context = build_lightweight_planner_context(planner_context)
+    if _context_requests_relative_motion(planner_context):
+        return {
+            "mode": "human_confirm",
+            "target_node": "",
+            "confidence": 0.9,
+            "reason": "relative_motion preview only",
+            "requires_human_ack": True,
+            "capability": "relative_motion",
+        }
     if not light_context.get("slam_ok") or not light_context.get("localized"):
         return {
             "mode": "safe_hold",
@@ -838,6 +912,9 @@ def _with_communication_prefix(steps: list[dict[str, Any]], communication_policy
 
 def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
     """Apply deterministic local safety/communication rules to a schema-valid plan."""
+    if _context_requests_relative_motion(planner_context):
+        return build_relative_motion_preview_plan(planner_context)
+
     fixed = deepcopy(plan)
     steps = fixed.get("steps", [])
     if not isinstance(steps, list):
@@ -992,6 +1069,12 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
     tools = _collect_tools(plan)
     nav_targets = _nav_target_nodes(plan)
     known_nodes = _semantic_nodes(planner_context)
+    if _context_requests_relative_motion(planner_context):
+        require(plan.get("mode") == "human_confirm", "relative_motion must use human_confirm")
+        require("relative_motion_preview" in tools, "relative_motion must include dry-run preview")
+        require("request_human_confirm" in tools, "relative_motion must request human confirmation")
+        require("create_navigation_subgoal" not in tools, "relative_motion must not create navigation subgoal")
+
     if known_nodes:
         for target in nav_targets:
             require(target in known_nodes, f"target_node {target!r} is not in semantic topology")
@@ -1056,6 +1139,17 @@ def run_local_llm_planner(
     timeout_s: int = 240,
     prompt_mode: str = "full",
 ) -> PlannerRunResult:
+    if _context_requests_relative_motion(planner_context):
+        plan = build_relative_motion_preview_plan(planner_context)
+        validate_local_llm_plan(plan)
+        validate_execution_contract(plan)
+        validate_context_policy(plan, planner_context)
+        return PlannerRunResult(
+            plan=plan,
+            raw_answer=json.dumps({"relative_motion_preview": plan["steps"][0]["arguments"]}, ensure_ascii=False),
+            elapsed_s=0.0,
+        )
+
     task_queue = build_task_queue_from_context(planner_context)
     if prompt_mode == "hybrid":
         if task_queue is not None:

@@ -33,6 +33,7 @@ def validate_plan(plan: dict[str, Any]) -> None:
         "create_navigation_subgoal",
         "wait_until",
         "capture_keyframe",
+        "relative_motion_preview",
         "start_mapless_scout",
         "request_human_confirm",
         "hold_position",
@@ -115,4 +116,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

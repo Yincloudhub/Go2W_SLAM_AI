@@ -33,6 +33,8 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("近场运动许可仍由实时深度摘要与 SLAM 安全门决定", web.INDEX_HTML)
         self.assertIn("运动安全门", web.INDEX_HTML)
         self.assertIn("外部边缘节点", web.INDEX_HTML)
+        self.assertIn('id="m-capture"', web.INDEX_HTML)
+        self.assertIn('id="m-notwired"', web.INDEX_HTML)
         self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
 
     def test_operator_ui_busy_state_does_not_lock_text_inputs(self):
@@ -393,6 +395,7 @@ class OperatorWebTests(unittest.TestCase):
             "--gateway-startup-wait-s", "1.25",
             "--registry", "configs/maps/go2w_real_site_map_registry.json",
             "--map-id", "go2w_real_site",
+            "--capture-command", "python3 scripts/capture_keyframe.py",
         ])
         argv = config.panel_argv(execute_enabled=True, weak_link_mode=True, current_node="wp_a")
         self.assertIn("--execute", argv)
@@ -408,7 +411,23 @@ class OperatorWebTests(unittest.TestCase):
             Path("configs/maps/go2w_real_site_map_registry.json"),
         )
         self.assertIn("--map-id", argv)
+        self.assertIn("--capture-command", argv)
+        self.assertIn("python3 scripts/capture_keyframe.py", argv)
         self.assertIn("go2w_real_site", argv)
+
+    def test_capabilities_reflect_capture_command(self):
+        config = web.make_config([
+            "--repo-root", str(Path(__file__).resolve().parents[1]),
+            "--panel-bin", "/tmp/go2w_operator_panel",
+            "--capture-command", "python3 scripts/capture_keyframe.py",
+        ])
+        app = web.OperatorWebApp(config)
+
+        capabilities = app.capabilities()
+
+        self.assertTrue(capabilities["capture_keyframe"]["configured"])
+        self.assertEqual(capabilities["capture_keyframe"]["status"], "ready")
+        self.assertEqual(capabilities["relative_motion"]["status"], "not_wired")
 
     def test_stereo_summary_file_is_bounded_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:

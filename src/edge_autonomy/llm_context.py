@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
@@ -17,6 +18,28 @@ RELATIVE_MOTION_TERMS = (
     "straight",
 )
 DISTANCE_TERMS = ("\u7c73", "meter", "meters", "metre", "metres")
+CHINESE_DIGITS = {
+    "\u96f6": 0,
+    "\u4e00": 1,
+    "\u4e8c": 2,
+    "\u4e24": 2,
+    "\u4e09": 3,
+    "\u56db": 4,
+    "\u4e94": 5,
+    "\u516d": 6,
+    "\u4e03": 7,
+    "\u516b": 8,
+    "\u4e5d": 9,
+}
+CAPTURE_REQUEST_TERMS = (
+    "\u62cd\u7167",
+    "\u62cd\u4e00\u5f20",
+    "\u7167\u7247",
+    "\u5173\u952e\u5e27",
+    "photo",
+    "capture",
+    "keyframe",
+)
 
 
 def _distance_xy(a: dict[str, float], b: dict[str, float]) -> float:
@@ -58,6 +81,58 @@ def command_requests_relative_motion(user_command: str) -> bool:
     return any(term in command for term in RELATIVE_MOTION_TERMS) and any(term in command for term in DISTANCE_TERMS)
 
 
+def _parse_chinese_number(text: str) -> float | None:
+    if not text:
+        return None
+    if text == "\u5341":
+        return 10.0
+    if "\u5341" in text:
+        left, right = text.split("\u5341", 1)
+        tens = CHINESE_DIGITS.get(left, 1 if left == "" else 0)
+        ones = CHINESE_DIGITS.get(right, 0) if right else 0
+        value = tens * 10 + ones
+        return float(value) if value > 0 else None
+    value = CHINESE_DIGITS.get(text)
+    return float(value) if value is not None else None
+
+
+def relative_motion_distance_m(user_command: str) -> float | None:
+    command = user_command.lower()
+    match = re.search(r"(\d+(?:\.\d+)?)\s*(?:m|meter|meters|metre|metres)", command)
+    if match:
+        return float(match.group(1))
+    match = re.search(r"(\d+(?:\.\d+)?)\s*\u7c73", user_command)
+    if match:
+        return float(match.group(1))
+    match = re.search(r"([\u96f6\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341]+)\s*\u7c73", user_command)
+    if match:
+        return _parse_chinese_number(match.group(1))
+    return None
+
+
+def relative_motion_preview_from_command(user_command: str) -> dict[str, Any] | None:
+    if not command_requests_relative_motion(user_command):
+        return None
+    command = user_command.lower()
+    capture_requested = any(term.lower() in command for term in CAPTURE_REQUEST_TERMS)
+    return {
+        "capability": "relative_motion",
+        "tool": "relative_motion_preview",
+        "status": "dry_run_only",
+        "real_execution": False,
+        "requested_direction": "forward",
+        "requested_distance_m": relative_motion_distance_m(user_command),
+        "capture_requested": capture_requested,
+        "safety_requirements": [
+            "odometry_or_visual_inertial_tracking",
+            "fresh_local_obstacle_summary",
+            "operator_confirmed_recovery_policy",
+            "hard_stop_on_gateway_or_obstacle_reject",
+        ],
+        "blocked_reason": "relative_motion is not wired for real execution",
+    }
+
+
 def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> dict[str, Any]:
     capture_configured = bool(snapshot.get("capture_command_configured") or snapshot.get("camera_capture_configured"))
     return {
@@ -95,6 +170,9 @@ def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> d
             {
                 "name": "relative_motion",
                 "examples": ["forward_10m_photo", "odom_only_drive"],
+                "dry_run_tool": "relative_motion_preview",
+                "status": "dry_run_only",
+                "real_execution": False,
                 "fallback": "human_confirm",
             },
             {
@@ -151,6 +229,7 @@ def build_planner_context(
     if localized:
         allowed_actions.extend(["navigate_to_verified_node", "pause_navigation"])
     capability_contract = build_capability_contract(localized=localized, snapshot=snapshot)
+    relative_motion_request = relative_motion_preview_from_command(user_command)
 
     lidar = snapshot.get("lidar_state", {})
     pointcloud = snapshot.get("live_pointcloud", {})
@@ -197,14 +276,17 @@ def build_planner_context(
                 ],
             },
             "allowed_actions": allowed_actions,
+            "relative_motion_request": relative_motion_request,
         },
         "capability_contract": capability_contract,
+        "relative_motion_request": relative_motion_request,
         "planner_rules": [
             "Do not output raw Unitree API IDs.",
             "Use mapped_navigation only when SLAM health is navigable, localization is fresh, and a topology node is selected.",
             "Use create_navigation_subgoal with a topology node instead of raw coordinates when possible.",
             "Use /slam_info ctrl_info is_arrived or stateMachine FINISHED as the arrival condition.",
             "Do not request dense pointcloud or raw video for weak-bandwidth planning.",
+            "relative_motion_preview is dry-run only and must never produce a SLAM or raw base-control command.",
         ],
     }
 
@@ -267,12 +349,23 @@ def simulate_local_llm_plan(context: dict[str, Any], registry: MapRegistry) -> d
         }
 
     if command_requests_relative_motion(user_command):
+        preview = relative_motion_preview_from_command(user_command) or {
+            "capability": "relative_motion",
+            "status": "dry_run_only",
+            "real_execution": False,
+            "blocked_reason": "relative_motion is not wired for real execution",
+        }
         return {
             "plan_id": f"mock_plan_{int(time.time() * 1000)}",
             "mode": "human_confirm",
             "confidence": 0.78,
-            "reason": "relative_motion is not wired for real execution",
+            "reason": "relative_motion preview only; real execution is blocked",
             "steps": [
+                {
+                    "step_id": "preview_1",
+                    "tool": "relative_motion_preview",
+                    "arguments": preview,
+                },
                 {
                     "step_id": "ask_1",
                     "tool": "request_human_confirm",

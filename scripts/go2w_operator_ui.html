@@ -303,6 +303,8 @@
           <div class="metric"><label>视觉场景</label><strong id="m-semantic-scene">暂无数据</strong></div>
           <div class="metric"><label>视觉建议</label><strong id="m-semantic-action">暂无数据</strong></div>
           <div class="metric"><label>外部边缘节点</label><strong id="m-edge-node">未接入</strong></div>
+          <div class="metric"><label>Keyframe</label><strong id="m-capture">semantic_event_only</strong></div>
+          <div class="metric"><label>Not wired</label><strong id="m-notwired">relative_motion</strong></div>
         </div>
       </section>
 
@@ -511,6 +513,15 @@
       $("output").textContent = JSON.stringify(result, null, 2);
       return result;
     }
+    function updateCapabilities(capabilities) {
+      const caps = capabilities || {};
+      const capture = caps.capture_keyframe || {};
+      $("m-capture").textContent = capture.configured ? "ready" : (capture.status || "semantic_event_only");
+      const notWired = Object.entries(caps)
+        .filter(([, value]) => value && value.status === "not_wired")
+        .map(([name]) => name);
+      $("m-notwired").textContent = notWired.join(", ") || "none";
+    }
     function updateStereo(stereo, motionGuard) {
       if (!stereo || !stereo.available || !stereo.data) {
         $("m-stereo-front").textContent = "深度侧车未启动或离线";
@@ -580,6 +591,7 @@
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
+        updateCapabilities(result.capabilities);
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);
@@ -607,6 +619,7 @@
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
+        updateCapabilities(result.capabilities);
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);

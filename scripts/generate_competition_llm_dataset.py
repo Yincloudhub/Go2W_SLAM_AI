@@ -23,7 +23,7 @@ SYSTEM_PROMPT = (
 
 TOOLS_TEXT = (
     "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, "
-    "start_mapless_scout, request_human_confirm, hold_position."
+    "relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
 )
 
 REGISTERED_TOOLS = [
@@ -31,6 +31,7 @@ REGISTERED_TOOLS = [
     "create_navigation_subgoal",
     "wait_until",
     "capture_keyframe",
+    "relative_motion_preview",
     "start_mapless_scout",
     "request_human_confirm",
     "hold_position",

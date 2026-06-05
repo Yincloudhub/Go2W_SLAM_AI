@@ -143,8 +143,12 @@ class LlmContextTests(unittest.TestCase):
         plan = simulate_local_llm_plan(context, registry)
 
         self.assertEqual(plan["mode"], "human_confirm")
-        self.assertEqual(plan["steps"][0]["tool"], "request_human_confirm")
-        self.assertEqual(plan["steps"][0]["arguments"]["missing_capability"], "relative_motion")
+        self.assertEqual(plan["steps"][0]["tool"], "relative_motion_preview")
+        self.assertEqual(plan["steps"][0]["arguments"]["requested_distance_m"], 10.0)
+        self.assertTrue(plan["steps"][0]["arguments"]["capture_requested"])
+        self.assertFalse(plan["steps"][0]["arguments"]["real_execution"])
+        self.assertEqual(plan["steps"][1]["tool"], "request_human_confirm")
+        self.assertEqual(plan["steps"][1]["arguments"]["missing_capability"], "relative_motion")
         self.assertIsNone(plan_to_slam_command(plan, registry))
 
 

@@ -147,6 +147,39 @@ bool containsMetricDistanceAscii(const std::string& text)
     return false;
 }
 
+double extractMetricDistanceM(const std::string& text)
+{
+    const std::string lower = lowerAscii(text);
+    const std::string meter = "米";
+    for (std::size_t i = 0; i < lower.size(); ++i) {
+        if (!isAsciiDigit(lower[i])) continue;
+        std::size_t j = i + 1;
+        while (j < lower.size() && (isAsciiDigit(lower[j]) || lower[j] == '.')) ++j;
+        const std::string number = lower.substr(i, j - i);
+        while (j < lower.size() && (lower[j] == ' ' || lower[j] == '\t')) ++j;
+        const bool has_unit =
+            (j < lower.size() && lower[j] == 'm') ||
+            lower.compare(j, 5, "meter") == 0 ||
+            lower.compare(j, 5, "metre") == 0 ||
+            text.compare(j, meter.size(), meter) == 0;
+        if (!has_unit) continue;
+        try {
+            return std::stod(number);
+        } catch (...) {
+            return -1.0;
+        }
+    }
+    if (containsAny(text, {"十米", "十 米"})) return 10.0;
+    return -1.0;
+}
+
+bool captureRequestedByText(const std::string& text)
+{
+    const std::string lower = lowerAscii(text);
+    return containsAny(lower, {"photo", "capture", "keyframe"}) ||
+        containsAny(text, {"拍照", "拍一张", "照片", "关键帧"});
+}
+
 std::string requestedNotWiredCapability(const std::string& text)
 {
     const std::string lower = lowerAscii(text);
@@ -168,14 +201,71 @@ std::string requestedNotWiredCapability(const std::string& text)
     return "";
 }
 
-CommandResult unsupportedCapabilityResult(const std::string& capability)
+nlohmann::json relativeMotionPreviewPlan(const std::string& text)
+{
+    const double distance_m = extractMetricDistanceM(text);
+    nlohmann::json preview = {
+        {"capability", "relative_motion"},
+        {"tool", "relative_motion_preview"},
+        {"status", "dry_run_only"},
+        {"real_execution", false},
+        {"requested_direction", "forward"},
+        {"requested_distance_m", distance_m >= 0.0 ? nlohmann::json(distance_m) : nlohmann::json(nullptr)},
+        {"capture_requested", captureRequestedByText(text)},
+        {"safety_requirements", nlohmann::json::array({
+            "odometry_or_visual_inertial_tracking",
+            "fresh_local_obstacle_summary",
+            "operator_confirmed_recovery_policy",
+            "hard_stop_on_gateway_or_obstacle_reject",
+        })},
+        {"blocked_reason", "relative_motion is not wired for real execution"},
+    };
+    return {
+        {"plan_id", "relative_preview_cpp"},
+        {"mode", "human_confirm"},
+        {"confidence", 0.9},
+        {"reason", "relative_motion preview only; real execution is blocked"},
+        {"steps", nlohmann::json::array({
+            {
+                {"step_id", "preview_1"},
+                {"tool", "relative_motion_preview"},
+                {"arguments", preview},
+            },
+            {
+                {"step_id", "ask_1"},
+                {"tool", "request_human_confirm"},
+                {"arguments", {
+                    {"missing_capability", "relative_motion"},
+                    {"dry_run_only", true},
+                    {"message", "relative_motion is preview-only; choose a registered topology node for real navigation."},
+                }},
+            },
+        })},
+        {"communication_policy", {
+            {"mode", "normal"},
+            {"send", nlohmann::json::array({"task_state", "navigation_feedback", "world_state_summary"})},
+            {"drop", nlohmann::json::array()},
+            {"reason", "normal link"},
+        }},
+        {"requires_human_ack", true},
+    };
+}
+
+CommandResult unsupportedCapabilityResult(const std::string& capability, const std::string& text, bool execute_enabled)
 {
     CommandResult result;
-    result.exit_code = 4;
+    result.exit_code = capability == "relative_motion" && !execute_enabled ? 0 : 4;
     std::ostringstream out;
-    out << "capability_guard: " << capability
-        << " is not wired for real execution; no command sent. "
-        << "Use a registered topology target or dry-run a future capability contract.\n";
+    out << "capability_guard: " << capability << " is not wired for real execution; no command sent.\n";
+    if (capability == "relative_motion") {
+        out << "执行状态：relative_motion 仅生成干跑预演，不会下发运动。\n";
+        if (execute_enabled) {
+            out << "EXEC 模式阻断：相对运动未接入安全执行链路。\n";
+        }
+        out << "预演计划JSON：" << relativeMotionPreviewPlan(text).dump(2) << "\n";
+    } else {
+        out << "Use a registered topology target or dry-run a future capability contract.\n";
+    }
     result.stdout_text = out.str();
     return result;
 }
@@ -559,7 +649,7 @@ CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
 {
     const std::string not_wired_capability = requestedNotWiredCapability(text);
     if (!not_wired_capability.empty()) {
-        return unsupportedCapabilityResult(not_wired_capability);
+        return unsupportedCapabilityResult(not_wired_capability, text, config_.execute_enabled);
     }
 
     const SemanticRouter router(loadRegistry(), config_.map_id);
