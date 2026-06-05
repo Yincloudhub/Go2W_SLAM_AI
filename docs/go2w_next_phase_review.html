@@ -571,6 +571,14 @@
           </tr>
         </tbody>
       </table>
+      <div class="note good">
+        P0 gateway contract 已推进：<code>SlamGateway::getLocalObstacleSummary()</code> 现在优先读取
+        <code>GO2W_LIDAR_GEOMETRY_SUMMARY_PATH</code>（默认
+        <code>/home/unitree/Go2W_SLAM_AI/artifacts/lidar_geometry_summary.json</code>）中的
+        <code>source="lidar_pointcloud"</code> 摘要；LiDAR 摘要缺失、过期或关键 clearance 不完整时，再回退到
+        <code>GO2W_STEREO_SUMMARY_PATH</code> 的 D435/stereo 摘要。<code>front/left/right_clearance_m</code>
+        必须是有限且非负的实数，否则 summary 会被标记为 <code>stale=true</code>，不能作为安全放行依据。
+      </div>
     </section>
 
     <section>

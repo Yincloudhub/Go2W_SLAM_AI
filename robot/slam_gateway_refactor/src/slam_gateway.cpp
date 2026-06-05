@@ -9,6 +9,25 @@
 namespace slam_gateway {
 namespace {
 
+std::string lidarGeometrySummaryPath()
+{
+    const char* configured = std::getenv("GO2W_LIDAR_GEOMETRY_SUMMARY_PATH");
+    return configured && *configured
+        ? configured
+        : "/home/unitree/Go2W_SLAM_AI/artifacts/lidar_geometry_summary.json";
+}
+
+int64_t lidarGeometrySummaryMaxAgeMs()
+{
+    const char* configured = std::getenv("GO2W_LIDAR_GEOMETRY_STALE_MS");
+    if (!configured || !*configured) return 1000;
+    try {
+        return std::max<int64_t>(1, std::stoll(configured));
+    } catch (...) {
+        return 1000;
+    }
+}
+
 std::string stereoSummaryPath()
 {
     const char* configured = std::getenv("GO2W_STEREO_SUMMARY_PATH");
@@ -375,7 +394,11 @@ NavigationTaskState SlamGateway::getNavigationTaskState() const
 
 LocalObstacleSummary SlamGateway::getLocalObstacleSummary() const
 {
-    return lidar_perception_.getExternalSummaryOrFallback(stereoSummaryPath(), stereoSummaryMaxAgeMs());
+    return lidar_perception_.getFusedSummaryOrFallback(
+        lidarGeometrySummaryPath(),
+        lidarGeometrySummaryMaxAgeMs(),
+        stereoSummaryPath(),
+        stereoSummaryMaxAgeMs());
 }
 
 SafetyDecision SlamGateway::getSafetyDecision() const

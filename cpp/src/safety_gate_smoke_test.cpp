@@ -47,6 +47,10 @@ int main()
     stale["world_state"]["local_obstacle"]["stale"] = true;
     require(gate.evaluateWorldState(stale).allowed, "stale sensor summary should not override gateway safety");
 
+    auto adapter_fresh = world(2.0, 2.0, 0.6);
+    adapter_fresh["world_state"]["local_obstacle"]["age_ms"] = 2500;
+    require(!gate.evaluateWorldState(adapter_fresh).allowed, "adapter-fresh obstacle should block even past the default producer period");
+
     auto stub = world(6.0, 6.0, 6.0);
     stub["world_state"]["local_obstacle"]["source"] = "manual_stub";
     require(gate.evaluateWorldState(stub).allowed, "manual clearance stub should not override gateway safety");

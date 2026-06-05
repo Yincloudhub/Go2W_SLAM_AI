@@ -136,7 +136,7 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
             obstacle_source == "lidar_pointcloud+stereo_depth";
         const double obstacle_age_ms = obstacle->value("age_ms", -1.0);
         const bool fresh_obstacle = trusted_obstacle_source && !obstacle->value("stale", true) &&
-            obstacle_age_ms >= 0.0 && obstacle_age_ms <= 1000.0;
+            obstacle_age_ms >= 0.0;
         if (fresh_obstacle) {
             const std::string obstacle_action = stringAt(*world, {"local_obstacle", "recommended_action"});
             if (obstacle_action == "stop" || obstacle_action == "emergency_stop") {

@@ -54,6 +54,12 @@ class GatewaySafetyContractTests(unittest.TestCase):
         self.assertTrue(allowed, reason)
         self.assertIn("gateway allows navigation", reason)
 
+    def test_adapter_fresh_summary_blocks_even_when_older_than_default_period(self):
+        allowed, reason = gateway_allows_navigation(world_state(age_ms=2500, right=0.6))
+
+        self.assertFalse(allowed)
+        self.assertIn("right clearance", reason)
+
     def test_side_obstacle_is_blocked(self):
         allowed, reason = gateway_allows_navigation(world_state(right=0.6))
 

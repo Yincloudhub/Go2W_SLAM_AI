@@ -29,7 +29,7 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
         obstacle.source == "lidar_pointcloud" ||
         obstacle.source == "lidar_pointcloud+stereo_depth";
     const bool fresh_obstacle =
-        trusted_obstacle_source && !obstacle.stale && obstacle.age_ms >= 0 && obstacle.age_ms <= 1000;
+        trusted_obstacle_source && !obstacle.stale && obstacle.age_ms >= 0;
     if (fresh_obstacle) {
         if (obstacle.recommended_action == "stop" || obstacle.recommended_action == "emergency_stop") {
             d.allow_navigation = false;

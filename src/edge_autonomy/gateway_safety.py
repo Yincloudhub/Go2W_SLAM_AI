@@ -27,7 +27,7 @@ def gateway_allows_navigation(
     world_state_result: dict[str, Any],
     *,
     max_localization_pose_age_ms: float = 2000.0,
-    max_obstacle_age_ms: float = 1000.0,
+    max_obstacle_age_ms: float | None = None,
     min_roi_confidence: float = 0.15,
     min_clearance_m: float = 0.8,
 ) -> tuple[bool, str]:
@@ -81,7 +81,9 @@ def gateway_allows_navigation(
     obstacle = _dict_at(world_state, "local_obstacle")
     if obstacle is not None and obstacle.get("source") in TRUSTED_OBSTACLE_SOURCES and obstacle.get("stale") is False:
         obstacle_age_ms = _finite_number(obstacle.get("age_ms"))
-        if obstacle_age_ms is not None and 0 <= obstacle_age_ms <= max_obstacle_age_ms:
+        if obstacle_age_ms is not None and 0 <= obstacle_age_ms and (
+            max_obstacle_age_ms is None or obstacle_age_ms <= max_obstacle_age_ms
+        ):
             obstacle_action = str(obstacle.get("recommended_action") or "")
             if obstacle_action in {"pause", "stop", "emergency_stop"}:
                 return False, f"local_obstacle recommends {obstacle_action}"

@@ -1,6 +1,7 @@
 #include "slam_gateway/lidar_geometry_perception.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 
 namespace slam_gateway {
@@ -13,18 +14,32 @@ double numberOr(const nlohmann::json& value, const char* key, double fallback)
     return it->get<double>();
 }
 
+bool knownClearance(double value)
+{
+    return std::isfinite(value) && value >= 0.0;
+}
+
+bool clearanceBelow(double value, double threshold)
+{
+    return knownClearance(value) && value < threshold;
+}
+
 void updateDerivedState(LocalObstacleSummary& summary)
 {
     summary.blocked_directions.clear();
-    if (summary.front_clearance_m < 0.8) summary.blocked_directions.push_back("front");
-    if (summary.left_clearance_m < 0.8) summary.blocked_directions.push_back("left");
-    if (summary.right_clearance_m < 0.8) summary.blocked_directions.push_back("right");
-    if (summary.rear_clearance_m < 0.6) summary.blocked_directions.push_back("rear");
+    if (clearanceBelow(summary.front_clearance_m, 0.8)) summary.blocked_directions.push_back("front");
+    if (clearanceBelow(summary.left_clearance_m, 0.8)) summary.blocked_directions.push_back("left");
+    if (clearanceBelow(summary.right_clearance_m, 0.8)) summary.blocked_directions.push_back("right");
+    if (clearanceBelow(summary.rear_clearance_m, 0.6)) summary.blocked_directions.push_back("rear");
 
-    summary.narrow_passage = summary.left_clearance_m < 0.8 && summary.right_clearance_m < 0.8;
-    if (summary.front_clearance_m < 0.8 || summary.left_clearance_m < 0.8 || summary.right_clearance_m < 0.8) {
+    summary.narrow_passage = clearanceBelow(summary.left_clearance_m, 0.8) && clearanceBelow(summary.right_clearance_m, 0.8);
+    if (clearanceBelow(summary.front_clearance_m, 0.8) ||
+        clearanceBelow(summary.left_clearance_m, 0.8) ||
+        clearanceBelow(summary.right_clearance_m, 0.8)) {
         summary.recommended_action = "pause";
-    } else if (summary.front_clearance_m < 1.5 || summary.left_clearance_m < 1.0 || summary.right_clearance_m < 1.0) {
+    } else if (clearanceBelow(summary.front_clearance_m, 1.5) ||
+               clearanceBelow(summary.left_clearance_m, 1.0) ||
+               clearanceBelow(summary.right_clearance_m, 1.0)) {
         summary.recommended_action = "go_slow";
     } else {
         summary.recommended_action = "normal";
@@ -83,16 +98,39 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
         summary.left_confidence = numberOr(roi, "left", 0.0);
         summary.right_confidence = numberOr(roi, "right", 0.0);
         summary.age_ms = summary.timestamp_ms > 0 ? wallClockNowMs() - summary.timestamp_ms : -1;
+        const bool has_required_clearance =
+            knownClearance(summary.front_clearance_m) &&
+            knownClearance(summary.left_clearance_m) &&
+            knownClearance(summary.right_clearance_m);
         summary.stale =
             j.value("stale", false) ||
             summary.timestamp_ms <= 0 ||
             summary.age_ms < 0 ||
-            summary.age_ms > std::max<int64_t>(1, max_age_ms);
+            summary.age_ms > std::max<int64_t>(1, max_age_ms) ||
+            !has_required_clearance;
         updateDerivedState(summary);
         return summary;
     } catch (...) {
         return fallback;
     }
+}
+
+LocalObstacleSummary LidarGeometryPerception::getFusedSummaryOrFallback(
+    const std::string& lidar_path,
+    int64_t lidar_max_age_ms,
+    const std::string& stereo_path,
+    int64_t stereo_max_age_ms) const
+{
+    const LocalObstacleSummary lidar = getExternalSummaryOrFallback(lidar_path, lidar_max_age_ms);
+    if (lidar.source == "lidar_pointcloud" && !lidar.stale) return lidar;
+
+    const LocalObstacleSummary stereo = getExternalSummaryOrFallback(stereo_path, stereo_max_age_ms);
+    if ((stereo.source == "stereo_depth" || stereo.source == "lidar_pointcloud+stereo_depth") && !stereo.stale) {
+        return stereo;
+    }
+
+    if (lidar.source == "lidar_pointcloud") return lidar;
+    return stereo;
 }
 
 }  // namespace slam_gateway
