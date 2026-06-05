@@ -310,6 +310,12 @@ require_process_alive xt16_driver
 fail_on_startup_log_error xt16_driver
 check_topic_once /unitree/slam_lidar/points 6
 
+if [[ "${GO2W_START_XT16_GEOMETRY:-0}" == "1" ]]; then
+  if ! bash "${SCRIPT_DIR}/go2w_xt16_geometry_sidecar.sh" restart-if-stale; then
+    echo "warning: XT16 geometry sidecar is unavailable; SLAM stays online and gateway remains fail-closed" >&2
+  fi
+fi
+
 run_unitree_binary unitree_slam
 wait_for_process unitree_slam
 sleep "${STABILITY_WAIT_S}"

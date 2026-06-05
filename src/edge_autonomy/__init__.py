@@ -10,6 +10,7 @@ from .slam_state import CurrentPose, LocalObstacleSummary, LocalizationState, Na
 from .runtime_state import LidarStateSummary, OdomPoseSummary, PointCloudSummary, ProcessState, SlamRuntimeSnapshot
 from .task_queue import validate_task_queue
 from .world_state_v1 import build_world_state_v1
+from .xt16_geometry import Xt16GeometryConfig, build_xt16_geometry_summary
 
 __all__ = [
     "CurrentPose",
@@ -45,10 +46,12 @@ __all__ = [
     "TopologyNode",
     "UnitreePose",
     "WorldState",
+    "Xt16GeometryConfig",
     "build_planner_context",
     "build_operator_display_state",
     "build_runtime_log_record",
     "build_world_state_v1",
+    "build_xt16_geometry_summary",
     "depth_summary_is_usable",
     "fuse_local_obstacle_summary",
     "plan_to_slam_command",
