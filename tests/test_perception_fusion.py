@@ -23,6 +23,9 @@ class PerceptionFusionTests(unittest.TestCase):
             front_clearance_m=0.6,
             left_clearance_m=2.0,
             right_clearance_m=2.0,
+            body_clearance_m={"front": 1.2},
+            low_hazard_clearance_m={"front": 0.6},
+            low_hazard_directions=["front"],
             recommended_action="pause",
             confidence=0.9,
             stale=False,
@@ -33,6 +36,9 @@ class PerceptionFusionTests(unittest.TestCase):
 
         self.assertEqual(fused.front_clearance_m, 0.6)
         self.assertEqual(fused.recommended_action, "pause")
+        self.assertEqual(fused.body_clearance_m, {"front": 1.2})
+        self.assertEqual(fused.low_hazard_clearance_m, {"front": 0.6})
+        self.assertEqual(fused.low_hazard_directions, ["front"])
 
     def test_stale_depth_is_ignored(self) -> None:
         lidar = LocalObstacleSummary(timestamp_ms=1000, source="lidar_pointcloud", front_clearance_m=2.4, confidence=0.9, stale=False)

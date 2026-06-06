@@ -74,6 +74,9 @@ class LocalObstacleSummary:
     left_clearance_m: float = 6.0
     right_clearance_m: float = 6.0
     rear_clearance_m: float = 6.0
+    body_clearance_m: dict[str, float | None] = field(default_factory=dict)
+    low_hazard_clearance_m: dict[str, float | None] = field(default_factory=dict)
+    low_hazard_directions: list[str] = field(default_factory=list)
     blocked_directions: list[str] = field(default_factory=list)
     narrow_passage: bool = False
     recommended_action: str = "normal"

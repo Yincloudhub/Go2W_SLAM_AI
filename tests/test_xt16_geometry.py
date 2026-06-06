@@ -14,23 +14,36 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "scripts" / "xt16_lidar_geometry_summary.py"
 
 
-def repeated_point(x: float, y: float, z: float = 0.2, count: int = 10) -> list[tuple[float, float, float]]:
-    return [(x, y, z) for _ in range(count)]
+def repeated_point(
+    x: float,
+    y: float,
+    z: float = 0.2,
+    count: int = 10,
+    spread_m: float = 0.06,
+) -> list[tuple[float, float, float]]:
+    return [
+        (
+            x + ((index % 3) - 1) * spread_m,
+            y + (((index // 3) % 3) - 1) * spread_m,
+            z + ((index % 2) * spread_m),
+        )
+        for index in range(count)
+    ]
 
 
 def clear_roi_points() -> list[tuple[float, float, float]]:
     points: list[tuple[float, float, float]] = []
-    points.extend(repeated_point(4.0, 0.0))
-    points.extend(repeated_point(0.0, 2.0))
-    points.extend(repeated_point(0.0, -2.0))
+    points.extend(repeated_point(0.0, -4.0))
+    points.extend(repeated_point(2.0, 0.0))
     points.extend(repeated_point(-2.0, 0.0))
+    points.extend(repeated_point(0.0, 2.0))
     return points
 
 
 class Xt16GeometryTests(unittest.TestCase):
     def test_front_obstacle_blocks_when_calibrated(self) -> None:
         points = clear_roi_points()
-        points.extend(repeated_point(0.9, 0.0))
+        points.extend(repeated_point(0.0, -0.9))
 
         summary = build_xt16_geometry_summary(
             points,
@@ -40,13 +53,14 @@ class Xt16GeometryTests(unittest.TestCase):
 
         self.assertFalse(summary["stale"])
         self.assertEqual(summary["source"], "lidar_pointcloud")
+        self.assertEqual(summary["schema_version"], 2)
         self.assertLess(summary["front_clearance_m"], 0.8)
         self.assertIn("front", summary["blocked_directions"])
         self.assertEqual(summary["recommended_action"], "pause")
 
     def test_footprint_returns_are_ignored(self) -> None:
         points = clear_roi_points()
-        points.extend(repeated_point(0.05, 0.05, count=30))
+        points.extend(repeated_point(0.05, -0.05, count=30))
 
         summary = build_xt16_geometry_summary(
             points,
@@ -69,7 +83,7 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertIn("uncalibrated_xt16_geometry", summary["stale_reasons"])
 
     def test_missing_required_roi_is_stale(self) -> None:
-        points = repeated_point(4.0, 0.0)
+        points = repeated_point(0.0, -4.0)
 
         summary = build_xt16_geometry_summary(
             points,
@@ -114,6 +128,101 @@ class Xt16GeometryTests(unittest.TestCase):
             summary = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertEqual(summary["source"], "lidar_pointcloud")
             self.assertFalse(summary["stale"])
+
+    def test_default_axes_match_static_robot_calibration(self) -> None:
+        summary = build_xt16_geometry_summary(
+            clear_roi_points(),
+            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            timestamp_ms=1,
+        )
+
+        axes = summary["summary"]["axes"]
+        self.assertEqual(axes["forward"], "y")
+        self.assertEqual(axes["forward_sign"], -1.0)
+        self.assertEqual(axes["lateral"], "x")
+        self.assertEqual(axes["lateral_sign"], 1.0)
+
+    def test_low_rear_hazard_is_preserved_separately_from_body_clearance(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.0, 0.53, z=-0.2, count=12))
+        points.extend(repeated_point(0.0, 1.12, z=0.2, count=30))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            timestamp_ms=1,
+        )
+
+        self.assertAlmostEqual(summary["low_hazard_clearance_m"]["rear"], 0.08, delta=0.08)
+        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.67, delta=0.08)
+        self.assertLess(summary["rear_clearance_m"], 0.2)
+        self.assertIn("rear", summary["low_hazard_directions"])
+        self.assertIn("rear", summary["blocked_directions"])
+        self.assertEqual(summary["recommended_action"], "pause")
+
+    def test_sparse_low_returns_do_not_override_supported_body_cluster(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.0, 0.52, z=-0.2, count=3))
+        points.extend(repeated_point(0.0, 1.12, z=0.2, count=30))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            timestamp_ms=1,
+        )
+
+        self.assertIsNone(summary["low_hazard_clearance_m"]["rear"])
+        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.67, delta=0.08)
+        self.assertAlmostEqual(summary["rear_clearance_m"], 0.67, delta=0.08)
+        self.assertIn("rear", summary["pending_low_hazard_directions"])
+        self.assertTrue(summary["stale"])
+
+    def test_nearest_supported_cluster_survives_far_low_background(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.0, 0.53, z=-0.2, count=12))
+        points.extend(repeated_point(0.0, 2.0, z=-0.2, count=120))
+        points.extend(repeated_point(0.0, 1.12, z=0.2, count=30))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            timestamp_ms=1,
+        )
+
+        self.assertAlmostEqual(summary["low_hazard_clearance_m"]["rear"], 0.08, delta=0.08)
+        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.67, delta=0.08)
+        self.assertLess(summary["rear_clearance_m"], 0.2)
+
+    def test_duplicate_points_do_not_create_supported_cluster(self) -> None:
+        points = clear_roi_points()
+        points.extend([(0.0, 0.53, -0.2)] * 30)
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            timestamp_ms=1,
+        )
+
+        self.assertIsNone(summary["low_hazard_clearance_m"]["rear"])
+        self.assertEqual(summary["low_hazard_roi_confidence"]["rear"], 0.0)
+        self.assertIn("rear", summary["pending_low_hazard_directions"])
+        self.assertTrue(summary["stale"])
+
+    def test_healthy_cloud_with_no_directional_return_is_clear_to_range(self) -> None:
+        points: list[tuple[float, float, float]] = []
+        points.extend(repeated_point(0.0, -4.0))
+        points.extend(repeated_point(2.0, 0.0))
+        points.extend(repeated_point(0.0, 2.0))
+        points.extend(repeated_point(8.0, 8.0, z=2.0, count=1000))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            timestamp_ms=1,
+        )
+
+        self.assertEqual(summary["right_clearance_m"], 6.0)
+        self.assertIn("right", summary["summary"]["body_no_return_directions"])
 
 
 if __name__ == "__main__":

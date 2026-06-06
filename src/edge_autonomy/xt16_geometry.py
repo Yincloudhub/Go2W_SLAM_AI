@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 
 def now_ms() -> int:
@@ -19,14 +19,21 @@ class Xt16GeometryConfig:
     side_forward_m: float = 0.75
     rear_half_width_m: float = 0.45
     footprint_front_m: float = 0.35
-    footprint_rear_m: float = 0.35
-    footprint_half_width_m: float = 0.32
+    footprint_rear_m: float = 0.45
+    footprint_half_width_m: float = 0.40
     min_z_m: float = -0.25
+    body_min_z_m: float = -0.10
     max_z_m: float = 1.20
-    forward_axis: str = "x"
-    lateral_axis: str = "y"
+    clearance_cluster_gap_m: float = 0.15
+    support_bin_m: float = 0.05
+    min_spatial_bins: int = 2
+    pending_min_points: int = 3
+    min_cloud_points_for_no_return: int = 1000
+    no_return_confidence: float = 0.5
+    forward_axis: str = "y"
+    lateral_axis: str = "x"
     vertical_axis: str = "z"
-    forward_sign: float = 1.0
+    forward_sign: float = -1.0
     lateral_sign: float = 1.0
     vertical_sign: float = 1.0
     calibrated: bool = False
@@ -77,17 +84,124 @@ def _percentile(values: Sequence[float], q: float) -> float | None:
     return clean[lo] * (1.0 - frac) + clean[hi] * frac
 
 
-def _roi_confidence(count: int, config: Xt16GeometryConfig) -> float:
-    return round(min(1.0, count / max(1, config.min_points_per_roi)), 3)
+DirectionalSample = Tuple[float, float, float]
 
 
-def _clearance(values: Sequence[float], config: Xt16GeometryConfig) -> float | None:
-    if len(values) < config.min_points_per_roi:
-        return None
-    value = _percentile(values, config.percentile)
-    if value is None:
-        return None
-    return round(max(0.0, float(value)), 3)
+@dataclass(frozen=True)
+class ClusterResult:
+    clearance_m: float | None
+    confidence: float
+    selected_points: int
+    selected_spatial_bins: int
+    cluster_count: int
+    pending_clearance_m: float | None
+
+
+def _spatial_bin(sample: DirectionalSample, config: Xt16GeometryConfig) -> tuple[int, int]:
+    bin_m = max(0.01, float(config.support_bin_m))
+    return (math.floor(sample[1] / bin_m), math.floor(sample[2] / bin_m))
+
+
+def _clearance_clusters(
+    samples: Sequence[DirectionalSample],
+    config: Xt16GeometryConfig,
+) -> list[list[DirectionalSample]]:
+    ordered = sorted(samples, key=lambda sample: sample[0])
+    if not ordered:
+        return []
+    gap_m = max(0.01, float(config.clearance_cluster_gap_m))
+    clusters: list[list[DirectionalSample]] = [[ordered[0]]]
+    for sample in ordered[1:]:
+        if sample[0] - clusters[-1][-1][0] <= gap_m:
+            clusters[-1].append(sample)
+        else:
+            clusters.append([sample])
+    return clusters
+
+
+def _cluster_result(samples: Sequence[DirectionalSample], config: Xt16GeometryConfig) -> ClusterResult:
+    clusters = _clearance_clusters(samples, config)
+    min_points = max(1, int(config.min_points_per_roi))
+    min_bins = max(1, int(config.min_spatial_bins))
+    pending_min_points = max(1, min(min_points - 1 if min_points > 1 else 1, int(config.pending_min_points)))
+    pending_clearance: float | None = None
+
+    for cluster in clusters:
+        bins = {_spatial_bin(sample, config) for sample in cluster}
+        clearance = _percentile([sample[0] for sample in cluster], config.percentile)
+        if clearance is None:
+            continue
+        clearance = round(max(0.0, float(clearance)), 3)
+        if len(cluster) >= min_points and len(bins) >= min_bins:
+            confidence = round(
+                min(1.0, len(cluster) / min_points) * min(1.0, len(bins) / min_bins),
+                3,
+            )
+            return ClusterResult(
+                clearance_m=clearance,
+                confidence=confidence,
+                selected_points=len(cluster),
+                selected_spatial_bins=len(bins),
+                cluster_count=len(clusters),
+                pending_clearance_m=pending_clearance,
+            )
+        if pending_clearance is None and len(cluster) >= pending_min_points:
+            pending_clearance = clearance
+
+    return ClusterResult(
+        clearance_m=None,
+        confidence=0.0,
+        selected_points=0,
+        selected_spatial_bins=0,
+        cluster_count=len(clusters),
+        pending_clearance_m=pending_clearance,
+    )
+
+
+def _conservative_clearance(*values: float | None) -> float | None:
+    known = [float(value) for value in values if isinstance(value, (int, float)) and float(value) >= 0.0]
+    return min(known) if known else None
+
+
+def _directional_results(
+    values: Mapping[str, Sequence[DirectionalSample]],
+    config: Xt16GeometryConfig,
+) -> dict[str, ClusterResult]:
+    return {direction: _cluster_result(direction_values, config) for direction, direction_values in values.items()}
+
+
+def _low_hazard_directions(
+    low_hazard_clearance: Mapping[str, float | None],
+) -> list[str]:
+    thresholds = {
+        "front": 0.8,
+        "left": 0.8,
+        "right": 0.8,
+        "rear": 0.6,
+    }
+    return [
+        direction
+        for direction in ("front", "left", "right", "rear")
+        if isinstance(low_hazard_clearance.get(direction), (int, float))
+        and float(low_hazard_clearance[direction]) < thresholds[direction]
+    ]
+
+
+def _pending_low_hazard_directions(
+    pending_clearance: Mapping[str, float | None],
+) -> list[str]:
+    thresholds = {
+        "front": 0.8,
+        "left": 0.8,
+        "right": 0.8,
+        "rear": 0.6,
+    }
+    return [
+        direction
+        for direction in ("front", "left", "right", "rear")
+        if isinstance(pending_clearance.get(direction), (int, float))
+        and float(pending_clearance[direction]) < thresholds[direction]
+    ]
 
 
 def _blocked_directions(summary: dict[str, Any]) -> list[str]:
@@ -109,11 +223,14 @@ def _recommended_action(summary: dict[str, Any]) -> str:
     front = summary.get("front_clearance_m")
     left = summary.get("left_clearance_m")
     right = summary.get("right_clearance_m")
+    rear = summary.get("rear_clearance_m")
     if isinstance(front, (int, float)) and 0 <= float(front) < 0.8:
         return "pause"
     if isinstance(left, (int, float)) and 0 <= float(left) < 0.8:
         return "pause"
     if isinstance(right, (int, float)) and 0 <= float(right) < 0.8:
+        return "pause"
+    if isinstance(rear, (int, float)) and 0 <= float(rear) < 0.6:
         return "pause"
     if isinstance(front, (int, float)) and 0 <= float(front) < 1.5:
         return "go_slow"
@@ -133,14 +250,19 @@ def build_xt16_geometry_summary(
     latency_ms: float | None = None,
 ) -> dict[str, Any]:
     cfg = config or Xt16GeometryConfig()
-    front_values: list[float] = []
-    left_values: list[float] = []
-    right_values: list[float] = []
-    rear_values: list[float] = []
+    body_values: dict[str, list[DirectionalSample]] = {
+        direction: [] for direction in ("front", "left", "right", "rear")
+    }
+    low_hazard_values: dict[str, list[DirectionalSample]] = {
+        direction: [] for direction in ("front", "left", "right", "rear")
+    }
     total_points = 0
     finite_points = 0
     height_filtered_points = 0
+    body_height_points = 0
+    low_hazard_height_points = 0
     footprint_filtered_points = 0
+    body_min_z_m = max(cfg.min_z_m, min(cfg.body_min_z_m, cfg.max_z_m))
 
     for point in points:
         total_points += 1
@@ -152,6 +274,11 @@ def build_xt16_geometry_summary(
         if vertical < cfg.min_z_m or vertical > cfg.max_z_m:
             continue
         height_filtered_points += 1
+        height_values = body_values if vertical >= body_min_z_m else low_hazard_values
+        if height_values is body_values:
+            body_height_points += 1
+        else:
+            low_hazard_height_points += 1
         in_footprint = (
             -cfg.footprint_rear_m <= forward <= cfg.footprint_front_m
             and abs(lateral) <= cfg.footprint_half_width_m
@@ -161,24 +288,51 @@ def build_xt16_geometry_summary(
             continue
 
         if cfg.footprint_front_m < forward <= cfg.range_m and abs(lateral) <= cfg.front_half_width_m:
-            front_values.append(forward - cfg.footprint_front_m)
+            height_values["front"].append((forward - cfg.footprint_front_m, lateral, vertical))
         if cfg.footprint_half_width_m < lateral <= cfg.range_m and abs(forward) <= cfg.side_forward_m:
-            left_values.append(lateral - cfg.footprint_half_width_m)
+            height_values["left"].append((lateral - cfg.footprint_half_width_m, forward, vertical))
         if -cfg.range_m <= lateral < -cfg.footprint_half_width_m and abs(forward) <= cfg.side_forward_m:
-            right_values.append(-lateral - cfg.footprint_half_width_m)
+            height_values["right"].append((-lateral - cfg.footprint_half_width_m, forward, vertical))
         if -cfg.range_m <= forward < -cfg.footprint_rear_m and abs(lateral) <= cfg.rear_half_width_m:
-            rear_values.append(-forward - cfg.footprint_rear_m)
+            height_values["rear"].append((-forward - cfg.footprint_rear_m, lateral, vertical))
 
-    front = _clearance(front_values, cfg)
-    left = _clearance(left_values, cfg)
-    right = _clearance(right_values, cfg)
-    rear = _clearance(rear_values, cfg)
-    roi_confidence = {
-        "front": _roi_confidence(len(front_values), cfg),
-        "left": _roi_confidence(len(left_values), cfg),
-        "right": _roi_confidence(len(right_values), cfg),
-        "rear": _roi_confidence(len(rear_values), cfg),
+    body_results = _directional_results(body_values, cfg)
+    low_hazard_results = _directional_results(low_hazard_values, cfg)
+    body_clearance = {direction: result.clearance_m for direction, result in body_results.items()}
+    low_hazard_clearance = {direction: result.clearance_m for direction, result in low_hazard_results.items()}
+    body_roi_confidence = {direction: result.confidence for direction, result in body_results.items()}
+    low_hazard_roi_confidence = {direction: result.confidence for direction, result in low_hazard_results.items()}
+    pending_body_clearance = {
+        direction: result.pending_clearance_m for direction, result in body_results.items()
     }
+    pending_low_hazard_clearance = {
+        direction: result.pending_clearance_m for direction, result in low_hazard_results.items()
+    }
+    pending_body_directions = _pending_low_hazard_directions(pending_body_clearance)
+    pending_low_hazard_directions = _pending_low_hazard_directions(pending_low_hazard_clearance)
+    cloud_supports_no_return = finite_points >= max(1, int(cfg.min_cloud_points_for_no_return))
+    body_no_return_directions: list[str] = []
+    if cloud_supports_no_return:
+        for direction in ("front", "left", "right", "rear"):
+            if body_clearance[direction] is None and direction not in pending_body_directions:
+                body_clearance[direction] = round(float(cfg.range_m), 3)
+                body_roi_confidence[direction] = round(
+                    max(0.0, min(1.0, float(cfg.no_return_confidence))),
+                    3,
+                )
+                body_no_return_directions.append(direction)
+    clearance = {
+        direction: _conservative_clearance(body_clearance[direction], low_hazard_clearance[direction])
+        for direction in ("front", "left", "right", "rear")
+    }
+    roi_confidence = {
+        direction: max(body_roi_confidence[direction], low_hazard_roi_confidence[direction])
+        for direction in ("front", "left", "right", "rear")
+    }
+    front = clearance["front"]
+    left = clearance["left"]
+    right = clearance["right"]
+    rear = clearance["rear"]
     confidence = round(min(roi_confidence["front"], roi_confidence["left"], roi_confidence["right"]), 3)
     missing_required = [name for name, value in {"front": front, "left": left, "right": right}.items() if value is None]
     stale_reasons: list[str] = []
@@ -186,11 +340,16 @@ def build_xt16_geometry_summary(
         stale_reasons.append("uncalibrated_xt16_geometry")
     if missing_required:
         stale_reasons.append("missing_required_roi:" + ",".join(missing_required))
+    if pending_body_directions:
+        stale_reasons.append("pending_body_obstacle:" + ",".join(pending_body_directions))
+    if pending_low_hazard_directions:
+        stale_reasons.append("pending_low_hazard:" + ",".join(pending_low_hazard_directions))
     if total_points == 0 or finite_points == 0:
         stale_reasons.append("empty_or_invalid_pointcloud")
 
     summary: dict[str, Any] = {
         "type": "local_obstacle_summary",
+        "schema_version": 2,
         "source": "lidar_pointcloud",
         "timestamp_ms": int(timestamp_ms if timestamp_ms is not None else now_ms()),
         "frame_id": frame_id,
@@ -199,8 +358,17 @@ def build_xt16_geometry_summary(
         "left_clearance_m": left,
         "right_clearance_m": right,
         "rear_clearance_m": rear,
+        "body_clearance_m": body_clearance,
+        "low_hazard_clearance_m": low_hazard_clearance,
+        "low_hazard_directions": _low_hazard_directions(low_hazard_clearance),
+        "pending_body_clearance_m": pending_body_clearance,
+        "pending_body_directions": pending_body_directions,
+        "pending_low_hazard_clearance_m": pending_low_hazard_clearance,
+        "pending_low_hazard_directions": pending_low_hazard_directions,
         "confidence": confidence,
         "roi_confidence": roi_confidence,
+        "body_roi_confidence": body_roi_confidence,
+        "low_hazard_roi_confidence": low_hazard_roi_confidence,
         "latency_ms": latency_ms,
         "stale": bool(stale_reasons),
         "stale_reasons": stale_reasons,
@@ -211,15 +379,44 @@ def build_xt16_geometry_summary(
             "points_total": total_points,
             "points_finite": finite_points,
             "points_in_height_band": height_filtered_points,
+            "points_in_body_height_band": body_height_points,
+            "points_in_low_hazard_band": low_hazard_height_points,
             "points_excluded_footprint": footprint_filtered_points,
+            "cloud_supports_no_return": cloud_supports_no_return,
+            "body_no_return_directions": body_no_return_directions,
             "roi_counts": {
-                "front": len(front_values),
-                "left": len(left_values),
-                "right": len(right_values),
-                "rear": len(rear_values),
+                direction: len(body_values[direction]) + len(low_hazard_values[direction])
+                for direction in ("front", "left", "right", "rear")
+            },
+            "body_roi_counts": {direction: len(values) for direction, values in body_values.items()},
+            "low_hazard_roi_counts": {direction: len(values) for direction, values in low_hazard_values.items()},
+            "body_cluster_support": {
+                direction: {
+                    "clusters": result.cluster_count,
+                    "selected_points": result.selected_points,
+                    "selected_spatial_bins": result.selected_spatial_bins,
+                }
+                for direction, result in body_results.items()
+            },
+            "low_hazard_cluster_support": {
+                direction: {
+                    "clusters": result.cluster_count,
+                    "selected_points": result.selected_points,
+                    "selected_spatial_bins": result.selected_spatial_bins,
+                }
+                for direction, result in low_hazard_results.items()
             },
             "percentile": cfg.percentile,
+            "clearance_cluster_gap_m": cfg.clearance_cluster_gap_m,
+            "support_bin_m": cfg.support_bin_m,
+            "min_spatial_bins": cfg.min_spatial_bins,
+            "min_cloud_points_for_no_return": cfg.min_cloud_points_for_no_return,
+            "no_return_confidence": cfg.no_return_confidence,
             "calibrated": cfg.calibrated,
+            "height_bands_m": {
+                "low_hazard": [cfg.min_z_m, body_min_z_m],
+                "body": [body_min_z_m, cfg.max_z_m],
+            },
             "axes": {
                 "forward": cfg.forward_axis,
                 "lateral": cfg.lateral_axis,

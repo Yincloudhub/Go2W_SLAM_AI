@@ -66,7 +66,14 @@ def config_from_args(args: argparse.Namespace) -> Xt16GeometryConfig:
         footprint_rear_m=args.footprint_rear_m,
         footprint_half_width_m=args.footprint_half_width_m,
         min_z_m=args.min_z_m,
+        body_min_z_m=args.body_min_z_m,
         max_z_m=args.max_z_m,
+        clearance_cluster_gap_m=args.clearance_cluster_gap_m,
+        support_bin_m=args.support_bin_m,
+        min_spatial_bins=args.min_spatial_bins,
+        pending_min_points=args.pending_min_points,
+        min_cloud_points_for_no_return=args.min_cloud_points_for_no_return,
+        no_return_confidence=args.no_return_confidence,
         forward_axis=args.forward_axis,
         lateral_axis=args.lateral_axis,
         vertical_axis=args.vertical_axis,
@@ -187,14 +194,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--side-forward-m", type=float, default=0.75)
     parser.add_argument("--rear-half-width-m", type=float, default=0.45)
     parser.add_argument("--footprint-front-m", type=float, default=0.35)
-    parser.add_argument("--footprint-rear-m", type=float, default=0.35)
-    parser.add_argument("--footprint-half-width-m", type=float, default=0.32)
+    parser.add_argument("--footprint-rear-m", type=float, default=0.45)
+    parser.add_argument("--footprint-half-width-m", type=float, default=0.40)
     parser.add_argument("--min-z-m", type=float, default=-0.25)
+    parser.add_argument("--body-min-z-m", type=float, default=-0.10)
     parser.add_argument("--max-z-m", type=float, default=1.20)
-    parser.add_argument("--forward-axis", choices=("x", "y", "z"), default="x")
-    parser.add_argument("--lateral-axis", choices=("x", "y", "z"), default="y")
+    parser.add_argument("--clearance-cluster-gap-m", type=float, default=0.15)
+    parser.add_argument("--support-bin-m", type=float, default=0.05)
+    parser.add_argument("--min-spatial-bins", type=int, default=2)
+    parser.add_argument("--pending-min-points", type=int, default=3)
+    parser.add_argument("--min-cloud-points-for-no-return", type=int, default=1000)
+    parser.add_argument("--no-return-confidence", type=float, default=0.5)
+    parser.add_argument("--forward-axis", choices=("x", "y", "z"), default="y")
+    parser.add_argument("--lateral-axis", choices=("x", "y", "z"), default="x")
     parser.add_argument("--vertical-axis", choices=("x", "y", "z"), default="z")
-    parser.add_argument("--forward-sign", type=float, choices=(-1.0, 1.0), default=1.0)
+    parser.add_argument("--forward-sign", type=float, choices=(-1.0, 1.0), default=-1.0)
     parser.add_argument("--lateral-sign", type=float, choices=(-1.0, 1.0), default=1.0)
     parser.add_argument("--vertical-sign", type=float, choices=(-1.0, 1.0), default=1.0)
     parser.add_argument("--max-points", type=int, default=80000)

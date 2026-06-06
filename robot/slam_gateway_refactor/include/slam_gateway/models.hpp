@@ -206,20 +206,41 @@ struct LocalObstacleSummary {
     double left_clearance_m{6.0};
     double right_clearance_m{6.0};
     double rear_clearance_m{6.0};
+    double body_front_clearance_m{-1.0};
+    double body_left_clearance_m{-1.0};
+    double body_right_clearance_m{-1.0};
+    double body_rear_clearance_m{-1.0};
+    double low_hazard_front_clearance_m{-1.0};
+    double low_hazard_left_clearance_m{-1.0};
+    double low_hazard_right_clearance_m{-1.0};
+    double low_hazard_rear_clearance_m{-1.0};
     double confidence{0.0};
     double front_confidence{0.0};
     double left_confidence{0.0};
     double right_confidence{0.0};
+    double body_front_confidence{0.0};
+    double body_left_confidence{0.0};
+    double body_right_confidence{0.0};
+    double body_rear_confidence{0.0};
+    double low_hazard_front_confidence{0.0};
+    double low_hazard_left_confidence{0.0};
+    double low_hazard_right_confidence{0.0};
+    double low_hazard_rear_confidence{0.0};
     int64_t age_ms{-1};
     bool stale{true};
     std::vector<std::string> blocked_directions;
+    std::vector<std::string> low_hazard_directions;
     bool narrow_passage{false};
     std::string recommended_action{"normal"};
 
     nlohmann::json toJson() const
     {
+        const auto optional_clearance = [](double value) -> nlohmann::json {
+            return std::isfinite(value) && value >= 0.0 ? nlohmann::json(value) : nlohmann::json(nullptr);
+        };
         return {
             {"type", "local_obstacle_summary"},
+            {"schema_version", 2},
             {"timestamp_ms", timestamp_ms},
             {"frame_id", frame_id},
             {"source", source},
@@ -228,13 +249,38 @@ struct LocalObstacleSummary {
             {"left_clearance_m", left_clearance_m},
             {"right_clearance_m", right_clearance_m},
             {"rear_clearance_m", rear_clearance_m},
+            {"body_clearance_m", {
+                {"front", optional_clearance(body_front_clearance_m)},
+                {"left", optional_clearance(body_left_clearance_m)},
+                {"right", optional_clearance(body_right_clearance_m)},
+                {"rear", optional_clearance(body_rear_clearance_m)}
+            }},
+            {"low_hazard_clearance_m", {
+                {"front", optional_clearance(low_hazard_front_clearance_m)},
+                {"left", optional_clearance(low_hazard_left_clearance_m)},
+                {"right", optional_clearance(low_hazard_right_clearance_m)},
+                {"rear", optional_clearance(low_hazard_rear_clearance_m)}
+            }},
             {"confidence", confidence},
             {"front_confidence", front_confidence},
             {"left_confidence", left_confidence},
             {"right_confidence", right_confidence},
+            {"body_roi_confidence", {
+                {"front", body_front_confidence},
+                {"left", body_left_confidence},
+                {"right", body_right_confidence},
+                {"rear", body_rear_confidence}
+            }},
+            {"low_hazard_roi_confidence", {
+                {"front", low_hazard_front_confidence},
+                {"left", low_hazard_left_confidence},
+                {"right", low_hazard_right_confidence},
+                {"rear", low_hazard_rear_confidence}
+            }},
             {"age_ms", age_ms},
             {"stale", stale},
             {"blocked_directions", blocked_directions},
+            {"low_hazard_directions", low_hazard_directions},
             {"narrow_passage", narrow_passage},
             {"recommended_action", recommended_action}
         };
