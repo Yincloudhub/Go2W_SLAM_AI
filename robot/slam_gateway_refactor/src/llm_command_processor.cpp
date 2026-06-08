@@ -49,6 +49,13 @@ bool hasOperatorAck(const nlohmann::json& cmd)
     return confirm != cmd.end() && confirm->is_boolean() && confirm->get<bool>();
 }
 
+bool hasRuntimeWatchdog(const nlohmann::json& cmd)
+{
+    if (cmd.value("runtime_watchdog", false) != true) return false;
+    const std::string context = cmd.value("execution_context", "");
+    return context == "queue_executor_v1" || context == "python_closed_loop_v1";
+}
+
 bool isFreshEnoughForWaypoint(const LocalizationState& loc)
 {
     const bool status_ok =
@@ -160,6 +167,9 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
     }
 
     if (action == "navigate_to_pose") {
+        if (!hasRuntimeWatchdog(cmd)) {
+            return reject("runtime_watchdog_required_for_navigation");
+        }
         if (!cmd.contains("target_pose") || !cmd["target_pose"].is_object()) {
             return reject("missing_target_pose");
         }
@@ -180,6 +190,9 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
     }
 
     if (action == "resume_navigation") {
+        if (!hasRuntimeWatchdog(cmd)) {
+            return reject("runtime_watchdog_required_for_resume");
+        }
         auto safety = gateway_.getSafetyDecision();
         if (!safety.allow_navigation) {
             return {{"accepted", false}, {"reason", "safety_blocked"}, {"safety", safety.toJson()}, {"world_state", gateway_.buildWorldStateJson()}};

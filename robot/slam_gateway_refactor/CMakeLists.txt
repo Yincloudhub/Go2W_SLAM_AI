@@ -4,6 +4,7 @@ project(slam_gateway_refactor_v3 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+enable_testing()
 
 set(UNITREE_SDK2_ROOT "" CACHE PATH "Path to unitree_sdk2 root")
 if(NOT UNITREE_SDK2_ROOT)
@@ -105,6 +106,26 @@ target_link_libraries(slam_keyboard_client PRIVATE slam_gateway_core)
 
 add_executable(slam_llm_command_client src/llm_command_main.cpp)
 target_link_libraries(slam_llm_command_client PRIVATE slam_gateway_core)
+
+add_executable(safety_supervisor_smoke_test
+    src/safety_supervisor_smoke_test.cpp
+    src/safety_supervisor.cpp
+)
+target_include_directories(safety_supervisor_smoke_test PRIVATE
+    ${PROJECT_INCLUDE_DIR}
+    ${SDK_INCLUDE_DIRS}
+)
+add_test(NAME slam_gateway_safety_supervisor_smoke_test COMMAND safety_supervisor_smoke_test)
+
+add_executable(lidar_geometry_perception_smoke_test
+    src/lidar_geometry_perception_smoke_test.cpp
+    src/lidar_geometry_perception.cpp
+)
+target_include_directories(lidar_geometry_perception_smoke_test PRIVATE
+    ${PROJECT_INCLUDE_DIR}
+    ${SDK_INCLUDE_DIRS}
+)
+add_test(NAME slam_gateway_lidar_geometry_perception_smoke_test COMMAND lidar_geometry_perception_smoke_test)
 
 install(TARGETS slam_gateway_core slam_keyboard_client slam_llm_command_client
     RUNTIME DESTINATION bin

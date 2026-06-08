@@ -8,58 +8,89 @@ The robot-side source of truth is:
 /home/unitree/Go2W_SLAM_AI
 ```
 
-Run operator UI, web UI, Python checks, and C++ builds from this repo.
+Operator UI, web UI, Python checks, C++ builds, the Unitree gateway adapter,
+and the real-site registry all live in this repository.
 
-`/home/unitree/go2w_slam_agent` is a legacy compatibility copy. It is not a
-separate functional module and should not own map data. If it remains on the
-robot, its real-site registry should be a symlink to the active repo registry:
+The following old source trees are not runtime modules:
 
 ```text
-/home/unitree/go2w_slam_agent/configs/maps/go2w_real_site_map_registry.json
-  -> /home/unitree/Go2W_SLAM_AI/configs/maps/go2w_real_site_map_registry.json
+/home/unitree/go2w_slam_agent
+/home/unitree/slam_gateway_refactor
 ```
+
+They must be absent from the active filesystem or stored under
+`/home/unitree/_archive/`. Runtime launchers must never point to them.
 
 ## Map ownership
 
-The single real-site semantic registry is:
+There is one real-site semantic registry:
 
 ```text
 /home/unitree/Go2W_SLAM_AI/configs/maps/go2w_real_site_map_registry.json
 ```
 
-That registry owns semantic topology, aliases, relocalization anchors, and the
-binding to the live Unitree map files:
+It owns topology nodes, aliases, relocalization anchors, and bindings to the
+two Unitree runtime files:
 
 ```text
 pcd_path: /home/unitree/test.pcd
 topology_path: /home/unitree/topology_points.json
 ```
 
-The standalone gateway does not own this semantic registry. It receives concrete
-commands with `map_path`, pose, and target values, then calls Unitree SLAM.
+Python and C++ read this same registry. They do not maintain separate maps.
+Demo registries remain test fixtures and are never selected by the robot
+launchers.
 
 ## Runtime modules
 
 ```text
+scripts/start_go2w_runtime_stack.sh
+  -> XT16 driver
+  -> XT16 geometry sidecar
+  -> Unitree SLAM
+  -> robot/slam_gateway_refactor/build/slam_llm_command_client
+
 scripts/run_go2w_operator_ui.sh or scripts/run_go2w_operator_web.sh
   -> cpp/build/go2w_operator_panel
-      -> cpp GatewayClient
-          -> /home/unitree/slam_gateway_refactor/build/slam_llm_command_client
-              -> Unitree SLAM / SDK services
+      -> SemanticRouter / optional LLM fallback
+      -> TaskQueueValidator
+      -> SafetyGate
+      -> QueueExecutor runtime watchdog
+      -> robot/slam_gateway_refactor/build/slam_llm_command_client
+          -> SafetySupervisor
+          -> Unitree SLAM / SDK services
 ```
 
-Python remains in the repo for map tooling, offline checks, local LLM fallback,
-and test parity. New live robot execution policy should be implemented in C++
-first, then mirrored in Python only when useful for tests or diagnostics.
+The LLM resolves ambiguous language and proposes registered task-level actions.
+It cannot provide raw API IDs, bypass topology validation, grant motion
+permission, or override deterministic safety.
+
+## Readiness boundary
+
+- Service startup and gateway probing may succeed before localization.
+- Relocalization requires a verified anchor and operator confirmation, but not
+  all-around obstacle clearance because it does not move the chassis.
+- Enabling execution requires fresh localization.
+- Actual navigation additionally requires fresh calibrated XT16 perception,
+  gateway safety, queue preflight, and a runtime watchdog.
+- Arrival, timeout, stale state, or gateway errors request pause; queue success
+  requires pause acceptance.
 
 ## Verification
-
-Run this after robot sync or map changes:
 
 ```bash
 cd /home/unitree/Go2W_SLAM_AI
 python3 scripts/check_go2w_runtime_layout.py
-PYTHONPATH=src python3 -m unittest discover -s tests
-cmake -S cpp -B cpp/build
+python3 scripts/check_go2w_json_text.py configs/maps/go2w_real_site_map_registry.json
+python3 -m pytest -q
+
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
 cmake --build cpp/build -j$(nproc)
+cd cpp/build && ctest --output-on-failure
+
+cd /home/unitree/Go2W_SLAM_AI
+cmake -S robot/slam_gateway_refactor -B robot/slam_gateway_refactor/build -DCMAKE_BUILD_TYPE=Release
+cmake --build robot/slam_gateway_refactor/build -j$(nproc)
+./robot/slam_gateway_refactor/build/safety_supervisor_smoke_test
+./robot/slam_gateway_refactor/build/lidar_geometry_perception_smoke_test
 ```

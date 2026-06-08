@@ -91,6 +91,7 @@ private:
     std::string last_slam_info_raw_;
     std::string last_slam_key_info_raw_;
     int64_t last_pose_update_ms_{0};
+    int64_t last_pose_source_timestamp_ns_{0};
     int64_t localization_lost_since_ms_{0};
 
     TopologyManager topology_;

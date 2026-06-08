@@ -193,7 +193,7 @@ class WebConfig:
     llm_http_model: str = "local"
     stereo_summary_path: Path = Path("artifacts/stereo_depth_summary.json")
     stereo_stale_ms: int = 5000
-    stereo_motion_guard_required: bool = True
+    stereo_motion_guard_required: bool = False
     stereo_motion_guard_stale_ms: int = 1000
     stereo_motion_guard_min_roi_confidence: float = 0.15
     stereo_motion_guard_min_clearance_m: float = 0.8
@@ -426,13 +426,13 @@ class OperatorWebApp:
         if line == "/execute on":
             status = self.status(force=True)
             summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
-            if summary.get("loc") != "true" or summary.get("safety") != "ok":
+            if summary.get("loc") != "true":
                 return {
                     "handled": True,
                     "accepted": False,
                     "exit_code": 3,
                     "stdout": "",
-                    "stderr": "execute on blocked: localization and safety gate must be ready.\n",
+                    "stderr": "execute on blocked: localization must be ready.\n",
                     "summary": summary,
                     "stereo_summary": self.stereo_summary(),
                     "semantic_summary": self.semantic_summary(),
@@ -440,7 +440,7 @@ class OperatorWebApp:
                     "state": self.state.snapshot(),
                 }
             stereo_guard = self.stereo_motion_guard()
-            if not stereo_guard["allowed"]:
+            if self.config.stereo_motion_guard_required and not stereo_guard["allowed"]:
                 return {
                     "handled": True,
                     "accepted": False,
@@ -459,7 +459,7 @@ class OperatorWebApp:
             now = time.monotonic()
             status = self.status(force=True)
             summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
-            if summary.get("loc") == "true" and summary.get("safety") == "ok":
+            if summary.get("loc") == "true":
                 return {
                     "accepted": False,
                     "exit_code": 3,
@@ -1518,7 +1518,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser = argparse.ArgumentParser(description="GO2W thin browser operator UI")
     parser.add_argument("--repo-root", default=env.get("GO2W_REPO_ROOT", str(repo_default)))
     parser.add_argument("--panel-bin", default=env.get("GO2W_OPERATOR_PANEL_BIN", ""))
-    parser.add_argument("--gateway-client", default=env.get("GO2W_GATEWAY_CLIENT", "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"))
+    parser.add_argument("--gateway-client", default=env.get("GO2W_GATEWAY_CLIENT", ""))
     parser.add_argument("--start-slam-script", default=env.get("GO2W_START_SLAM_SCRIPT", ""))
     parser.add_argument("--start-rviz2-script", default=env.get("GO2W_START_RVIZ2_SCRIPT", ""))
     parser.add_argument("--capture-command", default=env.get("GO2W_CAPTURE_COMMAND", ""))
@@ -1533,7 +1533,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--llm-http-model", default=env.get("GO2W_LLM_HTTP_MODEL", "local"))
     parser.add_argument("--stereo-summary-path", default=env.get("GO2W_STEREO_SUMMARY_PATH", "artifacts/stereo_depth_summary.json"))
     parser.add_argument("--stereo-stale-ms", type=int, default=int(env.get("GO2W_STEREO_STALE_MS", "5000")))
-    parser.add_argument("--stereo-motion-guard-required", action="store_true", default=truthy(env.get("GO2W_STEREO_MOTION_GUARD_REQUIRED", "1")))
+    parser.add_argument("--stereo-motion-guard-required", action="store_true", default=truthy(env.get("GO2W_STEREO_MOTION_GUARD_REQUIRED", "0")))
     parser.add_argument("--stereo-motion-guard-stale-ms", type=int, default=int(env.get("GO2W_STEREO_SAFETY_STALE_MS", "1000")))
     parser.add_argument("--stereo-motion-guard-min-roi-confidence", type=float, default=float(env.get("GO2W_STEREO_MOTION_GUARD_MIN_ROI_CONFIDENCE", "0.15")))
     parser.add_argument("--stereo-motion-guard-min-clearance-m", type=float, default=float(env.get("GO2W_STEREO_MOTION_GUARD_MIN_CLEARANCE_M", "0.8")))
@@ -1555,7 +1555,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     return WebConfig(
         repo_root=repo_root,
         panel_bin=panel_bin,
-        gateway_client=args.gateway_client,
+        gateway_client=args.gateway_client or str(repo_root / "robot" / "slam_gateway_refactor" / "build" / "slam_llm_command_client"),
         start_slam_script=start_slam_script,
         start_rviz2_script=start_rviz2_script,
         capture_command=args.capture_command,

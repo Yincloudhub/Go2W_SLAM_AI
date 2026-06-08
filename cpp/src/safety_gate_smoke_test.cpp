@@ -45,7 +45,7 @@ int main()
 
     auto stale = world(2.0, 2.0, 2.0);
     stale["world_state"]["local_obstacle"]["stale"] = true;
-    require(gate.evaluateWorldState(stale).allowed, "stale sensor summary should not override gateway safety");
+    require(!gate.evaluateWorldState(stale).allowed, "stale trusted sensor summary should fail closed");
 
     auto adapter_fresh = world(2.0, 2.0, 0.6);
     adapter_fresh["world_state"]["local_obstacle"]["age_ms"] = 2500;

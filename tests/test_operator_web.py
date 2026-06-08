@@ -300,6 +300,7 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
+                stereo_motion_guard_required=True,
             )
             app = FakeApp(config)
 
@@ -333,10 +334,33 @@ class OperatorWebTests(unittest.TestCase):
             self.assertFalse(blocked["accepted"])
             self.assertIn("right_obstacle_too_close", blocked["stderr"])
 
+    def test_execute_on_does_not_require_all_around_clearance(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "true", "safety": "side_obstacle_too_close"}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                )
+            )
+
+            result = app.command("/execute on", confirmed=True)
+
+            self.assertTrue(result["accepted"])
+            self.assertTrue(app.state.execute_enabled)
+            self.assertFalse(app.config.stereo_motion_guard_required)
+
     def test_relocate_is_blocked_when_localization_is_already_healthy(self):
         class FakeApp(web.OperatorWebApp):
             def status(self, *, force=False):
-                return {"summary": {"loc": "true", "safety": "ok"}}
+                return {"summary": {"loc": "true", "safety": "side_obstacle_too_close"}}
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

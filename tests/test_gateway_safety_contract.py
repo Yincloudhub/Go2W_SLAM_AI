@@ -48,11 +48,11 @@ class GatewaySafetyContractTests(unittest.TestCase):
         self.assertTrue(allowed, reason)
         self.assertIn("gateway allows navigation", reason)
 
-    def test_stale_summary_does_not_override_gateway_safety(self):
+    def test_stale_trusted_summary_fails_closed(self):
         allowed, reason = gateway_allows_navigation(world_state(stale=True))
 
-        self.assertTrue(allowed, reason)
-        self.assertIn("gateway allows navigation", reason)
+        self.assertFalse(allowed)
+        self.assertIn("stale", reason)
 
     def test_adapter_fresh_summary_blocks_even_when_older_than_default_period(self):
         allowed, reason = gateway_allows_navigation(world_state(age_ms=2500, right=0.6))

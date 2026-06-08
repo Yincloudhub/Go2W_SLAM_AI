@@ -124,7 +124,7 @@ The machine-readable path is intentionally stricter than the keyboard path:
 ## Important notes
 
 1. This code does not modify official `unitree_slam` internals.
-2. `LidarGeometryPerception` accepts the versioned XT16 summary from `GO2W_LIDAR_GEOMETRY_SUMMARY_PATH` and falls back to the D435 ROI summary. XT16 output remains fail-closed until its sidecar is explicitly marked calibrated. Schema version 2 preserves legacy directional clearances while adding body-height and low-hazard classifications.
+2. `LidarGeometryPerception` treats XT16 as the primary safety source. A present but stale or uncalibrated XT16 summary remains fail-closed and cannot be hidden by D435. When both sources are fresh, directional clearance is conservatively fused by keeping the nearer obstacle. D435 is used alone only when no XT16 summary exists.
 3. The keyboard path and LLM path are intentionally separated:
    - `slam_keyboard_client`: original manual operation.
    - `slam_llm_command_client`: structured command input for LLM/task executor.

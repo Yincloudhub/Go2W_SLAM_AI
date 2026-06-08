@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <thread>
@@ -195,6 +196,12 @@ ServiceResult SlamGateway::stopNode()
 
 void SlamGateway::addCurrentPoseAsWaypoint(const std::string& name)
 {
+    const auto localization = getLocalizationState();
+    if (localization.status != "localized" || localization.pose_age_ms < 0 || localization.pose_age_ms > 500) {
+        std::cout << "Reject waypoint capture: localization is not fresh." << std::endl;
+        return;
+    }
+
     PoseData pose;
     {
         std::lock_guard<std::mutex> lk(state_mutex_);
@@ -289,7 +296,15 @@ void SlamGateway::taskLoop(bool loop_patrol)
             }
 
             is_arrived_.store(false);
-            submitNavigationGoal(poses[i]);
+            const auto navigation_result = submitNavigationGoal(poses[i]);
+            if (!navigation_result.ok) {
+                std::cout << "Navigation request rejected for waypoint: " << poses[i].name << std::endl;
+                const auto pause_result = pauseNavigation();
+                std::cout << "Pause after rejected navigation accepted="
+                          << (pause_result.ok ? "true" : "false") << std::endl;
+                thread_control_.store(false);
+                return;
+            }
 
             const auto start = std::chrono::steady_clock::now();
             while (!is_arrived_.load() && thread_control_.load()) {
@@ -309,11 +324,26 @@ void SlamGateway::taskLoop(bool loop_patrol)
                 const double elapsed = std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::steady_clock::now() - start).count();
                 if (elapsed > 60.0) {
-                    std::lock_guard<std::mutex> lk(state_mutex_);
-                    nav_state_.state = "timeout";
-                    nav_state_.failure_reason = "navigation_timeout";
+                    {
+                        std::lock_guard<std::mutex> lk(state_mutex_);
+                        nav_state_.state = "timeout";
+                        nav_state_.failure_reason = "navigation_timeout";
+                    }
                     std::cout << "Navigation timeout on waypoint: " << poses[i].name << std::endl;
-                    break;
+                    const auto pause_result = pauseNavigation();
+                    std::cout << "Pause after timeout accepted="
+                              << (pause_result.ok ? "true" : "false") << std::endl;
+                    thread_control_.store(false);
+                    return;
+                }
+            }
+
+            if (is_arrived_.load()) {
+                const auto pause_result = pauseNavigation();
+                if (!pause_result.ok) {
+                    std::cout << "Arrival confirmed but pause was rejected." << std::endl;
+                    thread_control_.store(false);
+                    return;
                 }
             }
         }
@@ -440,20 +470,62 @@ void SlamGateway::slamInfoHandler(const void* message)
         }
 
         if (jsonData.value("type", "") == "pos_info") {
+            if (!jsonData.contains("data") || !jsonData["data"].is_object() ||
+                !jsonData["data"].contains("currentPose") || !jsonData["data"]["currentPose"].is_object()) {
+                std::cout << "slam_info rejected: missing data.currentPose" << std::endl;
+                return;
+            }
+            const auto& cp = jsonData["data"]["currentPose"];
+            const auto finite_number = [&](const char* key) {
+                return cp.contains(key) && cp.at(key).is_number() &&
+                    std::isfinite(cp.at(key).get<double>());
+            };
+            for (const char* key : {"x", "y", "z", "q_x", "q_y", "q_z", "q_w"}) {
+                if (!finite_number(key)) {
+                    std::cout << "slam_info rejected: invalid currentPose." << key << std::endl;
+                    return;
+                }
+            }
+            const double qx = cp.at("q_x").get<double>();
+            const double qy = cp.at("q_y").get<double>();
+            const double qz = cp.at("q_z").get<double>();
+            const double qw = cp.at("q_w").get<double>();
+            const double quaternion_norm = std::sqrt(qx * qx + qy * qy + qz * qz + qw * qw);
+            if (!std::isfinite(quaternion_norm) || quaternion_norm < 0.5 || quaternion_norm > 1.5) {
+                std::cout << "slam_info rejected: invalid quaternion norm" << std::endl;
+                return;
+            }
+            if (!jsonData.contains("sec") || !jsonData.at("sec").is_number_integer() ||
+                !jsonData.contains("nanosec") || !jsonData.at("nanosec").is_number_integer()) {
+                std::cout << "slam_info rejected: missing source timestamp" << std::endl;
+                return;
+            }
+            const int64_t sec = jsonData.at("sec").get<int64_t>();
+            const int64_t nanosec = jsonData.at("nanosec").get<int64_t>();
+            if (sec < 0 || nanosec < 0 || nanosec >= 1000000000LL) {
+                std::cout << "slam_info rejected: invalid source timestamp" << std::endl;
+                return;
+            }
+            const int64_t source_timestamp_ns = sec * 1000000000LL + nanosec;
+
             CurrentPose p;
             p.timestamp_ms = nowMs();
-            const auto& cp = jsonData["data"]["currentPose"];
-            p.pose.x = cp.value("x", 0.0f);
-            p.pose.y = cp.value("y", 0.0f);
-            p.pose.z = cp.value("z", 0.0f);
-            p.pose.q_x = cp.value("q_x", 0.0f);
-            p.pose.q_y = cp.value("q_y", 0.0f);
-            p.pose.q_z = cp.value("q_z", 0.0f);
-            p.pose.q_w = cp.value("q_w", 1.0f);
+            p.pose.x = cp.at("x").get<float>();
+            p.pose.y = cp.at("y").get<float>();
+            p.pose.z = cp.at("z").get<float>();
+            p.pose.q_x = static_cast<float>(qx);
+            p.pose.q_y = static_cast<float>(qy);
+            p.pose.q_z = static_cast<float>(qz);
+            p.pose.q_w = static_cast<float>(qw);
 
             std::lock_guard<std::mutex> lk(state_mutex_);
+            if (source_timestamp_ns <= last_pose_source_timestamp_ns_) {
+                std::cout << "slam_info rejected: source timestamp did not advance" << std::endl;
+                return;
+            }
             current_pose_ = p;
             last_pose_update_ms_ = p.timestamp_ms;
+            last_pose_source_timestamp_ns_ = source_timestamp_ns;
             localization_lost_since_ms_ = 0;
             last_slam_info_raw_ = raw;
             updateDistanceToGoalLocked();

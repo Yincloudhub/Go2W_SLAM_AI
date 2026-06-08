@@ -13,7 +13,7 @@ namespace go2w {
 
 struct OperatorPanelConfig {
     std::string repo_root = "..";
-    std::string gateway_client = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client";
+    std::string gateway_client = "/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor/build/slam_llm_command_client";
     std::string network_interface = "eth0";
     std::string python = "python3";
     std::string registry_path = "configs/maps/go2w_real_site_map_registry.json";

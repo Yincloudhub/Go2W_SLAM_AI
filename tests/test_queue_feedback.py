@@ -1,11 +1,12 @@
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from types import SimpleNamespace
 
 from edge_autonomy.map_registry import MapRegistry
-from scripts.run_robot_closed_loop import generate_llm_feedback_result, operator_feedback_message
+from scripts.run_robot_closed_loop import generate_llm_feedback_result, operator_feedback_message, wait_for_arrival
 from scripts.run_robot_closed_loop import execute_task_queue
 
 
@@ -190,6 +191,47 @@ class QueueFeedbackTests(unittest.TestCase):
 
         self.assertEqual(result["source"], "template_queue_budget")
         self.assertTrue(result["live_deferred"])
+
+    def test_runtime_safety_failure_requests_pause(self) -> None:
+        state = {
+            "world_state": {
+                "safety": {"allow_navigation": False, "reason": "local_obstacle_not_fresh"},
+                "slam_health": {"status": "ok", "slam_alive": True, "localization_alive": True},
+                "localization": {"status": "localized", "confidence": 0.9, "pose_age_ms": 100},
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
+                "local_obstacle": {"source": "lidar_pointcloud", "stale": True, "age_ms": 100},
+            }
+        }
+        args = SimpleNamespace(
+            gateway_client="gateway",
+            network_interface="eth0",
+            timeout_s=1,
+            gateway_startup_wait_s=0.0,
+            gateway_error_limit=1,
+            slam_poll_interval_s=0.1,
+            arrival_monitor_interval_s=0.1,
+            ui_refresh_interval_s=0.1,
+            operator_feedback_interval_s=1.0,
+            llm_feedback_interval_s=1.0,
+            max_arrival_samples=10,
+            max_feedback_events=10,
+            max_llm_feedback_events=10,
+            arrival_monitor_s=1.0,
+            arrival_distance_m=0.25,
+            arrival_confirm_samples=2,
+            llm_feedback_mode="off",
+        )
+
+        with patch("scripts.run_robot_closed_loop.run_gateway_command", side_effect=[state, {"accepted": True}]) as gateway:
+            result = wait_for_arrival(
+                {"target_node": "wp_a", "target_pose": {"x": 1.0, "y": 0.0}},
+                args,
+                target_name="A",
+            )
+
+        self.assertFalse(result["arrived"])
+        self.assertTrue(result["paused"])
+        self.assertEqual(gateway.call_args_list[1].args[0], {"action": "pause_navigation"})
 
 
 if __name__ == "__main__":

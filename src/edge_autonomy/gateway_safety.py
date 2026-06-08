@@ -79,24 +79,27 @@ def gateway_allows_navigation(
         return False, "current pose x/y is invalid"
 
     obstacle = _dict_at(world_state, "local_obstacle")
-    if obstacle is not None and obstacle.get("source") in TRUSTED_OBSTACLE_SOURCES and obstacle.get("stale") is False:
+    if obstacle is not None and obstacle.get("source") in TRUSTED_OBSTACLE_SOURCES:
+        if obstacle.get("stale") is not False:
+            return False, "trusted local_obstacle is stale"
         obstacle_age_ms = _finite_number(obstacle.get("age_ms"))
-        if obstacle_age_ms is not None and 0 <= obstacle_age_ms and (
-            max_obstacle_age_ms is None or obstacle_age_ms <= max_obstacle_age_ms
-        ):
-            obstacle_action = str(obstacle.get("recommended_action") or "")
-            if obstacle_action in {"pause", "stop", "emergency_stop"}:
-                return False, f"local_obstacle recommends {obstacle_action}"
-            for direction in ("front", "left", "right"):
-                roi_confidence = _finite_number(obstacle.get(f"{direction}_confidence"))
-                clearance = _finite_number(obstacle.get(f"{direction}_clearance_m"))
-                if (
-                    roi_confidence is not None
-                    and roi_confidence >= min_roi_confidence
-                    and clearance is not None
-                    and 0 <= clearance < min_clearance_m
-                ):
-                    return False, f"local_obstacle {direction} clearance is unsafe"
+        if obstacle_age_ms is None or obstacle_age_ms < 0:
+            return False, "trusted local_obstacle age is missing"
+        if max_obstacle_age_ms is not None and obstacle_age_ms > max_obstacle_age_ms:
+            return False, "trusted local_obstacle is too old"
+        obstacle_action = str(obstacle.get("recommended_action") or "")
+        if obstacle_action in {"pause", "stop", "emergency_stop"}:
+            return False, f"local_obstacle recommends {obstacle_action}"
+        for direction in ("front", "left", "right"):
+            roi_confidence = _finite_number(obstacle.get(f"{direction}_confidence"))
+            clearance = _finite_number(obstacle.get(f"{direction}_clearance_m"))
+            if (
+                roi_confidence is not None
+                and roi_confidence >= min_roi_confidence
+                and clearance is not None
+                and 0 <= clearance < min_clearance_m
+            ):
+                return False, f"local_obstacle {direction} clearance is unsafe"
 
     mode = str(safety.get("recommended_mode") or "")
     if mode and mode != "normal":

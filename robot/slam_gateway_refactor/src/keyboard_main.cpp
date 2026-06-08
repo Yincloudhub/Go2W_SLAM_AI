@@ -85,7 +85,11 @@ int main(int argc, const char** argv)
             gateway.pauseNavigation();
             break;
         case 'x':
-            gateway.resumeNavigation();
+            if (gateway.getSafetyDecision().allow_navigation) {
+                gateway.resumeNavigation();
+            } else {
+                std::cout << "Safety blocked resume_navigation." << std::endl;
+            }
             break;
         default:
             gateway.taskThreadStop();

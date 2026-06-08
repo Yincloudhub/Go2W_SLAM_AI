@@ -135,6 +135,9 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
             obstacle_source == "lidar_pointcloud" ||
             obstacle_source == "lidar_pointcloud+stereo_depth";
         const double obstacle_age_ms = obstacle->value("age_ms", -1.0);
+        if (trusted_obstacle_source && (obstacle->value("stale", true) || obstacle_age_ms < 0.0)) {
+            return blocked("trusted local_obstacle is stale", "hold");
+        }
         const bool fresh_obstacle = trusted_obstacle_source && !obstacle->value("stale", true) &&
             obstacle_age_ms >= 0.0;
         if (fresh_obstacle) {

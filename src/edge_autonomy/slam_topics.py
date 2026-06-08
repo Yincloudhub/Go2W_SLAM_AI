@@ -53,21 +53,33 @@ def parse_slam_info(
         current_pose = data["data"]["currentPose"]
     except KeyError as exc:
         raise SlamTopicParseError("pos_info is missing data.currentPose") from exc
+    if not isinstance(current_pose, dict):
+        raise SlamTopicParseError("pos_info data.currentPose must be an object")
 
-    qx = float(current_pose.get("q_x", 0.0))
-    qy = float(current_pose.get("q_y", 0.0))
-    qz = float(current_pose.get("q_z", 0.0))
-    qw = float(current_pose.get("q_w", 1.0))
+    values: dict[str, float] = {}
+    for key in ("x", "y", "z", "q_x", "q_y", "q_z", "q_w"):
+        if key not in current_pose:
+            raise SlamTopicParseError(f"pos_info currentPose is missing {key}")
+        try:
+            value = float(current_pose[key])
+        except (TypeError, ValueError) as exc:
+            raise SlamTopicParseError(f"pos_info currentPose.{key} must be numeric") from exc
+        if not math.isfinite(value):
+            raise SlamTopicParseError(f"pos_info currentPose.{key} must be finite")
+        values[key] = value
+    quaternion_norm = math.sqrt(sum(values[key] ** 2 for key in ("q_x", "q_y", "q_z", "q_w")))
+    if not 0.5 <= quaternion_norm <= 1.5:
+        raise SlamTopicParseError("pos_info quaternion norm is invalid")
     return CurrentPose(
         timestamp_ms=timestamp_ms if timestamp_ms is not None else now_ms(),
         map_id=map_id,
         frame_id=frame_id,
         pose=Pose2D(
-            x=float(current_pose.get("x", 0.0)),
-            y=float(current_pose.get("y", 0.0)),
-            yaw=quaternion_to_yaw(qx, qy, qz, qw),
+            x=values["x"],
+            y=values["y"],
+            yaw=quaternion_to_yaw(values["q_x"], values["q_y"], values["q_z"], values["q_w"]),
         ),
-        z=float(current_pose.get("z", 0.0)),
+        z=values["z"],
         source="rt/slam_info",
     )
 

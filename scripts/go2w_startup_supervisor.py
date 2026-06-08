@@ -22,9 +22,17 @@ try:
 except (AttributeError, ValueError):
     pass
 
+from edge_autonomy.runtime_readiness import (  # noqa: E402
+    assess_runtime_readiness,
+    gateway_response_from_output,
+    load_json_summary,
+)
 
-DEFAULT_GATEWAY_CLIENT = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"
+DEFAULT_GATEWAY_CLIENT = str(REPO_ROOT / "robot" / "slam_gateway_refactor" / "build" / "slam_llm_command_client")
 DEFAULT_START_SLAM_SCRIPT = REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh"
+DEFAULT_LIDAR_SUMMARY = REPO_ROOT / "artifacts" / "lidar_geometry_summary.json"
+DEFAULT_LLM_MODEL = Path("/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf")
+DEFAULT_LLM_ASK_SCRIPT = Path("/home/unitree/llm_runtime/scripts/ask_qwen.sh")
 
 
 @dataclass(frozen=True)
@@ -96,15 +104,22 @@ def run_step(step: StartupStep, *, dry_run: bool) -> dict[str, Any]:
             capture_output=True,
             timeout=step.timeout_s,
         )
+        gateway_response = (
+            gateway_response_from_output(completed.stdout)
+            if step.name == "gateway_world_state_probe"
+            else None
+        )
         record.update(
             {
                 "returncode": completed.returncode,
                 "stdout": completed.stdout[-4000:],
                 "stderr": completed.stderr[-4000:],
                 "elapsed_s": round(time.time() - start, 3),
-                "ok": completed.returncode == 0 or not step.required,
+                "ok": completed.returncode == 0,
             }
         )
+        if gateway_response is not None:
+            record["response"] = gateway_response
     except subprocess.TimeoutExpired as exc:
         record.update(
             {
@@ -112,23 +127,51 @@ def run_step(step: StartupStep, *, dry_run: bool) -> dict[str, Any]:
                 "stdout": (exc.stdout or "")[-4000:] if isinstance(exc.stdout, str) else "",
                 "stderr": (exc.stderr or "")[-4000:] if isinstance(exc.stderr, str) else "",
                 "elapsed_s": round(time.time() - start, 3),
-                "ok": not step.required,
+                "ok": False,
                 "timed_out": True,
+            }
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        record.update(
+            {
+                "returncode": None,
+                "stdout": "",
+                "stderr": str(exc),
+                "elapsed_s": round(time.time() - start, 3),
+                "ok": False,
             }
         )
     return record
 
 
-def startup_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+def startup_summary(
+    records: list[dict[str, Any]],
+    *,
+    lidar_summary: dict[str, Any] | None = None,
+    llm_configured: bool = False,
+) -> dict[str, Any]:
     failed_required = [item for item in records if item.get("required") and not item.get("ok")]
     gateway = next((item for item in records if item.get("name") == "gateway_world_state_probe"), None)
+    startup_ok = not failed_required
+    gateway_response = gateway.get("response") if isinstance(gateway, dict) else None
+    if not isinstance(gateway_response, dict) and gateway:
+        gateway_response = gateway_response_from_output(str(gateway.get("stdout") or ""))
+    readiness = assess_runtime_readiness(
+        gateway_response,
+        startup_ok=startup_ok,
+        lidar_summary=lidar_summary,
+        llm_configured=llm_configured,
+    )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "timestamp_ms": int(time.time() * 1000),
-        "ok": not failed_required,
+        "ok": startup_ok,
+        "startup_ok": startup_ok,
         "failed_required": [item["name"] for item in failed_required],
         "motion_commands_sent": any(item.get("starts_motion") for item in records if not item.get("dry_run")),
         "gateway_probe_ok": bool(gateway and gateway.get("returncode") == 0),
+        "readiness": readiness,
+        "gateway_response": gateway_response,
         "records": records,
     }
 
@@ -142,6 +185,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-slam-script", default=str(DEFAULT_START_SLAM_SCRIPT))
     parser.add_argument("--gateway-client", default=os.environ.get("GO2W_GATEWAY_CLIENT", DEFAULT_GATEWAY_CLIENT))
     parser.add_argument("--interface", default=os.environ.get("GO2W_NETWORK_INTERFACE", "eth0"))
+    parser.add_argument("--lidar-summary", default=os.environ.get("GO2W_LIDAR_GEOMETRY_SUMMARY_PATH", str(DEFAULT_LIDAR_SUMMARY)))
+    parser.add_argument("--llm-model", default=os.environ.get("GO2W_LLM_MODEL", str(DEFAULT_LLM_MODEL)))
+    parser.add_argument("--llm-ask-script", default=os.environ.get("GO2W_LLM_ASK_SCRIPT", str(DEFAULT_LLM_ASK_SCRIPT)))
+    parser.add_argument("--require-navigation-ready", action="store_true")
     return parser
 
 
@@ -155,18 +202,37 @@ def main(argv: list[str] | None = None) -> int:
         include_gateway_probe=not args.no_gateway_probe,
     )
     records = [run_step(step, dry_run=not args.run) for step in steps]
-    summary = startup_summary(records)
+    lidar_summary = load_json_summary(args.lidar_summary)
+    summary = startup_summary(
+        records,
+        lidar_summary=lidar_summary,
+        llm_configured=bool(os.environ.get("GO2W_LLM_HTTP_URL"))
+        or (Path(args.llm_model).is_file() and Path(args.llm_ask_script).is_file()),
+    )
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     else:
         mode = "RUN" if args.run else "DRY-RUN"
-        print(f"GO2W startup supervisor [{mode}] ok={summary['ok']} gateway_probe_ok={summary['gateway_probe_ok']}")
+        readiness = summary["readiness"]
+        print(
+            f"GO2W startup supervisor [{mode}] startup_ok={summary['startup_ok']} "
+            f"gateway_ready={readiness['gateway_ready']} relocalization_ready={readiness['relocalization_ready']} "
+            f"navigation_ready={readiness['navigation_ready']}"
+        )
         for item in records:
             rc = item.get("returncode")
             print(f"- {item['name']}: ok={item.get('ok')} rc={rc} required={item.get('required')}")
             if item.get("stderr"):
                 print(str(item["stderr"]).strip())
-    return 0 if summary["ok"] else 2
+        print(f"- localization: ready={readiness['localization_ready']} reason={readiness['localization_reason']}")
+        print(f"- perception: ready={readiness['perception_ready']} reason={readiness['perception_reason']}")
+        print(f"- navigation: ready={readiness['navigation_ready']} reason={readiness['navigation_reason']}")
+        print(f"- next_action: {readiness['next_action']}")
+    if not summary["ok"]:
+        return 2
+    if args.require_navigation_ready and not summary["readiness"]["acceptance_ok"]:
+        return 3
+    return 0
 
 
 if __name__ == "__main__":

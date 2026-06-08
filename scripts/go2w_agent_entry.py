@@ -36,7 +36,7 @@ from edge_autonomy.chassis_controller import (  # noqa: E402
 from edge_autonomy.execution_report import summarize_agent_output, write_execution_log  # noqa: E402
 
 
-DEFAULT_GATEWAY_CLIENT = "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"
+DEFAULT_GATEWAY_CLIENT = str(REPO_ROOT / "robot" / "slam_gateway_refactor" / "build" / "slam_llm_command_client")
 DEFAULT_START_SLAM = str(REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh")
 DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"

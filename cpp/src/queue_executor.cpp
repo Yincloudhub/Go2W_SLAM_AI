@@ -344,13 +344,22 @@ bool QueueExecutor::waitForArrival(
         };
     }
 
-    const auto bestEffortPause = [&](const std::string& reason) {
-        if (!event) return;
-        (*event)["pause_reason"] = reason;
+    const auto requestPause = [&](const std::string& reason) {
+        if (event) (*event)["pause_reason"] = reason;
         try {
-            (*event)["pause_result"] = sendGatewayCommand({{"action", "pause_navigation"}});
+            const auto pause_result = sendGatewayCommand({{"action", "pause_navigation"}});
+            const bool accepted = pause_result.value("accepted", false);
+            if (event) {
+                (*event)["pause_result"] = pause_result;
+                (*event)["pause_accepted"] = accepted;
+            }
+            return accepted;
         } catch (const std::exception& exc) {
-            (*event)["pause_error"] = exc.what();
+            if (event) {
+                (*event)["pause_error"] = exc.what();
+                (*event)["pause_accepted"] = false;
+            }
+            return false;
         }
     };
 
@@ -396,7 +405,7 @@ bool QueueExecutor::waitForArrival(
                     }
                     pushFeedback(event, feedbackMessage("blocked", "error", "运行中安全门阻断，已停止等待：" + runtime_safety.reason, target_node, name, distance), max_feedback_events);
                     pushLlmFeedback(event, llmFeedbackRequest("blocked", target_node, name, distance, runtime_safety.reason), max_llm_feedback_events);
-                    bestEffortPause(runtime_safety.reason);
+                    requestPause(runtime_safety.reason);
                     return false;
                 }
             }
@@ -420,9 +429,12 @@ bool QueueExecutor::waitForArrival(
             if (distance >= 0.0 && distance <= config_.arrival_distance_m) {
                 ++entered_count;
                 if (entered_count >= 2) {
-                    const auto pause_result = sendGatewayCommand({{"action", "pause_navigation"}});
-                    if (event) (*event)["pause_result"] = pause_result;
-                    log << "  已到达阈值，已发送暂停 accepted=" << (pause_result.value("accepted", false) ? "true" : "false") << "\n";
+                    const bool pause_accepted = requestPause("arrival threshold confirmed");
+                    log << "  已到达阈值，已发送暂停 accepted=" << (pause_accepted ? "true" : "false") << "\n";
+                    if (!pause_accepted) {
+                        if (event) (*event)["blocked_reason"] = "arrival reached but pause was not accepted";
+                        return false;
+                    }
                     pushFeedback(event, feedbackMessage("arrived", "ok", "已到达" + name + "，导航已暂停。", target_node, name, distance), max_feedback_events);
                     pushLlmFeedback(event, llmFeedbackRequest("arrived", target_node, name, distance, "arrived and paused"), max_llm_feedback_events);
                     return true;
@@ -439,7 +451,7 @@ bool QueueExecutor::waitForArrival(
                 if (event) (*event)["blocked_reason"] = reason;
                 pushFeedback(event, feedbackMessage("blocked", "error", "连续读取 SLAM 状态失败，停止等待并请求人工确认。", target_node, name), max_feedback_events);
                 pushLlmFeedback(event, llmFeedbackRequest("blocked", target_node, name, -1.0, reason), max_llm_feedback_events);
-                bestEffortPause(reason);
+                requestPause(reason);
                 return false;
             }
         }
@@ -448,7 +460,7 @@ bool QueueExecutor::waitForArrival(
     pushFeedback(event, feedbackMessage("timeout", "warning", "未在限定时间内确认到达" + name + "，停止后续队列。", target_node, name), max_feedback_events);
     if (event) (*event)["blocked_reason"] = "arrival threshold not reached before timeout";
     pushLlmFeedback(event, llmFeedbackRequest("timeout", target_node, name, -1.0, "arrival threshold not reached before timeout"), max_llm_feedback_events);
-    bestEffortPause("arrival threshold not reached before timeout");
+    requestPause("arrival threshold not reached before timeout");
     return false;
 }
 
@@ -617,7 +629,11 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
         out << "安全检查：通过，原因：" << safety.reason << "，模式：" << safety.recommended_mode << "\n";
         out << "下发导航：" << target_node << "\n";
         pushFeedback(&event, feedbackMessage("departing", "info", "正在前往" + displayName(target_node, target_name) + "。", target_node, displayName(target_node, target_name)), max_feedback_events);
-        const auto send_result = sendGatewayCommand(command);
+        auto guarded_command = command;
+        guarded_command["execution_context"] = "queue_executor_v1";
+        guarded_command["runtime_watchdog"] = true;
+        const auto send_result = sendGatewayCommand(guarded_command);
+        event["slam_command"] = guarded_command;
         event["send_result"] = send_result;
         out << "  gateway accepted=" << (send_result.value("accepted", false) ? "true" : "false") << "\n";
         if (!send_result.value("accepted", false)) {

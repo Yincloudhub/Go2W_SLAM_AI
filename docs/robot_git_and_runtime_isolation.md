@@ -1,111 +1,77 @@
-# 机器狗 Git 与运行目录隔离说明
+# 机器狗 Git 与运行目录隔离
 
-更新时间：2026-05-19
+## Git 仓库
 
-## 目标
-
-把“可版本管理的代码”和“机器狗本地运行状态”分开。
-
-机器狗可以用自己的 SSH key 拉取和推送代码，但模型、构建产物、日志、临时输出这些本地文件不进入 git。
-
-## Git 仓库位置
-
-PC 端工作仓库：
+PC 工作区：
 
 ```text
 E:\GO2W_0
 ```
 
-机器狗端 git clone：
+机器狗唯一 Git 工作区：
 
 ```text
 /home/unitree/Go2W_SLAM_AI
 ```
 
-当前分支：
+当前开发分支：
 
 ```text
 agent/llm-on-robot
 ```
 
-机器狗端 remote：
+Unitree gateway 源码也在主仓库中维护：
 
 ```text
-git@github-go2w-robot:Yincloudhub/Go2W_SLAM_AI.git
+/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor
 ```
 
-## 机器狗运行目录
+不要再从 `/home/unitree/go2w_slam_agent` 或
+`/home/unitree/slam_gateway_refactor` 启动。旧目录只允许归档到
+`/home/unitree/_archive/`。
 
-以下目录不属于 git 仓库：
+## 仓库外运行数据
+
+以下内容不进入 Git：
 
 ```text
 /home/unitree/llm_runtime
 /home/unitree/models
-/home/unitree/slam_gateway_refactor
+/home/unitree/test.pcd
+/home/unitree/topology_points.json
+/home/unitree/Go2W_SLAM_AI/artifacts
 ```
 
-职责划分：
+- `llm_runtime` 保存 llama.cpp 构建产物和安装后的推理脚本。
+- `models` 保存 GGUF 权重。
+- `test.pcd` 和 `topology_points.json` 是 Unitree SLAM 运行文件。
+- `artifacts` 保存日志、图像和传感器摘要。
 
-- `/home/unitree/llm_runtime`：存放 llama.cpp 源码、build 产物和已安装的推理脚本。
-- `/home/unitree/models`：存放 GGUF 模型文件。
-- `/home/unitree/slam_gateway_refactor`：现有 Unitree SDK2 / SLAM 执行网关。
+## LLM 安装
 
-## 机器人侧可版本管理文件
-
-机器人部署辅助文件统一放在：
+版本化脚本位于：
 
 ```text
-robot/
+robot/llm_runtime/ask_qwen.sh
 ```
 
-在机器狗上安装这些脚本：
+安装到仓库外运行目录：
 
 ```bash
 cd /home/unitree/Go2W_SLAM_AI
 bash robot/llm_runtime/install_runtime_files.sh
 ```
 
-安装脚本会把：
+模型文件：
 
 ```text
-robot/llm_runtime/ask_qwen.sh
+/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf
 ```
 
-复制到：
+## 同步原则
 
-```text
-/home/unitree/llm_runtime/scripts/ask_qwen.sh
-```
-
-这样脚本由 git 管理，但实际运行位置和仓库隔离。
-
-## 明确不进 Git 的内容
-
-不要提交：
-
-- `*.gguf`
-- llama.cpp 的 `build/`
-- `/home/unitree/models`
-- `/home/unitree/llm_runtime/llama.cpp/build`
-- 运行日志
-- 评测运行产物
-- 机器狗生成的点云、bag、db3、pcd、地图文件
-
-顶层 `.gitignore` 已经排除了模型、构建输出、artifacts 和常见机器人运行时文件。
-
-## 当前 LLM 文件状态
-
-已完成：
-
-- 机器狗上已有 llama.cpp CPU 版 `llama-cli`。
-- `ask_qwen.sh` 已纳入 git。
-- `ask_qwen.sh` 已安装到 `/home/unitree/llm_runtime/scripts`。
-- GGUF 模型已上传到 `/home/unitree/models`。
-- 模型 SHA256 校验通过。
-
-待完成：
-
-- 需要重新做一次干净的短推理 smoke test。
-- CUDA 版 llama.cpp 还没有评估。
-- C++ 层还没有完整接入 `slam_gateway_refactor`。
-
+1. PC 和机器狗在同一 Git 分支、同一提交上工作。
+2. 源码修改先提交和推送，再让机器狗拉取；现场临时同步只用于编译验证。
+3. 地图 registry 由 Git 管理；PCD 和 Unitree topology runtime 文件不进 Git。
+4. 运行入口只使用主仓库内的 launcher 和 gateway 二进制。
+5. 每次同步后运行 `python3 scripts/check_go2w_runtime_layout.py`。

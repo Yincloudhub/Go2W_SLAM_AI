@@ -35,6 +35,28 @@ bool clearanceBelow(double value, double threshold)
     return knownClearance(value) && value < threshold;
 }
 
+void keepNearestClearance(
+    double primary_clearance,
+    double primary_confidence,
+    double secondary_clearance,
+    double secondary_confidence,
+    double& output_clearance,
+    double& output_confidence)
+{
+    if (!knownClearance(primary_clearance)) {
+        output_clearance = secondary_clearance;
+        output_confidence = secondary_confidence;
+        return;
+    }
+    if (!knownClearance(secondary_clearance) || primary_clearance <= secondary_clearance) {
+        output_clearance = primary_clearance;
+        output_confidence = primary_confidence;
+        return;
+    }
+    output_clearance = secondary_clearance;
+    output_confidence = secondary_confidence;
+}
+
 void updateDerivedState(LocalObstacleSummary& summary)
 {
     summary.blocked_directions.clear();
@@ -166,15 +188,58 @@ LocalObstacleSummary LidarGeometryPerception::getFusedSummaryOrFallback(
     int64_t stereo_max_age_ms) const
 {
     const LocalObstacleSummary lidar = getExternalSummaryOrFallback(lidar_path, lidar_max_age_ms);
-    if (lidar.source == "lidar_pointcloud" && !lidar.stale) return lidar;
-
-    const LocalObstacleSummary stereo = getExternalSummaryOrFallback(stereo_path, stereo_max_age_ms);
-    if ((stereo.source == "stereo_depth" || stereo.source == "lidar_pointcloud+stereo_depth") && !stereo.stale) {
-        return stereo;
+    const bool has_lidar = lidar.source == "lidar_pointcloud";
+    if (has_lidar && lidar.stale) {
+        // XT16 is the primary safety sensor. A present but stale/uncalibrated
+        // summary must not be hidden by a secondary perception source.
+        return lidar;
     }
 
-    if (lidar.source == "lidar_pointcloud") return lidar;
-    return stereo;
+    const LocalObstacleSummary stereo = getExternalSummaryOrFallback(stereo_path, stereo_max_age_ms);
+    const bool has_fresh_stereo =
+        (stereo.source == "stereo_depth" || stereo.source == "lidar_pointcloud+stereo_depth") &&
+        !stereo.stale;
+
+    if (!has_lidar) {
+        return stereo;
+    }
+    if (!has_fresh_stereo) {
+        return lidar;
+    }
+
+    LocalObstacleSummary fused = lidar;
+    fused.source = "lidar_pointcloud+stereo_depth";
+    fused.timestamp_ms = std::min(lidar.timestamp_ms, stereo.timestamp_ms);
+    fused.age_ms = std::max(lidar.age_ms, stereo.age_ms);
+    fused.stale = false;
+    fused.confidence = std::min(lidar.confidence, stereo.confidence);
+
+    keepNearestClearance(
+        lidar.front_clearance_m,
+        lidar.front_confidence,
+        stereo.front_clearance_m,
+        stereo.front_confidence,
+        fused.front_clearance_m,
+        fused.front_confidence);
+    keepNearestClearance(
+        lidar.left_clearance_m,
+        lidar.left_confidence,
+        stereo.left_clearance_m,
+        stereo.left_confidence,
+        fused.left_clearance_m,
+        fused.left_confidence);
+    keepNearestClearance(
+        lidar.right_clearance_m,
+        lidar.right_confidence,
+        stereo.right_clearance_m,
+        stereo.right_confidence,
+        fused.right_clearance_m,
+        fused.right_confidence);
+
+    // The stereo sidecar is forward-facing and has no independent rear
+    // confidence field. Keep XT16 rear/body/low-hazard measurements intact.
+    updateDerivedState(fused);
+    return fused;
 }
 
 }  // namespace slam_gateway

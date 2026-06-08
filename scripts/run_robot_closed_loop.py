@@ -459,6 +459,29 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
     last_llm_feedback = time.monotonic() - llm_feedback_interval
     deadline = time.monotonic() + args.arrival_monitor_s
 
+    def request_pause(reason: str) -> dict[str, Any]:
+        try:
+            result = run_gateway_command(
+                {"action": "pause_navigation"},
+                client_path=args.gateway_client,
+                network_interface=args.network_interface,
+                timeout_s=args.timeout_s,
+                startup_wait_s=args.gateway_startup_wait_s,
+            )
+            return {
+                "requested": True,
+                "accepted": result.get("accepted") is True,
+                "reason": reason,
+                "result": result,
+            }
+        except Exception as exc:  # pragma: no cover - field robustness
+            return {
+                "requested": True,
+                "accepted": False,
+                "reason": reason,
+                "error": str(exc),
+            }
+
     def record_performance(loop_start: float) -> float:
         elapsed = time.monotonic() - loop_start
         perf["max_loop_elapsed_s"] = max(float(perf["max_loop_elapsed_s"]), elapsed)
@@ -497,6 +520,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             dropped_counts["arrival_samples"] += append_limited(samples, {"error": str(exc), "consecutive_errors": consecutive_errors}, max_samples)
             if consecutive_errors >= max_errors:
                 reason = f"gateway feedback failed repeatedly: {exc}"
+                pause = request_pause(reason)
                 dropped_counts["operator_feedback"] += append_limited(
                     operator_feedback,
                     operator_feedback_message(
@@ -524,7 +548,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                 )
                 return {
                     "arrived": False,
-                    "paused": False,
+                    "paused": pause["accepted"],
                     "threshold_m": args.arrival_distance_m,
                     "samples": samples,
                     "operator_feedback": operator_feedback,
@@ -532,6 +556,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                     "llm_feedback_results": llm_feedback_results,
                     "performance": performance_summary(),
                     "reason": reason,
+                    "pause": pause,
                 }
             sleep_s = record_performance(loop_start)
             if sleep_s > 0:
@@ -542,6 +567,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
         world = state.get("world_state", {}) if isinstance(state, dict) else {}
         allowed, reason = gateway_allows_navigation(state)
         if not allowed:
+            pause = request_pause(reason)
             dropped_counts["operator_feedback"] += append_limited(
                 operator_feedback,
                 operator_feedback_message(
@@ -570,7 +596,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             )
             return {
                 "arrived": False,
-                "paused": False,
+                "paused": pause["accepted"],
                 "threshold_m": args.arrival_distance_m,
                 "samples": samples,
                 "operator_feedback": operator_feedback,
@@ -579,6 +605,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                 "runtime_safety": {"allowed": False, "reason": reason},
                 "performance": performance_summary(),
                 "reason": reason,
+                "pause": pause,
             }
 
         sample = {
@@ -622,13 +649,8 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
         if distance_m is not None and distance_m <= args.arrival_distance_m:
             entered_count += 1
             if entered_count >= args.arrival_confirm_samples:
-                pause_result = run_gateway_command(
-                    {"action": "pause_navigation"},
-                    client_path=args.gateway_client,
-                    network_interface=args.network_interface,
-                    timeout_s=args.timeout_s,
-                    startup_wait_s=args.gateway_startup_wait_s,
-                )
+                pause = request_pause("arrival threshold confirmed")
+                pause_result = pause.get("result")
                 dropped_counts["operator_feedback"] += append_limited(
                     operator_feedback,
                     operator_feedback_message(
@@ -657,14 +679,16 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
                 )
                 return {
                     "arrived": True,
-                    "paused": bool(pause_result.get("accepted")),
+                    "paused": pause["accepted"],
                     "threshold_m": args.arrival_distance_m,
                     "samples": samples,
                     "operator_feedback": operator_feedback,
                     "llm_feedback_requests": llm_feedback_requests,
                     "llm_feedback_results": llm_feedback_results,
                     "pause_result": pause_result,
+                    "pause": pause,
                     "performance": performance_summary(),
+                    "reason": "" if pause["accepted"] else "arrival reached but pause was not accepted",
                 }
         else:
             entered_count = 0
@@ -673,6 +697,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
             time.sleep(sleep_s)
 
     timeout_reason = "arrival threshold not reached before timeout"
+    pause = request_pause(timeout_reason)
     dropped_counts["operator_feedback"] += append_limited(
         operator_feedback,
         operator_feedback_message(
@@ -700,7 +725,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
     )
     return {
         "arrived": False,
-        "paused": False,
+        "paused": pause["accepted"],
         "threshold_m": args.arrival_distance_m,
         "samples": samples,
         "operator_feedback": operator_feedback,
@@ -708,6 +733,7 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
         "llm_feedback_results": llm_feedback_results,
         "performance": performance_summary(),
         "reason": timeout_reason,
+        "pause": pause,
     }
 
 
@@ -980,8 +1006,13 @@ def execute_task_queue(
             target_node=target_node,
             target_name=target_name,
         )
+        guarded_slam_command = {
+            **slam_command,
+            "execution_context": "python_closed_loop_v1",
+            "runtime_watchdog": True,
+        }
         result = run_gateway_command(
-            slam_command,
+            guarded_slam_command,
             client_path=args.gateway_client,
             network_interface=args.network_interface,
             timeout_s=args.timeout_s,
@@ -1020,14 +1051,14 @@ def execute_task_queue(
                 "llm_feedback_requests": rejected_llm_requests,
                 "llm_feedback_results": rejected_llm_results,
             }
-        status = "ok" if accepted and arrival.get("arrived") else "failed"
+        status = "ok" if accepted and arrival.get("arrived") and arrival.get("paused") else "failed"
         events.append(
             {
                 "task_id": task_id,
                 "action": action,
                 "status": status,
                 "target_node": target_node,
-                "slam_command": slam_command,
+                "slam_command": guarded_slam_command,
                 "send_result": result,
                 "arrival": arrival,
                 "operator_feedback": [departing_feedback] + list(arrival.get("operator_feedback") or []),
@@ -1096,7 +1127,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mock-x", type=float, default=1.154)
     parser.add_argument("--mock-y", type=float, default=-0.147)
     parser.add_argument("--mock-yaw", type=float, default=-0.03)
-    parser.add_argument("--gateway-client", default="/home/unitree/slam_gateway_refactor/build/slam_llm_command_client")
+    parser.add_argument(
+        "--gateway-client",
+        default=str(REPO_ROOT / "robot" / "slam_gateway_refactor" / "build" / "slam_llm_command_client"),
+    )
     parser.add_argument("--network-interface", default=os.environ.get("GO2W_NETWORK_INTERFACE", "eth0"))
     parser.add_argument("--gateway-startup-wait-s", type=float, default=4.0)
     parser.add_argument("--skip-gateway-check", action="store_true")

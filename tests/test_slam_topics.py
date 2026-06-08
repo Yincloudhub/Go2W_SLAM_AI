@@ -2,7 +2,7 @@ import json
 import math
 import unittest
 
-from edge_autonomy.slam_topics import parse_slam_ctrl_info, parse_slam_info, parse_slam_key_info, quaternion_to_yaw
+from edge_autonomy.slam_topics import SlamTopicParseError, parse_slam_ctrl_info, parse_slam_info, parse_slam_key_info, quaternion_to_yaw
 
 
 class SlamTopicParserTests(unittest.TestCase):
@@ -42,6 +42,38 @@ class SlamTopicParserTests(unittest.TestCase):
 
     def test_parse_slam_info_ignores_non_pose_messages(self) -> None:
         self.assertIsNone(parse_slam_info({"errorCode": 0, "type": "other"}, timestamp_ms=1))
+
+    def test_parse_slam_info_rejects_missing_pose_fields(self) -> None:
+        with self.assertRaises(SlamTopicParseError):
+            parse_slam_info(
+                {
+                    "errorCode": 0,
+                    "type": "pos_info",
+                    "data": {"currentPose": {"x": 1.0, "y": 2.0}},
+                },
+                timestamp_ms=1,
+            )
+
+    def test_parse_slam_info_rejects_invalid_quaternion(self) -> None:
+        with self.assertRaises(SlamTopicParseError):
+            parse_slam_info(
+                {
+                    "errorCode": 0,
+                    "type": "pos_info",
+                    "data": {
+                        "currentPose": {
+                            "x": 1.0,
+                            "y": 2.0,
+                            "z": 0.0,
+                            "q_x": 0.0,
+                            "q_y": 0.0,
+                            "q_z": 0.0,
+                            "q_w": 0.0,
+                        }
+                    },
+                },
+                timestamp_ms=1,
+            )
 
     def test_parse_slam_key_info_arrived(self) -> None:
         state = parse_slam_key_info(

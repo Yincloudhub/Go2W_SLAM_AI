@@ -72,6 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Check GO2W runtime repo and map registry ownership.")
     parser.add_argument("--active-repo", default=str(default_active_repo()))
     parser.add_argument("--legacy-repo", default=os.environ.get("GO2W_LEGACY_REPO", "/home/unitree/go2w_slam_agent"))
+    parser.add_argument(
+        "--legacy-gateway",
+        default=os.environ.get("GO2W_LEGACY_GATEWAY", "/home/unitree/slam_gateway_refactor"),
+    )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     return parser
 
@@ -80,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     active_repo = Path(args.active_repo).expanduser()
     legacy_repo = Path(args.legacy_repo).expanduser()
+    legacy_gateway = Path(args.legacy_gateway).expanduser()
     active_registry = active_repo / REAL_SITE_REGISTRY
     legacy_registry = legacy_repo / REAL_SITE_REGISTRY
     errors: list[str] = []
@@ -113,9 +118,22 @@ def main(argv: list[str] | None = None) -> int:
             if not legacy["is_symlink"]:
                 warnings.append(f"legacy registry is not a symlink: {legacy_registry}")
 
+    expected_gateway = active_repo / "robot" / "slam_gateway_refactor"
+    expected_gateway_client = expected_gateway / "build" / "slam_llm_command_client"
+    if not expected_gateway.exists():
+        errors.append(f"versioned gateway source is missing: {expected_gateway}")
+    if legacy_gateway.exists():
+        errors.append(
+            "legacy gateway directory still exists outside the active repo: "
+            f"{legacy_gateway}; archive it after stopping old processes"
+        )
+
     result = {
         "active_repo": str(active_repo),
         "legacy_repo": str(legacy_repo),
+        "legacy_gateway": str(legacy_gateway),
+        "expected_gateway": str(expected_gateway),
+        "expected_gateway_client": str(expected_gateway_client),
         "active_registry": active,
         "legacy_registry": legacy,
         "errors": errors,
@@ -137,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"legacy_repo={legacy_repo}")
             print(f"legacy_registry_resolved={legacy['resolved_path']}")
             print(f"legacy_registry_symlink={legacy['is_symlink']}")
+        print(f"versioned_gateway={expected_gateway}")
+        print(f"gateway_client={expected_gateway_client}")
         for warning in warnings:
             print(f"warning: {warning}", file=sys.stderr)
         for error in errors:

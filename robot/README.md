@@ -1,69 +1,37 @@
-# 机器狗侧文件说明
+# 机器狗侧版本化文件
 
-`robot/` 目录只放适合版本管理的机器狗部署辅助文件。
-
-这里不放：
-
-- GGUF 模型权重。
-- llama.cpp build 产物。
-- 运行日志。
-- 临时推理输出。
-- 机器狗生成的地图、点云、bag、db3。
-
-## 机器狗上的实际目录
-
-git clone 位于：
-
-```text
-/home/unitree/Go2W_SLAM_AI
-```
-
-运行时文件安装在仓库外部：
-
-```text
-/home/unitree/llm_runtime
-/home/unitree/models
-/home/unitree/slam_gateway_refactor
-```
-
-这样可以把 PC 端工作仓库、机器狗端 git clone、模型目录和可执行运行时隔离开。
-
-## 当前受 Git 管理的机器狗文件
+`robot/` 保存适合 Git 管理、需要部署到机器狗的源码和脚本：
 
 ```text
 robot/
-  README.md
   llm_runtime/
-    ask_qwen.sh
-    install_runtime_files.sh
+  slam_gateway_refactor/
 ```
 
-`ask_qwen.sh` 在这里版本管理，然后安装到：
+## Gateway
+
+Unitree SLAM gateway 的唯一源码位于：
 
 ```text
-/home/unitree/llm_runtime/scripts/ask_qwen.sh
+/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor
 ```
 
-安装命令：
-
-```bash
-cd /home/unitree/Go2W_SLAM_AI
-bash robot/llm_runtime/install_runtime_files.sh
-```
-
-## 外部模型文件
-
-模型不进入 git。
-
-机器狗上的模型路径：
+构建目录：
 
 ```text
-/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf
+/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor/build
 ```
 
-期望 SHA256：
+旧目录 `/home/unitree/slam_gateway_refactor` 不再是运行模块，应归档。
 
-```text
-2fde00ce69dd4899c70d020845e2638353015bba0fdf161b3eb965f2bca4464e
-```
+## LLM runtime
 
+版本化推理脚本位于 `robot/llm_runtime/`，安装到仓库外的
+`/home/unitree/llm_runtime`。模型权重保存在 `/home/unitree/models`。
+
+## 不进入 Git 的内容
+
+- GGUF 模型权重
+- CMake 和 llama.cpp 构建产物
+- 运行日志与传感器摘要
+- PCD、bag、db3 和 Unitree topology runtime 文件
