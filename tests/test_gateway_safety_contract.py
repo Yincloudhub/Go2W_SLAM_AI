@@ -5,7 +5,7 @@ from edge_autonomy.gateway_safety import gateway_allows_navigation
 
 def world_state(
     *,
-    source="stereo_depth",
+    source="lidar_pointcloud",
     stale=False,
     age_ms=100,
     front=2.0,
@@ -15,6 +15,7 @@ def world_state(
     pose_age_ms=100,
 ):
     return {
+        "accepted": True,
         "world_state": {
             "safety": {"allow_navigation": True, "reason": "ok"},
             "slam_health": {"status": "ok", "slam_alive": True, "localization_alive": True},
@@ -42,11 +43,27 @@ class GatewaySafetyContractTests(unittest.TestCase):
 
         self.assertTrue(allowed, reason)
 
-    def test_manual_stub_does_not_override_gateway_safety(self):
+    def test_manual_stub_is_not_accepted_for_real_navigation(self):
         allowed, reason = gateway_allows_navigation(world_state(source="manual_stub"))
 
-        self.assertTrue(allowed, reason)
-        self.assertIn("gateway allows navigation", reason)
+        self.assertFalse(allowed)
+        self.assertIn("not trusted", reason)
+
+    def test_forward_stereo_alone_cannot_authorize_side_safe_navigation(self):
+        allowed, reason = gateway_allows_navigation(world_state(source="stereo_depth"))
+
+        self.assertFalse(allowed)
+        self.assertIn("not trusted", reason)
+
+    def test_rejected_gateway_response_fails_closed(self):
+        state = world_state()
+        state["accepted"] = False
+        state["reason"] = "rejected"
+
+        allowed, reason = gateway_allows_navigation(state)
+
+        self.assertFalse(allowed)
+        self.assertIn("not accepted", reason)
 
     def test_stale_trusted_summary_fails_closed(self):
         allowed, reason = gateway_allows_navigation(world_state(stale=True))

@@ -1,9 +1,16 @@
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
-from edge_autonomy.chassis_controller import ChassisController, GatewayConfig, gateway_allows_navigation
+from edge_autonomy.chassis_controller import (
+    ChassisController,
+    GatewayConfig,
+    gateway_allows_navigation,
+    run_gateway_command,
+)
 
 
 class ChassisControllerTests(unittest.TestCase):
@@ -38,9 +45,10 @@ class ChassisControllerTests(unittest.TestCase):
         self.assertEqual(result["selected"]["node_id"], "room701")
         self.assertEqual([item["node_id"] for item in result["matches"]], ["room701", "station"])
 
-    def test_preflight_trusts_gateway_safety_when_obstacle_advisory_is_manual(self) -> None:
+    def test_preflight_rejects_manual_obstacle_stub(self) -> None:
         allowed, reason = gateway_allows_navigation(
             {
+                "accepted": True,
                 "world_state": {
                     "safety": {"allow_navigation": True, "reason": "ok"},
                     "slam_health": {"status": "ok", "slam_alive": True, "localization_alive": True},
@@ -62,8 +70,22 @@ class ChassisControllerTests(unittest.TestCase):
             }
         )
 
-        self.assertTrue(allowed, reason)
-        self.assertIn("gateway allows navigation", reason)
+        self.assertFalse(allowed)
+        self.assertIn("not trusted", reason)
+
+    def test_gateway_timeout_kills_child_and_fails_deterministically(self) -> None:
+        process = MagicMock()
+        process.communicate.side_effect = [
+            subprocess.TimeoutExpired(cmd=["gateway"], timeout=1),
+            ("", ""),
+        ]
+        with patch("edge_autonomy.chassis_controller.subprocess.Popen", return_value=process):
+            with self.assertRaisesRegex(RuntimeError, "timed out after 1s"):
+                run_gateway_command(
+                    {"action": "get_world_state"},
+                    GatewayConfig(client_path="gateway", timeout_s=1),
+                )
+        process.kill.assert_called_once_with()
 
 
 if __name__ == "__main__":

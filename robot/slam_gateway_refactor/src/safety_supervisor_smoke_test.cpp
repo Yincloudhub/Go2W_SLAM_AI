@@ -69,7 +69,15 @@ int main()
     auto stub = clear;
     stub.source = "manual_stub";
     stub.stale = true;
-    require(supervisor.evaluate(health, localization, stub).allow_navigation, "manual stub should remain advisory");
+    const auto stub_decision = supervisor.evaluate(health, localization, stub);
+    require(!stub_decision.allow_navigation, "manual stub must not authorize real navigation");
+    require(stub_decision.reason == "local_obstacle_source_not_trusted", "manual stub reason mismatch");
+
+    auto stereo_only = clear;
+    stereo_only.source = "stereo_depth";
+    const auto stereo_decision = supervisor.evaluate(health, localization, stereo_only);
+    require(!stereo_decision.allow_navigation, "forward stereo alone must not authorize side-safe navigation");
+    require(stereo_decision.reason == "local_obstacle_source_not_trusted", "stereo-only reason mismatch");
 
     std::cout << "slam_gateway_safety_supervisor_smoke_test=passed\n";
     return 0;

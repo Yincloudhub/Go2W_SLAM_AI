@@ -5,7 +5,7 @@
     "host": "192.168.123.18",
     "ssh_user": "unitree",
     "network_interface": "eth0",
-    "slam_gateway_client": "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client",
+    "slam_gateway_client": "/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor/build/slam_llm_command_client",
     "unitree_slam_dir": "/unitree/module/unitree_slam"
   },
   "maps": [

@@ -25,9 +25,15 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
     }
 
     const bool trusted_obstacle_source =
-        obstacle.source == "stereo_depth" ||
         obstacle.source == "lidar_pointcloud" ||
         obstacle.source == "lidar_pointcloud+stereo_depth";
+    if (!trusted_obstacle_source) {
+        d.allow_navigation = false;
+        d.should_pause = true;
+        d.recommended_mode = "hold";
+        d.reason = "local_obstacle_source_not_trusted";
+        return d;
+    }
     if (trusted_obstacle_source && (obstacle.stale || obstacle.age_ms < 0)) {
         d.allow_navigation = false;
         d.should_pause = true;

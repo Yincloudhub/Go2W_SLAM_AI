@@ -173,6 +173,23 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         if (!cmd.contains("target_pose") || !cmd["target_pose"].is_object()) {
             return reject("missing_target_pose");
         }
+        const std::string requested_map_path = cmd.value("map_path", "");
+        if (requested_map_path.empty()) {
+            return reject("map_path_required_for_navigation");
+        }
+        const auto current_pose = gateway_.getCurrentPose();
+        if (current_pose.map_path.empty()) {
+            return reject("current_localization_map_path_missing");
+        }
+        if (requested_map_path != current_pose.map_path) {
+            return {
+                {"accepted", false},
+                {"reason", "navigation_map_path_mismatch"},
+                {"requested_map_path", requested_map_path},
+                {"current_map_path", current_pose.map_path},
+                {"world_state", gateway_.buildWorldStateJson()}
+            };
+        }
         const std::string pose_error = validatePoseJson(cmd["target_pose"], true);
         if (!pose_error.empty()) {
             return reject(pose_error);

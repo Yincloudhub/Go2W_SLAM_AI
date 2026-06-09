@@ -19,6 +19,12 @@ class RuntimeLayoutTests(unittest.TestCase):
             json.dumps(
                 {
                     "default_map_id": "go2w_real_site",
+                    "robot": {
+                        "slam_gateway_client": (
+                            "/home/unitree/Go2W_SLAM_AI/robot/"
+                            "slam_gateway_refactor/build/slam_llm_command_client"
+                        )
+                    },
                     "maps": [
                         {
                             "map_id": "go2w_real_site",
@@ -68,6 +74,28 @@ class RuntimeLayoutTests(unittest.TestCase):
                 "--legacy-gateway",
                 str(legacy_gateway),
             )
+            self.assertEqual(result, 2)
+
+    def test_rejects_registry_pointing_to_legacy_gateway(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            active_repo = self.make_active_repo(root)
+            registry = active_repo / "configs" / "maps" / "go2w_real_site_map_registry.json"
+            data = json.loads(registry.read_text(encoding="utf-8"))
+            data["robot"]["slam_gateway_client"] = (
+                "/home/unitree/slam_gateway_refactor/build/slam_llm_command_client"
+            )
+            registry.write_text(json.dumps(data), encoding="utf-8")
+
+            result = self.run_checker(
+                "--active-repo",
+                str(active_repo),
+                "--legacy-repo",
+                str(root / "missing-agent"),
+                "--legacy-gateway",
+                str(root / "missing-gateway"),
+            )
+
             self.assertEqual(result, 2)
 
 

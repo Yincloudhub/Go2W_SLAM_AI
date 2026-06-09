@@ -156,6 +156,13 @@ def build_depth_summary(
         "source": source,
         "timestamp_ms": int(timestamp_ms or now_ms()),
         "frame_id": frame_id,
+        "coverage": "forward_fov",
+        "roi_semantics": {
+            "front": "center_third_of_forward_fov",
+            "left": "left_third_of_forward_fov",
+            "right": "right_third_of_forward_fov",
+            "rear": "not_observed",
+        },
         "center_distance_m": valid_depth_m(depth_mm[cy][cx], min_m=min_m, max_m=max_m),
         "center_window_m": percentile(center_values, 50.0),
         "front_clearance_m": percentile(front_values, q),

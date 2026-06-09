@@ -221,23 +221,9 @@ LocalObstacleSummary LidarGeometryPerception::getFusedSummaryOrFallback(
         stereo.front_confidence,
         fused.front_clearance_m,
         fused.front_confidence);
-    keepNearestClearance(
-        lidar.left_clearance_m,
-        lidar.left_confidence,
-        stereo.left_clearance_m,
-        stereo.left_confidence,
-        fused.left_clearance_m,
-        fused.left_confidence);
-    keepNearestClearance(
-        lidar.right_clearance_m,
-        lidar.right_confidence,
-        stereo.right_clearance_m,
-        stereo.right_confidence,
-        fused.right_clearance_m,
-        fused.right_confidence);
-
-    // The stereo sidecar is forward-facing and has no independent rear
-    // confidence field. Keep XT16 rear/body/low-hazard measurements intact.
+    // Stereo left/right are image sectors inside the forward field of view,
+    // not robot-side clearances. XT16 remains authoritative for lateral,
+    // rear, body, and low-hazard geometry.
     updateDerivedState(fused);
     return fused;
 }

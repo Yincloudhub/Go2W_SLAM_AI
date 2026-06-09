@@ -5,7 +5,7 @@ from typing import Any
 
 
 LOCALIZED_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
-TRUSTED_OBSTACLE_SOURCES = {"stereo_depth", "lidar_pointcloud", "lidar_pointcloud+stereo_depth"}
+TRUSTED_OBSTACLE_SOURCES = {"lidar_pointcloud", "lidar_pointcloud+stereo_depth"}
 
 
 def _finite_number(value: Any) -> float | None:
@@ -33,11 +33,14 @@ def gateway_allows_navigation(
 ) -> tuple[bool, str]:
     """Host preflight gate for sending real navigation commands to the gateway.
 
-    The gateway/SLAM safety decision is the hard authority. Local obstacle
-    summaries are advisory: they only block when a fresh trusted sensor reports
-    a concrete close obstacle, and they do not have to be present for relocation
-    or navigation preflight.
+    The gateway/SLAM safety decision is the hard authority. Navigation also
+    requires a fresh XT16-backed summary with valid front and lateral geometry.
+    Forward stereo may supplement the front view but cannot establish robot-side
+    clearance or authorize navigation on its own.
     """
+
+    if world_state_result.get("accepted") is not True:
+        return False, f"gateway response was not accepted: {world_state_result.get('reason', 'unknown')}"
 
     world_state = world_state_result.get("world_state", {})
     if not isinstance(world_state, dict):
@@ -79,27 +82,30 @@ def gateway_allows_navigation(
         return False, "current pose x/y is invalid"
 
     obstacle = _dict_at(world_state, "local_obstacle")
-    if obstacle is not None and obstacle.get("source") in TRUSTED_OBSTACLE_SOURCES:
-        if obstacle.get("stale") is not False:
-            return False, "trusted local_obstacle is stale"
-        obstacle_age_ms = _finite_number(obstacle.get("age_ms"))
-        if obstacle_age_ms is None or obstacle_age_ms < 0:
-            return False, "trusted local_obstacle age is missing"
-        if max_obstacle_age_ms is not None and obstacle_age_ms > max_obstacle_age_ms:
-            return False, "trusted local_obstacle is too old"
-        obstacle_action = str(obstacle.get("recommended_action") or "")
-        if obstacle_action in {"pause", "stop", "emergency_stop"}:
-            return False, f"local_obstacle recommends {obstacle_action}"
-        for direction in ("front", "left", "right"):
-            roi_confidence = _finite_number(obstacle.get(f"{direction}_confidence"))
-            clearance = _finite_number(obstacle.get(f"{direction}_clearance_m"))
-            if (
-                roi_confidence is not None
-                and roi_confidence >= min_roi_confidence
-                and clearance is not None
-                and 0 <= clearance < min_clearance_m
-            ):
-                return False, f"local_obstacle {direction} clearance is unsafe"
+    if obstacle is None:
+        return False, "missing local_obstacle"
+    source = str(obstacle.get("source") or "")
+    if source not in TRUSTED_OBSTACLE_SOURCES:
+        return False, f"local_obstacle source is not trusted: {source or 'missing'}"
+    if obstacle.get("stale") is not False:
+        return False, "trusted local_obstacle is stale"
+    obstacle_age_ms = _finite_number(obstacle.get("age_ms"))
+    if obstacle_age_ms is None or obstacle_age_ms < 0:
+        return False, "trusted local_obstacle age is missing"
+    if max_obstacle_age_ms is not None and obstacle_age_ms > max_obstacle_age_ms:
+        return False, "trusted local_obstacle is too old"
+    obstacle_action = str(obstacle.get("recommended_action") or "")
+    if obstacle_action in {"pause", "stop", "emergency_stop"}:
+        return False, f"local_obstacle recommends {obstacle_action}"
+    for direction in ("front", "left", "right"):
+        roi_confidence = _finite_number(obstacle.get(f"{direction}_confidence"))
+        clearance = _finite_number(obstacle.get(f"{direction}_clearance_m"))
+        if roi_confidence is None or roi_confidence < min_roi_confidence:
+            return False, f"local_obstacle {direction} confidence is insufficient"
+        if clearance is None or clearance < 0:
+            return False, f"local_obstacle {direction} clearance is missing"
+        if clearance < min_clearance_m:
+            return False, f"local_obstacle {direction} clearance is unsafe"
 
     mode = str(safety.get("recommended_mode") or "")
     if mode and mode != "normal":

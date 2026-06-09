@@ -76,9 +76,9 @@ int main()
     require(near(fused.front_clearance_m, 0.6), "fusion must keep the nearest front obstacle");
     require(near(fused.front_confidence, 0.95), "front confidence must follow the selected clearance");
     require(near(fused.left_clearance_m, 2.0), "fusion must retain the nearer XT16 left clearance");
-    require(near(fused.left_confidence, 0.7), "left confidence must follow the selected clearance");
-    require(near(fused.right_clearance_m, 1.0), "fusion must keep the nearer stereo right clearance");
-    require(near(fused.right_confidence, 0.85), "right confidence must follow the selected clearance");
+    require(near(fused.left_confidence, 0.7), "left confidence must remain owned by XT16");
+    require(near(fused.right_clearance_m, 2.0), "forward stereo must not overwrite robot-side clearance");
+    require(near(fused.right_confidence, 0.6), "right confidence must remain owned by XT16");
     require(fused.recommended_action == "pause", "close fused obstacle must request pause");
 
     const auto stereo_only = perception.getFusedSummaryOrFallback(

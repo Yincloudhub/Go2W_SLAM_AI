@@ -50,6 +50,12 @@ operator confirmation
 An uncalibrated or stale trusted XT16 summary fails closed for navigation.
 Manual relocation remains available so localization can be recovered.
 
+The depth camera is forward-facing. Its `left_clearance_m` and
+`right_clearance_m` values are left/right thirds of the forward image, not the
+robot's true lateral clearances. Stereo depth may only tighten the front
+clearance. XT16 remains authoritative for left, right, rear, body, and
+low-hazard geometry, and stereo-only data cannot authorize navigation.
+
 ## Read-only acceptance
 
 ```bash
@@ -69,3 +75,61 @@ motion_commands_sent=false
 ```
 
 until a separate, explicitly confirmed topology navigation command is issued.
+
+## Guided supervised acceptance
+
+Use the dedicated acceptance helper instead of remembering individual gateway
+commands:
+
+```bash
+cd /home/unitree/Go2W_SLAM_AI
+python3 scripts/go2w_supervised_acceptance.py --stage status
+```
+
+The tool has four explicit stages:
+
+1. `status`: read-only readiness and world-state check.
+2. `relocate`: only a verified registry anchor is accepted, and the exact
+   anchor ID must also be supplied through `--confirm-relocation`. Relocation
+   initializes SLAM coordinates and does not command chassis motion.
+3. `verify-localization`: samples localization repeatedly and checks pose age,
+   SLAM health, monotonic timestamps, anchor radius, and yaw tolerance.
+4. `prepare-navigation`: validates the target and live navigation gate, then
+   prints a 0.1 m/s supervised command. It never executes navigation itself.
+
+`prepare-navigation` fails closed unless all of these conditions hold:
+
+- `xt16_driver` and `unitree_slam` are running;
+- localization and pose timestamps are fresh and advancing;
+- the active SLAM `map_path` matches the registry PCD;
+- the relocation anchor has an explicit `verified`/`verified_*` status;
+- the target has the positive `live_verified` tag and no blocking tag;
+- XT16 geometry explicitly reports `calibrated=true`;
+- the trusted obstacle summary is fresh, confident, and clear;
+- the gateway's own safety decision allows navigation.
+
+The positive checks are deliberate. Missing map identity, calibration metadata,
+timestamps, target verification, or sensor provenance are blockers rather than
+defaults.
+
+Example relocation after the operator physically confirms the robot is at the
+verified mapping origin:
+
+```bash
+python3 scripts/go2w_supervised_acceptance.py \
+  --stage relocate \
+  --anchor mapping_origin \
+  --confirm-relocation mapping_origin
+```
+
+Prepare, but do not execute, one short navigation target:
+
+```bash
+python3 scripts/go2w_supervised_acceptance.py \
+  --stage prepare-navigation \
+  --anchor mapping_origin \
+  --target TARGET_NODE
+```
+
+Only run the printed motion command while the robot remains in sight and the
+operator has immediate access to the emergency stop.

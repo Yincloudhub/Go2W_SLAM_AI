@@ -40,6 +40,7 @@ def find_map(registry: dict[str, Any], map_id: str) -> dict[str, Any] | None:
 
 def describe_registry(path: Path) -> dict[str, Any]:
     registry = load_json(path)
+    robot = registry.get("robot") if isinstance(registry.get("robot"), dict) else {}
     map_profile = find_map(registry, EXPECTED_MAP_ID)
     if map_profile is None:
         raise ValueError(f"{EXPECTED_MAP_ID} missing from {path}")
@@ -49,6 +50,7 @@ def describe_registry(path: Path) -> dict[str, Any]:
         "is_symlink": path.is_symlink(),
         "sha256": sha256(path),
         "default_map_id": registry.get("default_map_id"),
+        "gateway_client": robot.get("slam_gateway_client"),
         "map_id": map_profile.get("map_id"),
         "status": map_profile.get("status"),
         "pcd_path": map_profile.get("pcd_path"),
@@ -120,8 +122,16 @@ def main(argv: list[str] | None = None) -> int:
 
     expected_gateway = active_repo / "robot" / "slam_gateway_refactor"
     expected_gateway_client = expected_gateway / "build" / "slam_llm_command_client"
+    expected_gateway_client_runtime = (
+        "/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor/build/slam_llm_command_client"
+    )
     if not expected_gateway.exists():
         errors.append(f"versioned gateway source is missing: {expected_gateway}")
+    if active["gateway_client"] != expected_gateway_client_runtime:
+        errors.append(
+            "active registry gateway client does not point to the versioned in-repo binary: "
+            f"{active['gateway_client']!r}"
+        )
     if legacy_gateway.exists():
         errors.append(
             "legacy gateway directory still exists outside the active repo: "
@@ -134,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
         "legacy_gateway": str(legacy_gateway),
         "expected_gateway": str(expected_gateway),
         "expected_gateway_client": str(expected_gateway_client),
+        "expected_gateway_client_runtime": expected_gateway_client_runtime,
         "active_registry": active,
         "legacy_registry": legacy,
         "errors": errors,

@@ -11,6 +11,21 @@ class MapRegistryError(ValueError):
     pass
 
 
+def _finite_float(data: dict[str, Any], key: str, *, required: bool, default: float = 0.0) -> float:
+    if required and key not in data:
+        raise MapRegistryError(f"pose is missing required field '{key}'")
+    value = data.get(key, default)
+    if isinstance(value, bool):
+        raise MapRegistryError(f"pose field '{key}' must be a finite number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise MapRegistryError(f"pose field '{key}' must be a finite number") from exc
+    if not math.isfinite(number):
+        raise MapRegistryError(f"pose field '{key}' must be a finite number")
+    return number
+
+
 def yaw_to_quaternion(yaw: float) -> tuple[float, float, float, float]:
     half = yaw / 2.0
     return 0.0, 0.0, math.sin(half), math.cos(half)
@@ -38,27 +53,50 @@ class UnitreePose:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, default_name: str = "") -> "UnitreePose":
+        if not isinstance(data, dict):
+            raise MapRegistryError("pose must be an object")
+        x = _finite_float(data, "x", required=True)
+        y = _finite_float(data, "y", required=True)
+        z = _finite_float(data, "z", required=False)
         if "yaw" in data and not {"q_x", "q_y", "q_z", "q_w"}.issubset(data):
-            q_x, q_y, q_z, q_w = yaw_to_quaternion(float(data["yaw"]))
+            yaw = _finite_float(data, "yaw", required=True)
+            q_x, q_y, q_z, q_w = yaw_to_quaternion(yaw)
         else:
-            q_x = float(data.get("q_x", 0.0))
-            q_y = float(data.get("q_y", 0.0))
-            q_z = float(data.get("q_z", 0.0))
-            q_w = float(data.get("q_w", 1.0))
+            q_x = _finite_float(data, "q_x", required=False)
+            q_y = _finite_float(data, "q_y", required=False)
+            q_z = _finite_float(data, "q_z", required=False)
+            q_w = _finite_float(data, "q_w", required=False, default=1.0)
+            quaternion_norm = math.sqrt(q_x * q_x + q_y * q_y + q_z * q_z + q_w * q_w)
+            if quaternion_norm < 0.5 or quaternion_norm > 1.5:
+                raise MapRegistryError("pose quaternion norm must be in [0.5, 1.5]")
+            yaw = (
+                _finite_float(data, "yaw", required=True)
+                if "yaw" in data
+                else quaternion_to_yaw(q_x, q_y, q_z, q_w)
+            )
 
-        yaw = float(data["yaw"]) if "yaw" in data else quaternion_to_yaw(q_x, q_y, q_z, q_w)
+        speed = _finite_float(data, "speed", required=False, default=0.5)
+        mode_value = data.get("mode", 0)
+        if isinstance(mode_value, bool):
+            raise MapRegistryError("pose field 'mode' must be 0 or 1")
+        try:
+            mode = int(mode_value)
+        except (TypeError, ValueError) as exc:
+            raise MapRegistryError("pose field 'mode' must be 0 or 1") from exc
+        if mode not in {0, 1}:
+            raise MapRegistryError("pose field 'mode' must be 0 or 1")
         return cls(
             name=str(data.get("name", default_name)),
-            x=float(data.get("x", 0.0)),
-            y=float(data.get("y", 0.0)),
-            z=float(data.get("z", 0.0)),
+            x=x,
+            y=y,
+            z=z,
             q_x=q_x,
             q_y=q_y,
             q_z=q_z,
             q_w=q_w,
             yaw=yaw,
-            speed=float(data.get("speed", 0.5)),
-            mode=int(data.get("mode", 0)),
+            speed=speed,
+            mode=mode,
         )
 
     def to_unitree_json(self, *, name: str | None = None, speed: float | None = None, mode: int | None = None) -> dict[str, Any]:
@@ -209,6 +247,7 @@ class MapProfile:
         return {
             "action": "navigate_to_pose",
             "map_id": self.map_id,
+            "map_path": self.pcd_path,
             "target_node": node.node_id,
             "target_pose": node.pose.to_unitree_json(name=node.node_id, speed=speed, mode=mode),
         }

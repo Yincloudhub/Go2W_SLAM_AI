@@ -57,7 +57,7 @@ print(
     "summary_health="
     + ("ok" if fresh else "stale")
     + f" age_ms={age_ms} stale_ms={max_age_ms}"
-    + f" front_m={data.get('front_clearance_m')} left_m={data.get('left_clearance_m')} right_m={data.get('right_clearance_m')}"
+    + f" front_m={data.get('front_clearance_m')} forward_left_sector_m={data.get('left_clearance_m')} forward_right_sector_m={data.get('right_clearance_m')}"
     + f" roi_front={roi.get('front')} roi_left={roi.get('left')} roi_right={roi.get('right')}"
 )
 raise SystemExit(0 if fresh else 1)

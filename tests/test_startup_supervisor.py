@@ -79,6 +79,63 @@ class StartupSupervisorTests(unittest.TestCase):
         self.assertFalse(summary["readiness"]["perception_ready"])
         self.assertEqual(summary["readiness"]["next_action"], "request relocalization from a verified anchor")
 
+    def test_lidar_without_explicit_calibration_fails_closed(self) -> None:
+        now_ms = int(time.time() * 1000)
+        gateway_response = {
+            "accepted": True,
+            "action": "get_world_state",
+            "world_state": {
+                "safety": {"allow_navigation": True, "reason": "ok", "recommended_mode": "normal"},
+                "slam_health": {
+                    "status": "ok",
+                    "slam_alive": True,
+                    "localization_alive": True,
+                },
+                "localization": {
+                    "status": "localized",
+                    "pose_age_ms": 100,
+                    "confidence": 0.9,
+                },
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0}},
+                "local_obstacle": {
+                    "source": "lidar_pointcloud",
+                    "stale": False,
+                    "age_ms": 100,
+                    "recommended_action": "normal",
+                    "front_confidence": 1.0,
+                    "left_confidence": 1.0,
+                    "right_confidence": 1.0,
+                    "front_clearance_m": 2.0,
+                    "left_clearance_m": 2.0,
+                    "right_clearance_m": 2.0,
+                },
+            },
+        }
+        records = [
+            {"name": "slam_stack", "required": True, "ok": True, "dry_run": False, "starts_motion": False},
+            {
+                "name": "gateway_world_state_probe",
+                "required": False,
+                "ok": True,
+                "returncode": 0,
+                "response": gateway_response,
+                "dry_run": False,
+                "starts_motion": False,
+            },
+        ]
+        summary = startup_summary(
+            records,
+            lidar_summary={
+                "source": "lidar_pointcloud",
+                "timestamp_ms": now_ms,
+                "stale": False,
+                "summary": {},
+            },
+        )
+
+        self.assertFalse(summary["readiness"]["perception_ready"])
+        self.assertEqual(summary["readiness"]["perception_reason"], "XT16 geometry is not calibrated")
+
 
 if __name__ == "__main__":
     unittest.main()

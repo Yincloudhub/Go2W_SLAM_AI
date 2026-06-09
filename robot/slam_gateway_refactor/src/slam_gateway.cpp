@@ -361,9 +361,11 @@ CurrentPose SlamGateway::getCurrentPose() const
 
 LocalizationState SlamGateway::getLocalizationState() const
 {
+    std::lock_guard<std::mutex> lk(state_mutex_);
     LocalizationState s;
     s.timestamp_ms = nowMs();
     s.map_id = current_pose_.map_id;
+    s.map_path = current_pose_.map_path;
     if (last_pose_update_ms_ <= 0) {
         s.status = "not_started";
         s.pose_age_ms = -1;
@@ -390,6 +392,7 @@ LocalizationState SlamGateway::getLocalizationState() const
 
 SlamHealth SlamGateway::getSlamHealth() const
 {
+    std::lock_guard<std::mutex> lk(state_mutex_);
     SlamHealth h;
     h.timestamp_ms = nowMs();
     if (last_pose_update_ms_ <= 0) {
@@ -510,6 +513,16 @@ void SlamGateway::slamInfoHandler(const void* message)
 
             CurrentPose p;
             p.timestamp_ms = nowMs();
+            const auto& data = jsonData["data"];
+            p.map_id = data.value("pcdName", "");
+            p.map_path = data.value("address", "");
+            if (p.map_id.empty() && !p.map_path.empty()) {
+                const auto slash = p.map_path.find_last_of('/');
+                const auto dot = p.map_path.find_last_of('.');
+                const auto begin = slash == std::string::npos ? 0 : slash + 1;
+                const auto end = dot == std::string::npos || dot < begin ? p.map_path.size() : dot;
+                p.map_id = p.map_path.substr(begin, end - begin);
+            }
             p.pose.x = cp.at("x").get<float>();
             p.pose.y = cp.at("y").get<float>();
             p.pose.z = cp.at("z").get<float>();

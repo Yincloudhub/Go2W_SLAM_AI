@@ -32,6 +32,7 @@ class MapRegistryTests(unittest.TestCase):
 
         self.assertEqual(command["action"], "navigate_to_pose")
         self.assertEqual(command["target_node"], "nie_guoli_office_front")
+        self.assertEqual(command["map_path"], "/home/unitree/test.pcd")
         self.assertAlmostEqual(command["target_pose"]["x"], 3.258938789367676)
         self.assertEqual(command["target_pose"]["mode"], 0)
         self.assertEqual(command["target_pose"]["speed"], 0.45)
@@ -65,6 +66,13 @@ class MapRegistryTests(unittest.TestCase):
         self.assertEqual(q_y, 0.0)
         self.assertEqual(q_z, 0.0)
         self.assertEqual(q_w, 1.0)
+
+    def test_missing_pose_coordinates_are_rejected(self) -> None:
+        data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+        del data["maps"][0]["topology_nodes"][0]["pose"]["x"]
+
+        with self.assertRaises(MapRegistryError):
+            MapRegistry.from_dict(data)
 
 
 if __name__ == "__main__":

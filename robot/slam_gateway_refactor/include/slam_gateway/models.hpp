@@ -102,6 +102,7 @@ struct PoseData {
 struct CurrentPose {
     int64_t timestamp_ms{0};
     std::string map_id{"debug_map"};
+    std::string map_path{""};
     std::string frame_id{"map"};
     PoseData pose;
     std::string source{"rt/slam_info"};
@@ -112,6 +113,7 @@ struct CurrentPose {
             {"type", "current_pose"},
             {"timestamp_ms", timestamp_ms},
             {"map_id", map_id},
+            {"map_path", map_path},
             {"frame_id", frame_id},
             {"pose", pose.toJson()},
             {"source", source}
@@ -122,6 +124,7 @@ struct CurrentPose {
 struct LocalizationState {
     int64_t timestamp_ms{0};
     std::string map_id{"debug_map"};
+    std::string map_path{""};
     std::string status{"not_started"};
     double confidence{-1.0};
     int64_t pose_age_ms{-1};
@@ -133,6 +136,7 @@ struct LocalizationState {
             {"type", "localization_state"},
             {"timestamp_ms", timestamp_ms},
             {"map_id", map_id},
+            {"map_path", map_path},
             {"status", status},
             {"confidence", confidence},
             {"pose_age_ms", pose_age_ms},

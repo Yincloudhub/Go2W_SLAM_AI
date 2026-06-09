@@ -7,12 +7,16 @@ from edge_autonomy.slam_state import LocalObstacleSummary
 class PerceptionFusionTests(unittest.TestCase):
     def test_valid_depth_can_only_reduce_clearance(self) -> None:
         lidar = LocalObstacleSummary(timestamp_ms=1000, source="lidar_pointcloud", front_clearance_m=2.4, left_clearance_m=2.0, right_clearance_m=2.0, confidence=0.9, stale=False)
-        depth = DepthCameraSummary(timestamp_ms=1050, front_clearance_m=0.7, left_clearance_m=1.2, right_clearance_m=1.5, confidence=0.8)
+        depth = DepthCameraSummary(timestamp_ms=1050, front_clearance_m=0.7, left_clearance_m=0.2, right_clearance_m=0.3, confidence=0.8)
 
         fused = fuse_local_obstacle_summary(lidar, depth, now_ms=1100)
 
         self.assertEqual(fused.front_clearance_m, 0.7)
+        self.assertEqual(fused.left_clearance_m, 2.0)
+        self.assertEqual(fused.right_clearance_m, 2.0)
         self.assertIn("front", fused.blocked_directions)
+        self.assertNotIn("left", fused.blocked_directions)
+        self.assertNotIn("right", fused.blocked_directions)
         self.assertEqual(fused.recommended_action, "pause")
         self.assertEqual(fused.source, "lidar_pointcloud+stereo_depth")
 

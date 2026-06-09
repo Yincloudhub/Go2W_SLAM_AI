@@ -114,7 +114,7 @@ def _perception_readiness(
     }
     if source not in TRUSTED_OBSTACLE_SOURCES:
         return False, f"local obstacle source is {source or 'missing'}", details
-    if calibrated is False:
+    if "lidar_pointcloud" in source and calibrated is not True:
         return False, "XT16 geometry is not calibrated", details
     if stale:
         reasons = obstacle.get("stale_reasons")

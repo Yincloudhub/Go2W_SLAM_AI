@@ -30,7 +30,14 @@ def run_gateway_command(command: dict[str, Any], config: GatewayConfig) -> dict[
     )
     if config.startup_wait_s > 0:
         time.sleep(config.startup_wait_s)
-    stdout, stderr = process.communicate(payload, timeout=config.timeout_s)
+    try:
+        stdout, stderr = process.communicate(payload, timeout=config.timeout_s)
+    except subprocess.TimeoutExpired as exc:
+        process.kill()
+        stdout, stderr = process.communicate()
+        detail = (stderr or "").strip()
+        suffix = f": {detail}" if detail else ""
+        raise RuntimeError(f"gateway command timed out after {config.timeout_s}s{suffix}") from exc
     if process.returncode != 0:
         raise RuntimeError(stderr.strip() or f"gateway command failed with exit {process.returncode}")
 

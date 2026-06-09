@@ -106,6 +106,9 @@ The machine-readable path is intentionally stricter than the keyboard path:
 ```json
 {
   "action": "navigate_to_pose",
+  "map_id": "go2w_real_site",
+  "map_path": "/home/unitree/test.pcd",
+  "runtime_watchdog": true,
   "target_pose": {
     "name": "llm_goal_001",
     "x": 2.0,
@@ -132,3 +135,5 @@ The machine-readable path is intentionally stricter than the keyboard path:
 5. Navigation obstacle mode follows Unitree SLAM API semantics: `mode=0` means obstacle avoidance, `mode=1` means stop for obstacle. LLM navigation and manually recorded waypoints default to `mode=0`.
 6. Short-lived command clients must not stop the SLAM backend when they exit. Use the explicit `stop_slam` action or the keyboard stop path when the backend should really stop.
 7. `navigate_to_pose` and `resume_navigation` are rejected unless the near-field summary is sensor-backed, fresh, sufficiently confident, and clear in the front, left, and right ROIs.
+8. `navigate_to_pose` requires `map_path`, and it must match the map path reported by the active SLAM localization stream.
+9. Stereo depth is forward-facing. Its image-left/image-right sectors may tighten the front view for diagnostics, but they never replace XT16 lateral or rear clearance. Stereo-only data cannot authorize navigation.

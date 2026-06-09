@@ -11,7 +11,8 @@ class DepthCameraSummary:
     """Compact depth-camera result for the closed-loop runtime.
 
     Raw stereo frames or dense depth clouds should be consumed by a separate
-    perception process. The runtime only needs this low-rate, bounded summary.
+    perception process. The camera is forward-facing: left/right values are
+    image sectors inside its forward field of view, not robot-side clearances.
     """
 
     timestamp_ms: int
@@ -85,9 +86,9 @@ def fuse_local_obstacle_summary(
 ) -> LocalObstacleSummary:
     """Fuse optional stereo depth into the LiDAR obstacle summary conservatively.
 
-    Stereo depth may reduce a clearance estimate, but it never increases the
-    clearance that the safety layer sees. Invalid, old, or low-confidence depth
-    is ignored so camera stalls cannot block the SLAM control path.
+    Forward-facing stereo may only reduce the front clearance. Robot-side and
+    rear clearances remain owned by the 360-degree LiDAR geometry path.
+    Invalid, old, or low-confidence depth is ignored.
     """
 
     if not depth_summary_is_usable(
@@ -100,9 +101,9 @@ def fuse_local_obstacle_summary(
 
     assert depth_summary is not None
     front = _clearance_min(lidar_summary.front_clearance_m, depth_summary.front_clearance_m)
-    left = _clearance_min(lidar_summary.left_clearance_m, depth_summary.left_clearance_m)
-    right = _clearance_min(lidar_summary.right_clearance_m, depth_summary.right_clearance_m)
-    rear = _clearance_min(lidar_summary.rear_clearance_m, depth_summary.rear_clearance_m)
+    left = lidar_summary.left_clearance_m
+    right = lidar_summary.right_clearance_m
+    rear = lidar_summary.rear_clearance_m
     blocked = _blocked_directions(front, left, right, rear, list(lidar_summary.blocked_directions))
     confidence = (
         depth_summary.confidence
