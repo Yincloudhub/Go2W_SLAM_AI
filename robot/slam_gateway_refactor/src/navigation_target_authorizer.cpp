@@ -1,5 +1,6 @@
 #include "slam_gateway/navigation_target_authorizer.hpp"
 
+#include <cctype>
 #include <cmath>
 #include <fstream>
 #include <set>
@@ -26,6 +27,20 @@ NavigationAuthorizationResult allow(
     return {true, "registry_target_authorized", details, authorized_pose};
 }
 
+RelocalizationAuthorizationResult rejectRelocation(
+    const std::string& reason,
+    nlohmann::json details = nlohmann::json::object())
+{
+    return {false, reason, std::move(details), PoseData{}};
+}
+
+RelocalizationAuthorizationResult allowRelocation(
+    const nlohmann::json& details,
+    const PoseData& authorized_pose)
+{
+    return {true, "registry_relocalization_anchor_authorized", details, authorized_pose};
+}
+
 bool closeEnough(double lhs, double rhs, double tolerance)
 {
     return std::isfinite(lhs) && std::isfinite(rhs) && std::fabs(lhs - rhs) <= tolerance;
@@ -49,6 +64,29 @@ const nlohmann::json* findNode(const nlohmann::json& map, const std::string& nod
         if (node.is_object() && node.value("node_id", "") == node_id) return &node;
     }
     return nullptr;
+}
+
+const nlohmann::json* findRelocalizationAnchor(
+    const nlohmann::json& map,
+    const std::string& anchor_id)
+{
+    const auto anchors = map.find("relocalization_anchors");
+    if (anchors == map.end() || !anchors->is_array()) return nullptr;
+    for (const auto& anchor : *anchors) {
+        if (anchor.is_object() && anchor.value("anchor_id", "") == anchor_id) {
+            return &anchor;
+        }
+    }
+    return nullptr;
+}
+
+bool verifiedRelocalizationStatus(const nlohmann::json& anchor)
+{
+    std::string status = anchor.value("status", "");
+    for (auto& ch : status) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return status == "verified" || status.rfind("verified_", 0) == 0;
 }
 
 std::set<std::string> nodeTags(const nlohmann::json& node)
@@ -244,6 +282,96 @@ NavigationAuthorizationResult NavigationTargetAuthorizer::authorize(
             {"registry_map_id", registry_map_id_},
             {"map_path", registry_map_path},
             {"target_node", target_node},
+            {"authorized_pose", authorized_pose.toJson()}
+        },
+        authorized_pose);
+}
+
+RelocalizationAuthorizationResult NavigationTargetAuthorizer::authorizeRelocation(
+    const std::string& command_map_id,
+    const std::string& requested_map_path,
+    const std::string& anchor_id,
+    const nlohmann::json& initial_pose) const
+{
+    if (registry_path_.empty() || registry_map_id_.empty()) {
+        return rejectRelocation("relocalization_registry_not_configured");
+    }
+    if (command_map_id != registry_map_id_) {
+        return rejectRelocation(
+            "relocalization_registry_map_id_mismatch",
+            {{"requested_map_id", command_map_id}, {"registry_map_id", registry_map_id_}});
+    }
+    if (!load_error_.empty()) {
+        return rejectRelocation(load_error_, {{"registry_path", registry_path_}});
+    }
+
+    const auto* map = findMap(registry_snapshot_, registry_map_id_);
+    if (map == nullptr) {
+        return rejectRelocation(
+            "relocalization_registry_map_not_found",
+            {{"registry_map_id", registry_map_id_}});
+    }
+    const std::string registry_map_path = map->value("pcd_path", "");
+    if (registry_map_path.empty()) {
+        return rejectRelocation("relocalization_registry_map_path_missing");
+    }
+    if (requested_map_path != registry_map_path) {
+        return rejectRelocation(
+            "relocalization_registry_map_path_mismatch",
+            {{"requested_map_path", requested_map_path}, {"registry_map_path", registry_map_path}});
+    }
+    if (anchor_id.empty()) {
+        return rejectRelocation("relocalization_anchor_id_required");
+    }
+
+    const auto* anchor = findRelocalizationAnchor(*map, anchor_id);
+    if (anchor == nullptr) {
+        return rejectRelocation(
+            "relocalization_active_anchor_not_found",
+            {{"anchor_id", anchor_id}});
+    }
+    if (!verifiedRelocalizationStatus(*anchor)) {
+        return rejectRelocation(
+            "relocalization_verified_anchor_required",
+            {{"anchor_id", anchor_id}, {"status", anchor->value("status", "")}});
+    }
+
+    const auto registered_pose_it = anchor->find("pose");
+    if (registered_pose_it == anchor->end() || !registered_pose_it->is_object()) {
+        return rejectRelocation(
+            "relocalization_registry_anchor_pose_missing",
+            {{"anchor_id", anchor_id}});
+    }
+    if (!initial_pose.is_object()) {
+        return rejectRelocation("relocalization_initial_pose_must_be_object");
+    }
+    if (initial_pose.value("name", "") != anchor_id) {
+        return rejectRelocation("relocalization_initial_pose_name_mismatch");
+    }
+
+    const auto& registered_pose = *registered_pose_it;
+    for (const char* field : {"x", "y", "z", "q_x", "q_y", "q_z", "q_w"}) {
+        const auto comparison = compareNumber(
+            initial_pose,
+            registered_pose,
+            field,
+            kPoseTolerance);
+        if (!comparison.authorized) {
+            return rejectRelocation(
+                "relocalization_anchor_pose_mismatch:" + std::string(field),
+                comparison.details);
+        }
+    }
+
+    PoseData authorized_pose = PoseData::fromJson(registered_pose);
+    authorized_pose.name = anchor_id;
+    authorized_pose.speed = 0.0f;
+    return allowRelocation(
+        {
+            {"registry_path", registry_path_},
+            {"registry_map_id", registry_map_id_},
+            {"map_path", registry_map_path},
+            {"anchor_id", anchor_id},
             {"authorized_pose", authorized_pose.toJson()}
         },
         authorized_pose);

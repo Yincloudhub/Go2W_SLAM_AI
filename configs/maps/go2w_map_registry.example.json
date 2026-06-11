@@ -15,6 +15,7 @@
       "status": "active_candidate",
       "pcd_path": "/home/unitree/test.pcd",
       "topology_path": "/home/unitree/topology_points.json",
+      "mapping_origin_anchor_id": "mapping_origin",
       "frame_id": "map",
       "description": "2026-05-17 从机器狗只读检查得到的当前主 PCD。已知在建图起点附近可以重定位，远离起点时不稳定。",
       "rviz_topics": {
@@ -148,6 +149,7 @@
       "status": "candidate",
       "pcd_path": "/home/unitree/test513.pcd",
       "topology_path": "/home/unitree/maps/test513.topology.json",
+      "mapping_origin_anchor_id": "mapping_origin",
       "frame_id": "map",
       "description": "2026-05-17 只读检查得到的另一个 PCD。还没有绑定可靠拓扑点和重定位锚点。",
       "rviz_topics": {

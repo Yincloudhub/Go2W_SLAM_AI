@@ -138,6 +138,11 @@ class RelocalizationAnchor:
             description=str(data.get("description", "")),
         )
 
+    @property
+    def verified(self) -> bool:
+        status = self.status.strip().lower()
+        return status == "verified" or status.startswith("verified_")
+
 
 @dataclass(frozen=True)
 class TopologyNode:
@@ -193,32 +198,59 @@ class MapProfile:
     name: str
     pcd_path: str
     topology_path: str
+    mapping_origin_anchor_id: str = ""
     frame_id: str = "map"
     status: str = "candidate"
     description: str = ""
     rviz_topics: dict[str, str] = field(default_factory=dict)
     pcd_statistics: dict[str, Any] = field(default_factory=dict)
     relocalization_anchors: tuple[RelocalizationAnchor, ...] = field(default_factory=tuple)
+    archived_relocalization_anchors: tuple[RelocalizationAnchor, ...] = field(default_factory=tuple)
     topology_nodes: tuple[TopologyNode, ...] = field(default_factory=tuple)
     topology_edges: tuple[TopologyEdge, ...] = field(default_factory=tuple)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MapProfile":
         map_id = str(data["map_id"])
-        return cls(
+        profile = cls(
             map_id=map_id,
             name=str(data.get("name", map_id)),
             pcd_path=str(data["pcd_path"]),
             topology_path=str(data.get("topology_path", f"/home/unitree/maps/{map_id}.topology.json")),
+            mapping_origin_anchor_id=str(data.get("mapping_origin_anchor_id", "")),
             frame_id=str(data.get("frame_id", "map")),
             status=str(data.get("status", "candidate")),
             description=str(data.get("description", "")),
             rviz_topics=dict(data.get("rviz_topics", {})),
             pcd_statistics=dict(data.get("pcd_statistics", {})),
             relocalization_anchors=tuple(RelocalizationAnchor.from_dict(v) for v in data.get("relocalization_anchors", [])),
+            archived_relocalization_anchors=tuple(
+                RelocalizationAnchor.from_dict(v)
+                for v in data.get("archived_relocalization_anchors", [])
+            ),
             topology_nodes=tuple(TopologyNode.from_dict(v) for v in data.get("topology_nodes", [])),
             topology_edges=tuple(TopologyEdge.from_dict(v) for v in data.get("topology_edges", [])),
         )
+        active_ids = [anchor.anchor_id for anchor in profile.relocalization_anchors]
+        archived_ids = [anchor.anchor_id for anchor in profile.archived_relocalization_anchors]
+        if len(active_ids) != len(set(active_ids)):
+            raise MapRegistryError(f"map '{map_id}' has duplicate active relocalization anchor ids")
+        if len(archived_ids) != len(set(archived_ids)):
+            raise MapRegistryError(f"map '{map_id}' has duplicate archived relocalization anchor ids")
+        overlap = sorted(set(active_ids) & set(archived_ids))
+        if overlap:
+            raise MapRegistryError(
+                f"map '{map_id}' has anchors present in both active and archive: {', '.join(overlap)}"
+            )
+        if (
+            profile.mapping_origin_anchor_id
+            and profile.mapping_origin_anchor_id not in set(active_ids)
+        ):
+            raise MapRegistryError(
+                f"map '{map_id}' mapping origin anchor "
+                f"'{profile.mapping_origin_anchor_id}' is not active"
+            )
+        return profile
 
     def get_anchor(self, anchor_id: str) -> RelocalizationAnchor:
         for anchor in self.relocalization_anchors:
@@ -234,8 +266,13 @@ class MapProfile:
 
     def relocate_command(self, anchor_id: str) -> dict[str, Any]:
         anchor = self.get_anchor(anchor_id)
+        if not anchor.verified:
+            raise MapRegistryError(
+                f"relocalization anchor '{anchor.anchor_id}' is not verified: {anchor.status}"
+            )
         return {
             "action": "relocate",
+            "operator_ack": True,
             "map_id": self.map_id,
             "map_path": self.pcd_path,
             "anchor_id": anchor.anchor_id,

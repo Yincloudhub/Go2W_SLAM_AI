@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts import go2w_agent_entry
 from scripts import run_robot_closed_loop
@@ -89,6 +90,34 @@ class AgentEntrySafetyTests(unittest.TestCase):
         self.assertFalse(preflight["checked"])
         self.assertIsNone(preflight["allowed"])
         self.assertNotIn("go_dry_run_preflight_not_enforced", [step["step"] for step in payload["steps"]])
+
+    def test_explicit_relocation_requires_matching_anchor_confirmation(self) -> None:
+        stdout = io.StringIO()
+        with patch.object(go2w_agent_entry, "relocate_to_anchor") as relocate:
+            with contextlib.redirect_stdout(stdout):
+                rc = go2w_agent_entry.main(
+                    [
+                        "--relocate",
+                        "--relocation-anchor",
+                        "mapping_origin",
+                    ]
+                )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(rc, 2)
+        self.assertFalse(payload["steps"][-1]["result"]["accepted"])
+        relocate.assert_not_called()
+
+    def test_explicit_relocation_requires_anchor_selection(self) -> None:
+        stdout = io.StringIO()
+        with patch.object(go2w_agent_entry, "relocate_to_anchor") as relocate:
+            with contextlib.redirect_stdout(stdout):
+                rc = go2w_agent_entry.main(["--relocate"])
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(rc, 2)
+        self.assertIn("--relocation-anchor is required", payload["steps"][-1]["result"]["reason"])
+        relocate.assert_not_called()
 
 
 if __name__ == "__main__":

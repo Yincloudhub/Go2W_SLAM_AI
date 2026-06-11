@@ -31,8 +31,30 @@ class RuntimeLayoutTests(unittest.TestCase):
                             "status": "real",
                             "pcd_path": "/home/unitree/test.pcd",
                             "topology_path": "/home/unitree/topology_points.json",
-                            "topology_nodes": [],
-                            "relocalization_anchors": [],
+                            "mapping_origin_anchor_id": "mapping_origin",
+                            "topology_nodes": [
+                                {
+                                    "node_id": "initial_point",
+                                    "name": "initial_point",
+                                    "pose": {"x": 0.0, "y": 0.0},
+                                }
+                            ],
+                            "relocalization_anchors": [
+                                {
+                                    "anchor_id": "mapping_origin",
+                                    "name": "mapping_origin",
+                                    "status": "verified_test",
+                                    "pose": {"x": 0.0, "y": 0.0},
+                                }
+                            ],
+                            "archived_relocalization_anchors": [
+                                {
+                                    "anchor_id": "initial_point",
+                                    "name": "initial_point",
+                                    "status": "candidate_failed",
+                                    "pose": {"x": 1.0, "y": 0.0},
+                                }
+                            ],
                         }
                     ],
                 }
@@ -97,6 +119,60 @@ class RuntimeLayoutTests(unittest.TestCase):
             )
 
             self.assertEqual(result, 2)
+
+    def test_rejects_unverified_or_extra_active_relocalization_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            active_repo = self.make_active_repo(root)
+            registry = active_repo / "configs" / "maps" / "go2w_real_site_map_registry.json"
+            data = json.loads(registry.read_text(encoding="utf-8"))
+            data["maps"][0]["relocalization_anchors"].append(
+                {
+                    "anchor_id": "initial_point",
+                    "name": "initial_point",
+                    "status": "candidate",
+                    "pose": {"x": 1.0, "y": 0.0},
+                }
+            )
+            registry.write_text(json.dumps(data), encoding="utf-8")
+
+            result = self.run_checker(
+                "--active-repo",
+                str(active_repo),
+                "--legacy-repo",
+                str(root / "missing-agent"),
+                "--legacy-gateway",
+                str(root / "missing-gateway"),
+            )
+
+            self.assertEqual(result, 2)
+
+    def test_accepts_multiple_verified_relocalization_anchors(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            active_repo = self.make_active_repo(root)
+            registry = active_repo / "configs" / "maps" / "go2w_real_site_map_registry.json"
+            data = json.loads(registry.read_text(encoding="utf-8"))
+            data["maps"][0]["relocalization_anchors"].append(
+                {
+                    "anchor_id": "verified_station_anchor",
+                    "name": "verified_station_anchor",
+                    "status": "verified_field_test",
+                    "pose": {"x": 1.0, "y": 0.0},
+                }
+            )
+            registry.write_text(json.dumps(data), encoding="utf-8")
+
+            result = self.run_checker(
+                "--active-repo",
+                str(active_repo),
+                "--legacy-repo",
+                str(root / "missing-agent"),
+                "--legacy-gateway",
+                str(root / "missing-gateway"),
+            )
+
+            self.assertEqual(result, 0)
 
 
 if __name__ == "__main__":

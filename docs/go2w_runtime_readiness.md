@@ -51,6 +51,24 @@ operator confirmation
 An uncalibrated or stale trusted XT16 summary fails closed for navigation.
 Manual relocation remains available so localization can be recovered.
 
+Build-map origin, relocation, and navigation use separate registry roles:
+
+- `mapping_origin_anchor_id` identifies exactly one build-map coordinate origin.
+- `relocalization_anchors` may contain multiple active verified poses from the
+  same PCD. The build-map origin may also be used as one relocation anchor.
+- `initial_point` is a navigation topology node only.
+- failed and candidate relocation observations are retained under
+  `archived_relocalization_anchors`; they are visible for audit but cannot emit
+  or authorize a relocation command.
+
+The current real-site registry has only one verified active relocation anchor,
+`mapping_origin`; additional PCD locations become selectable only after field
+verification. The C++ gateway is the final relocation authorization boundary. It requires
+operator acknowledgement and exact agreement among `map_id`, `map_path`,
+`anchor_id`, and the active verified anchor pose in the fixed startup registry
+snapshot. Raw coordinates, archived anchors, and topology-node poses are
+rejected.
+
 The C++ gateway loads the deployed map registry once when the persistent
 session starts. The request names a topology node, carries a pose assertion
 for diagnostics, and may request a lower speed, but executable coordinates,
@@ -96,7 +114,7 @@ The shortest operator entry point exposes no navigation execution action:
 ```bash
 cd /home/unitree/Go2W_SLAM_AI
 bash scripts/go2w_accept.sh status
-bash scripts/go2w_accept.sh relocate mapping_origin
+bash scripts/go2w_accept.sh relocate SELECTED_ANCHOR confirm
 bash scripts/go2w_accept.sh verify mapping_origin
 bash scripts/go2w_accept.sh check TARGET_NODE
 ```
@@ -117,17 +135,18 @@ The tool has four explicit stages:
 2. `relocate`: only a verified registry anchor is accepted, and the exact
    anchor ID must also be supplied through `--confirm-relocation`. Relocation
    initializes SLAM coordinates and does not command chassis motion.
-3. `verify-localization`: samples localization repeatedly and checks pose age,
-   SLAM health, monotonic timestamps, anchor radius, and yaw tolerance.
+3. `verify-localization`: reuses one persistent gateway subscriber across all
+   samples and checks pose age, SLAM health, monotonic timestamps, anchor
+   radius, and yaw tolerance.
 4. `prepare-navigation`: validates the target and live navigation gate, then
-   prints a 0.1 m/s supervised command. It never executes navigation itself.
+   prints a 0.1 m/s supervised command. It never executes navigation itself
+   and does not require the robot to remain near its previous relocation anchor.
 
 `prepare-navigation` fails closed unless all of these conditions hold:
 
 - `xt16_driver` and `unitree_slam` are running;
 - localization and pose timestamps are fresh and advancing;
 - the active SLAM `map_path` matches the registry PCD;
-- the relocation anchor has an explicit `verified`/`verified_*` status;
 - the target has the positive `live_verified` tag and no blocking tag;
 - XT16 geometry explicitly reports `calibrated=true`;
 - XT16 reports a non-empty calibration ID from a verified repository
@@ -140,7 +159,7 @@ timestamps, target verification, or sensor provenance are blockers rather than
 defaults.
 
 Example relocation after the operator physically confirms the robot is at the
-verified mapping origin:
+verified build-map origin:
 
 ```bash
 python3 scripts/go2w_supervised_acceptance.py \
@@ -154,9 +173,13 @@ Prepare, but do not execute, one short navigation target:
 ```bash
 python3 scripts/go2w_supervised_acceptance.py \
   --stage prepare-navigation \
-  --anchor mapping_origin \
   --target TARGET_NODE
 ```
+
+The relocation anchor is only an initialization and verification reference.
+Once localization is healthy, normal movement away from that anchor must not
+invalidate navigation. Navigation is gated by fresh SLAM localization, exact
+map identity, target verification, calibrated perception, and live safety.
 
 Only run the printed motion command while the robot remains in sight and the
 operator has immediate access to the emergency stop.

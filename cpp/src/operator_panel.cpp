@@ -4,7 +4,9 @@
 #include "go2w/queue_executor.hpp"
 #include "go2w/world_state_v1.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -299,6 +301,15 @@ const nlohmann::json* findRelocalizationAnchor(const nlohmann::json& map, const 
         if (anchor.value("anchor_id", "") == anchor_id || anchor.value("name", "") == anchor_id) return &anchor;
     }
     return nullptr;
+}
+
+bool isVerifiedRelocalizationAnchor(const nlohmann::json& anchor)
+{
+    std::string status = anchor.value("status", "");
+    std::transform(status.begin(), status.end(), status.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return status == "verified" || status.rfind("verified_", 0) == 0;
 }
 
 double yawFromQuaternionLocal(double qx, double qy, double qz, double qw)
@@ -833,7 +844,8 @@ CommandResult OperatorPanel::fallbackPythonCommand(const std::string& text) cons
         << " --nav-mode " << config_.nav_mode
         << " --arrival-distance-m " << config_.arrival_distance_m
         << " --arrival-monitor-s " << config_.arrival_monitor_s
-        << " --gateway-startup-wait-s " << config_.gateway_startup_wait_s;
+        << " --gateway-startup-wait-s " << config_.gateway_startup_wait_s
+        << " --no-auto-relocate";
     if (config_.execute_enabled) cmd << " --execute";
     if (!config_.execute_enabled) cmd << " --dry-run";
     if (!config_.current_node.empty()) cmd << " --current-node " << shellQuote(config_.current_node);
@@ -916,6 +928,12 @@ CommandResult OperatorPanel::relocateAnchor(const std::string& anchor_id, bool c
         result.stderr_text = "anchor not found in registry: " + target_anchor + "\n";
         return result;
     }
+    if (!isVerifiedRelocalizationAnchor(*anchor)) {
+        result.exit_code = 3;
+        result.stderr_text =
+            "relocalization anchor is not verified: " + target_anchor + "\n";
+        return result;
+    }
     const auto* pose = objectAt(*anchor, {"pose"});
     if (!pose || !pose->is_object() || !pose->contains("x") || !pose->contains("y")) {
         result.exit_code = 2;
@@ -925,6 +943,7 @@ CommandResult OperatorPanel::relocateAnchor(const std::string& anchor_id, bool c
 
     const auto command = nlohmann::json{
         {"action", "relocate"},
+        {"operator_ack", true},
         {"map_id", config_.map_id},
         {"map_path", map->value("pcd_path", "/home/unitree/test.pcd")},
         {"anchor_id", anchor->value("anchor_id", target_anchor)},

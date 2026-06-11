@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import math
+import queue
 import subprocess
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,6 +63,149 @@ def run_gateway_command(command: dict[str, Any], config: GatewayConfig) -> dict[
         if "accepted" in value:
             return value
     return objects[-1]
+
+
+class PersistentGatewaySession:
+    """Persistent gateway client with request correlation and a navigation lease."""
+
+    def __init__(
+        self,
+        *,
+        client_path: str,
+        network_interface: str,
+        timeout_s: int,
+        startup_wait_s: float = 0.0,
+    ) -> None:
+        self.timeout_s = max(1, timeout_s)
+        self.process = subprocess.Popen(
+            [client_path, network_interface, "--persistent-navigation-session"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        self.messages: queue.Queue[dict[str, Any]] = queue.Queue()
+        self.reader = threading.Thread(target=self._read_output, daemon=True)
+        self.reader.start()
+        self.session_token = ""
+        self.lease_timeout_ms = 0
+        self._request_sequence = 0
+        self.active = False
+        self.async_events: list[dict[str, Any]] = []
+        if startup_wait_s > 0:
+            time.sleep(startup_wait_s)
+        try:
+            ready = self._wait_for(
+                lambda value: value.get("type") == "navigation_session_ready",
+                timeout_s=self.timeout_s,
+            )
+        except Exception:
+            self.close()
+            raise
+        self.session_token = str(ready.get("session_token") or "")
+        self.lease_timeout_ms = int(ready.get("lease_timeout_ms") or 0)
+        if not self.session_token or self.lease_timeout_ms <= 0:
+            self.close()
+            raise RuntimeError("gateway did not provide a valid navigation session lease")
+
+    def _read_output(self) -> None:
+        assert self.process.stdout is not None
+        for line in self.process.stdout:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                value = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                self.messages.put(value)
+        self.messages.put({"type": "_session_eof", "returncode": self.process.poll()})
+
+    def _wait_for(self, predicate: Any, *, timeout_s: float) -> dict[str, Any]:
+        deadline = time.monotonic() + timeout_s
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("persistent gateway session response timed out")
+            try:
+                value = self.messages.get(timeout=remaining)
+            except queue.Empty as exc:
+                raise TimeoutError("persistent gateway session response timed out") from exc
+            if value.get("type") == "_session_eof":
+                raise RuntimeError(
+                    f"persistent gateway session exited unexpectedly: {value.get('returncode')}"
+                )
+            if value.get("type") == "navigation_session_unready":
+                raise RuntimeError(
+                    "persistent gateway session is unready: "
+                    f"{value.get('reason') or 'unknown reason'}"
+                )
+            if predicate(value):
+                return value
+            self.async_events.append(value)
+
+    def command(self, command: dict[str, Any]) -> dict[str, Any]:
+        if self.process.poll() is not None:
+            raise RuntimeError("persistent gateway session is not running")
+        action = str(command.get("action") or "")
+        self._request_sequence += 1
+        request_id = f"session-request-{self._request_sequence}"
+        payload = {
+            **command,
+            "navigation_session_token": self.session_token,
+            "request_id": request_id,
+        }
+        assert self.process.stdin is not None
+        self.process.stdin.write(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+        )
+        self.process.stdin.flush()
+        result = self._wait_for(
+            lambda value: (
+                "accepted" in value
+                and not value.get("type")
+                and value.get("request_id") == request_id
+            ),
+            timeout_s=self.timeout_s,
+        )
+        if action == "navigate_to_pose" and result.get("accepted") is True:
+            self.active = True
+        elif action in {"pause_navigation", "stop_slam"}:
+            self.active = False
+        return result
+
+    def heartbeat(self) -> dict[str, Any]:
+        return self.command({"action": "navigation_heartbeat"})
+
+    def close(self) -> None:
+        if not hasattr(self, "process"):
+            return
+        try:
+            if self.active and self.process.poll() is None:
+                self.command({"action": "pause_navigation"})
+        except Exception:
+            pass
+        try:
+            if self.process.stdin is not None and not self.process.stdin.closed:
+                self.process.stdin.close()
+        except OSError:
+            pass
+        try:
+            self.process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=3)
+        self.active = False
+
+    def __enter__(self) -> "PersistentGatewaySession":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        self.close()
 
 
 def pose_distance(pose: dict[str, Any], target_pose: dict[str, Any]) -> float | None:
@@ -184,19 +329,43 @@ class ChassisController:
     def pause(self) -> dict[str, Any]:
         return run_gateway_command({"action": "pause_navigation"}, self.gateway)
 
-    def relocate_to_node(self, node_id: str, *, map_path_fallback: str) -> dict[str, Any]:
-        node = self.node(node_id)
-        if not node:
-            return {"accepted": False, "action": "relocate", "reason": f"node_id {node_id!r} not found"}
-        pose = node.get("pose")
+    def relocate_to_anchor(self, anchor_id: str, *, map_path_fallback: str) -> dict[str, Any]:
+        profile = self.registry_map()
+        if not profile:
+            return {"accepted": False, "action": "relocate", "reason": f"map_id {self.map_id!r} not found"}
+        anchors = profile.get("relocalization_anchors", [])
+        anchor = next(
+            (
+                item
+                for item in anchors
+                if isinstance(item, dict) and item.get("anchor_id") == anchor_id
+            ),
+            None,
+        )
+        if not anchor:
+            return {
+                "accepted": False,
+                "action": "relocate",
+                "reason": f"active relocalization anchor {anchor_id!r} not found",
+            }
+        status = str(anchor.get("status") or "").strip().lower()
+        if status != "verified" and not status.startswith("verified_"):
+            return {
+                "accepted": False,
+                "action": "relocate",
+                "reason": f"relocalization anchor {anchor_id!r} is not verified: {status or 'missing'}",
+            }
+        pose = anchor.get("pose")
         if not isinstance(pose, dict):
-            return {"accepted": False, "action": "relocate", "reason": f"node_id {node_id!r} has no pose"}
+            return {"accepted": False, "action": "relocate", "reason": f"anchor_id {anchor_id!r} has no pose"}
         return run_gateway_command(
             {
                 "action": "relocate",
+                "operator_ack": True,
+                "map_id": self.map_id,
                 "map_path": self.map_path(map_path_fallback),
+                "anchor_id": anchor_id,
                 "initial_pose": pose,
-                "init_pose": pose,
             },
             self.gateway,
         )

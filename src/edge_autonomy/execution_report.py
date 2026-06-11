@@ -136,8 +136,10 @@ def summarize_agent_output(output: dict[str, Any]) -> dict[str, Any]:
                 summary["resolved_target"] = selected.get("node_id")
             summary["resolve_ambiguous"] = result.get("ambiguous")
             summary["resolve_reason"] = result.get("reason", "")
-        elif name == "go_auto_relocate":
-            summary["auto_relocated"] = True
+        elif name == "go_auto_relocate_blocked":
+            summary["auto_relocated"] = False
+            summary["relocation_required"] = True
+            summary["relocation_reason"] = step.get("reason", "")
         elif name == "closed_loop" and isinstance(result, dict):
             payload = result.get("result", {})
             if isinstance(payload, dict):

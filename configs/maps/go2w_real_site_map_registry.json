@@ -418,7 +418,9 @@
             "mode": 0
           },
           "description": "Startup relocalization anchor verified on 2026-06-01 after SLAM restart; ICP Score 0.0165342 and relocation succeeded."
-        },
+        }
+      ],
+      "archived_relocalization_anchors": [
         {
           "anchor_id": "initial_point",
           "name": "初始点",
@@ -572,7 +574,8 @@
             }
           }
         }
-      ]
+      ],
+      "mapping_origin_anchor_id": "mapping_origin"
     }
   ]
 }

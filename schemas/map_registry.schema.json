@@ -29,6 +29,7 @@
         "status": {"type": "string"},
         "pcd_path": {"type": "string"},
         "topology_path": {"type": "string"},
+        "mapping_origin_anchor_id": {"type": "string", "minLength": 1},
         "frame_id": {"type": "string"},
         "description": {"type": "string"},
         "rviz_topics": {
@@ -40,6 +41,10 @@
           "additionalProperties": true
         },
         "relocalization_anchors": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/relocalization_anchor"}
+        },
+        "archived_relocalization_anchors": {
           "type": "array",
           "items": {"$ref": "#/$defs/relocalization_anchor"}
         },
@@ -65,6 +70,10 @@
         "allowed_yaw_error_deg": {"type": "number", "minimum": 0},
         "pose": {"$ref": "#/$defs/unitree_pose"},
         "calibration_observation": {"$ref": "#/$defs/calibration_observation"},
+        "verification": {
+          "type": "object",
+          "additionalProperties": true
+        },
         "description": {"type": "string"}
       }
     },
@@ -87,6 +96,10 @@
         },
         "pose": {"$ref": "#/$defs/unitree_pose"},
         "calibration_observation": {"$ref": "#/$defs/calibration_observation"},
+        "verification": {
+          "type": "object",
+          "additionalProperties": true
+        },
         "description": {"type": "string"}
       }
     },

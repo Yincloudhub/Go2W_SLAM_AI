@@ -163,7 +163,15 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
     }
 
     if (action == "relocate") {
-        const std::string map_path = cmd.value("map_path", "/home/unitree/test.pcd");
+        if (!hasOperatorAck(cmd)) {
+            return reject("operator_ack_required_for_relocation");
+        }
+        if (target_authorizer_ == nullptr) {
+            return reject("relocalization_anchor_authorizer_not_configured");
+        }
+        const std::string map_id = cmd.value("map_id", "");
+        const std::string map_path = cmd.value("map_path", "");
+        const std::string anchor_id = cmd.value("anchor_id", "");
         if (!cmd.contains("initial_pose") || !cmd["initial_pose"].is_object()) {
             return reject("missing_initial_pose");
         }
@@ -171,8 +179,20 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         if (!pose_error.empty()) {
             return reject(pose_error);
         }
-        PoseData init_pose = parsePose(cmd["initial_pose"]);
-        return ok(action, gateway_.startRelocation(map_path, init_pose));
+        const auto authorization = target_authorizer_->authorizeRelocation(
+            map_id,
+            map_path,
+            anchor_id,
+            cmd["initial_pose"]);
+        if (!authorization.authorized) {
+            return {
+                {"accepted", false},
+                {"reason", authorization.reason},
+                {"authorization", authorization.details},
+                {"world_state", gateway_.buildWorldStateJson()}
+            };
+        }
+        return ok(action, gateway_.startRelocation(map_path, authorization.authorized_pose));
     }
 
     if (action == "navigate_to_pose") {

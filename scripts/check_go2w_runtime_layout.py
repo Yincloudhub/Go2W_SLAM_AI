@@ -14,6 +14,7 @@ REAL_SITE_REGISTRY = Path("configs/maps/go2w_real_site_map_registry.json")
 EXPECTED_MAP_ID = "go2w_real_site"
 EXPECTED_PCD_PATH = "/home/unitree/test.pcd"
 EXPECTED_TOPOLOGY_PATH = "/home/unitree/topology_points.json"
+EXPECTED_MAPPING_ORIGIN_ANCHOR = "mapping_origin"
 
 
 def sha256(path: Path) -> str:
@@ -55,8 +56,32 @@ def describe_registry(path: Path) -> dict[str, Any]:
         "status": map_profile.get("status"),
         "pcd_path": map_profile.get("pcd_path"),
         "topology_path": map_profile.get("topology_path"),
+        "mapping_origin_anchor_id": map_profile.get("mapping_origin_anchor_id"),
         "topology_nodes": len(map_profile.get("topology_nodes", [])),
+        "topology_node_ids": [
+            item.get("node_id")
+            for item in map_profile.get("topology_nodes", [])
+            if isinstance(item, dict)
+        ],
         "relocalization_anchors": len(map_profile.get("relocalization_anchors", [])),
+        "relocalization_anchor_ids": [
+            item.get("anchor_id")
+            for item in map_profile.get("relocalization_anchors", [])
+            if isinstance(item, dict)
+        ],
+        "relocalization_anchor_statuses": {
+            str(item.get("anchor_id")): str(item.get("status") or "")
+            for item in map_profile.get("relocalization_anchors", [])
+            if isinstance(item, dict)
+        },
+        "archived_relocalization_anchors": len(
+            map_profile.get("archived_relocalization_anchors", [])
+        ),
+        "archived_relocalization_anchor_ids": [
+            item.get("anchor_id")
+            for item in map_profile.get("archived_relocalization_anchors", [])
+            if isinstance(item, dict)
+        ],
     }
 
 
@@ -105,6 +130,33 @@ def main(argv: list[str] | None = None) -> int:
         errors.append(f"active pcd_path is {active['pcd_path']!r}")
     if active["topology_path"] != EXPECTED_TOPOLOGY_PATH:
         errors.append(f"active topology_path is {active['topology_path']!r}")
+    if active["mapping_origin_anchor_id"] != EXPECTED_MAPPING_ORIGIN_ANCHOR:
+        errors.append(
+            "mapping_origin_anchor_id must identify the unique build-map origin: "
+            f"{active['mapping_origin_anchor_id']!r}"
+        )
+    if active["mapping_origin_anchor_id"] not in active["relocalization_anchor_ids"]:
+        errors.append("mapping origin anchor must exist in active relocalization anchors")
+    for anchor_id, status in active["relocalization_anchor_statuses"].items():
+        normalized = status.strip().lower()
+        if normalized != "verified" and not normalized.startswith("verified_"):
+            errors.append(
+                f"active relocalization anchor {anchor_id!r} is not verified: {status!r}"
+            )
+    active_anchor_ids = active["relocalization_anchor_ids"]
+    archived_anchor_ids = active["archived_relocalization_anchor_ids"]
+    duplicate_anchor_ids = sorted(set(active_anchor_ids) & set(archived_anchor_ids))
+    if duplicate_anchor_ids:
+        errors.append(
+            "active and archived relocalization anchors overlap: "
+            f"{duplicate_anchor_ids!r}"
+        )
+    if "initial_point" in active_anchor_ids:
+        errors.append("initial_point must not be an active relocalization anchor")
+    if "initial_point" not in archived_anchor_ids:
+        errors.append("historical initial_point relocation record must remain archived")
+    if "initial_point" not in active["topology_node_ids"]:
+        errors.append("navigation topology node initial_point is missing")
 
     legacy: dict[str, Any] | None = None
     if legacy_repo.exists():
@@ -160,7 +212,8 @@ def main(argv: list[str] | None = None) -> int:
             "active_map="
             f"{active['map_id']} status={active['status']} "
             f"pcd={active['pcd_path']} topology={active['topology_path']} "
-            f"nodes={active['topology_nodes']} anchors={active['relocalization_anchors']}"
+            f"nodes={active['topology_nodes']} anchors={active['relocalization_anchors']} "
+            f"archived_anchors={active['archived_relocalization_anchors']}"
         )
         if legacy is not None:
             print(f"legacy_repo={legacy_repo}")

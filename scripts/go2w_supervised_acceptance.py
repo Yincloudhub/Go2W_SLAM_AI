@@ -16,7 +16,11 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from edge_autonomy.chassis_controller import GatewayConfig, run_gateway_command  # noqa: E402
+from edge_autonomy.chassis_controller import (  # noqa: E402
+    GatewayConfig,
+    PersistentGatewaySession,
+    run_gateway_command,
+)
 from edge_autonomy.gateway_safety import gateway_allows_navigation  # noqa: E402
 from edge_autonomy.map_registry import MapProfile, MapRegistry, RelocalizationAnchor, TopologyNode  # noqa: E402
 from edge_autonomy.runtime_readiness import assess_runtime_readiness, load_json_summary  # noqa: E402
@@ -325,6 +329,7 @@ def validate_localization_sample(
 
 
 def status_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    profile = load_profile(args)
     processes = runtime_process_status()
     response = world_state(args)
     lidar_summary = load_json_summary(args.lidar_summary)
@@ -340,9 +345,21 @@ def status_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         "runtime_processes": processes,
         "readiness": readiness,
         "world": compact_world(response),
-        "next_command": (
-            f"python3 scripts/go2w_supervised_acceptance.py --stage relocate "
-            f"--anchor {args.anchor} --confirm-relocation {args.anchor}"
+        "build_map_origin": profile.mapping_origin_anchor_id or None,
+        "active_relocalization_anchors": [
+            {
+                "anchor_id": anchor.anchor_id,
+                "name": anchor.name,
+                "status": anchor.status,
+                "verified": verified_anchor(anchor),
+                "is_build_map_origin": anchor.anchor_id == profile.mapping_origin_anchor_id,
+            }
+            for anchor in profile.relocalization_anchors
+        ],
+        "next_command": None,
+        "operator_action": (
+            "select the active verified relocation anchor matching the robot's physical pose, "
+            "align the robot there, then pass that anchor ID explicitly"
         )
         if readiness.get("relocalization_ready") and not readiness.get("localization_ready")
         else None,
@@ -355,9 +372,10 @@ def verify_samples(
     anchor: RelocalizationAnchor,
     *,
     get_world: Callable[[], dict[str, Any]],
+    minimum_timestamp_ms: float | None = None,
 ) -> tuple[bool, list[dict[str, Any]]]:
     samples: list[dict[str, Any]] = []
-    last_timestamp: float | None = None
+    last_timestamp = minimum_timestamp_ms
     all_ok = True
     for index in range(args.samples):
         try:
@@ -406,6 +424,39 @@ def verify_samples(
     return all_ok, samples
 
 
+def verify_persistent_samples(
+    args: argparse.Namespace,
+    profile: MapProfile,
+    anchor: RelocalizationAnchor,
+    *,
+    minimum_timestamp_ms: float | None = None,
+) -> tuple[bool, list[dict[str, Any]]]:
+    try:
+        with PersistentGatewaySession(
+            client_path=args.gateway_client,
+            network_interface=args.network_interface,
+            timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
+        ) as session:
+            return verify_samples(
+                args,
+                profile,
+                anchor,
+                get_world=lambda: session.command({"action": "get_world_state"}),
+                minimum_timestamp_ms=minimum_timestamp_ms,
+            )
+    except Exception as exc:
+        return False, [
+            {
+                "index": 1,
+                "ok": False,
+                "reason": f"persistent gateway session failed: {exc}",
+                "timestamp_ms": None,
+                "timestamp_advanced": False,
+            }
+        ]
+
+
 def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
     processes = runtime_process_status()
     if not processes["ready"]:
@@ -415,6 +466,13 @@ def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             "motion_commands_sent": False,
             "reason": "XT16 and Unitree SLAM processes must be running before relocation",
             "runtime_processes": processes,
+        }
+    if not args.anchor:
+        return 2, {
+            "stage": "relocate",
+            "accepted": False,
+            "motion_commands_sent": False,
+            "reason": "--anchor is required; choose the active verified anchor matching the physical pose",
         }
     profile = load_profile(args)
     anchor = profile.get_anchor(args.anchor)
@@ -474,7 +532,23 @@ def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         }
     if args.relocation_settle_s > 0:
         time.sleep(args.relocation_settle_s)
-    verified, samples = verify_samples(args, profile, anchor, get_world=lambda: world_state(args))
+    relocation_world = result.get("world_state") if isinstance(result, dict) else None
+    relocation_pose = (
+        relocation_world.get("current_pose")
+        if isinstance(relocation_world, dict)
+        else None
+    )
+    relocation_timestamp = (
+        finite_number(relocation_pose.get("timestamp_ms"))
+        if isinstance(relocation_pose, dict)
+        else None
+    )
+    verified, samples = verify_persistent_samples(
+        args,
+        profile,
+        anchor,
+        minimum_timestamp_ms=relocation_timestamp,
+    )
     return (0 if verified else 5), {
         "stage": "relocate",
         "accepted": True,
@@ -484,7 +558,7 @@ def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         "samples": samples,
         "next_command": (
             f"python3 scripts/go2w_supervised_acceptance.py --stage prepare-navigation "
-            f"--anchor {anchor.anchor_id} --target TARGET_NODE"
+            f"--target TARGET_NODE"
         )
         if verified
         else "do not navigate; inspect SLAM/ICP and anchor alignment",
@@ -492,6 +566,13 @@ def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
 
 
 def verify_localization_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
+    if not args.anchor:
+        return 2, {
+            "stage": "verify-localization",
+            "motion_commands_sent": False,
+            "localization_verified": False,
+            "reason": "--anchor is required; verification compares the pose against that explicit anchor",
+        }
     profile = load_profile(args)
     anchor = profile.get_anchor(args.anchor)
     if not verified_anchor(anchor):
@@ -502,7 +583,7 @@ def verify_localization_stage(args: argparse.Namespace) -> tuple[int, dict[str, 
             "localization_verified": False,
             "reason": f"anchor {anchor.anchor_id} is not verified: {anchor.status}",
         }
-    verified, samples = verify_samples(args, profile, anchor, get_world=lambda: world_state(args))
+    verified, samples = verify_persistent_samples(args, profile, anchor)
     return (0 if verified else 5), {
         "stage": "verify-localization",
         "motion_commands_sent": False,
@@ -528,14 +609,6 @@ def prepare_navigation_stage(args: argparse.Namespace) -> tuple[int, dict[str, A
             "reason": "--target is required",
         }
     profile = load_profile(args)
-    anchor = profile.get_anchor(args.anchor)
-    if not verified_anchor(anchor):
-        return 3, {
-            "stage": "prepare-navigation",
-            "motion_commands_sent": False,
-            "ready": False,
-            "reason": f"anchor {anchor.anchor_id} is not verified: {anchor.status}",
-        }
     node = profile.get_node(args.target)
     blockers = target_blockers(node)
     response = world_state(args)
@@ -551,19 +624,12 @@ def prepare_navigation_stage(args: argparse.Namespace) -> tuple[int, dict[str, A
     )
     navigation_ready, reason = gateway_allows_navigation(response, max_obstacle_age_ms=args.max_obstacle_age_ms)
     map_identity = map_identity_check(response, profile)
-    anchor_position = anchor_error(response, anchor)
-    anchor_position_ready = (
-        anchor_position.get("valid") is True
-        and anchor_position.get("within_radius") is True
-        and anchor_position.get("within_yaw") is True
-    )
     ready = (
         processes["ready"]
         and readiness.get("localization_ready") is True
         and readiness.get("perception_ready") is True
         and navigation_ready
         and map_identity["matches"]
-        and anchor_position_ready
         and not blockers
     )
     blocking_reasons: list[str] = []
@@ -577,8 +643,6 @@ def prepare_navigation_stage(args: argparse.Namespace) -> tuple[int, dict[str, A
         blocking_reasons.append(reason)
     if not map_identity["matches"]:
         blocking_reasons.append(map_identity["reason"])
-    if not anchor_position_ready:
-        blocking_reasons.append("current pose is outside the verified anchor acceptance envelope")
     blocking_reasons.extend(blockers)
     command = (
         "python3 scripts/go2w_agent_entry.py "
@@ -593,7 +657,6 @@ def prepare_navigation_stage(args: argparse.Namespace) -> tuple[int, dict[str, A
         "runtime_processes": processes,
         "readiness": readiness,
         "map_identity": map_identity,
-        "anchor_check": anchor_position,
         "target": {
             "node_id": node.node_id,
             "name": node.name,
@@ -617,6 +680,12 @@ def human_output(payload: dict[str, Any]) -> str:
     lines = [f"阶段: {stage}", f"底盘运动命令: {'已发送' if payload.get('motion_commands_sent') else '未发送'}"]
     if stage == "status":
         readiness = payload.get("readiness", {})
+        anchors = payload.get("active_relocalization_anchors", [])
+        anchor_labels = [
+            f"{item.get('anchor_id')}{'（建图原点）' if item.get('is_build_map_origin') else ''}"
+            for item in anchors
+            if item.get("verified")
+        ]
         lines.extend(
             [
                 f"服务: {readiness.get('services_ready')}",
@@ -625,8 +694,12 @@ def human_output(payload: dict[str, Any]) -> str:
                 f"感知: {readiness.get('perception_ready')}",
                 f"可导航: {readiness.get('navigation_ready')}",
                 f"下一步: {readiness.get('next_action')}",
+                f"建图原点: {payload.get('build_map_origin') or '未登记'}",
+                f"可选重定位锚点: {', '.join(anchor_labels) if anchor_labels else '无'}",
             ]
         )
+        if payload.get("operator_action"):
+            lines.append("操作要求: 按机器人的真实物理位置选择对应锚点，现场对齐后显式确认")
     else:
         for key in ("accepted", "localization_verified", "ready", "reason", "anchor_id"):
             if key in payload:
@@ -645,7 +718,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["status", "relocate", "verify-localization", "prepare-navigation"],
         default="status",
     )
-    parser.add_argument("--anchor", default="mapping_origin")
+    parser.add_argument("--anchor", default="")
     parser.add_argument("--target", default="")
     parser.add_argument("--confirm-relocation", default="")
     parser.add_argument("--samples", type=int, default=5)

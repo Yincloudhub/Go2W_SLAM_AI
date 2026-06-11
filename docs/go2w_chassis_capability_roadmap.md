@@ -41,7 +41,7 @@ python3 scripts/go2w_agent_entry.py \
 含义：
 
 - `--go`：一键闭环，默认执行，不再手动拼 `--execute --no-live-snapshot --prompt-mode light`。
-- `--current-node yin_siyuan_station`：如果 SLAM 未定位，会自动用尹思园工位作为当前锚点重定位。
+- `--current-node yin_siyuan_station`：仅表示规划器当前导航拓扑点，不再用于重定位。
 - 默认会先查安全状态，不允许导航时不会硬走。
 - 默认距离达标自动暂停。
 
@@ -59,8 +59,8 @@ python3 scripts/go2w_agent_entry.py --go-b64 <utf8_base64> --current-node yin_si
 - `--status`：查定位、健康、安全、导航状态。
 - `--pause`：软件暂停导航。
 - `--calibrate-node <node_id>`：用当前 live pose 覆盖某个 registry 点。
-- `--relocate`：手动重定位。
-- `--current-node <node_id>`：给 `--go` 自动重定位使用。
+- `--relocate --relocation-anchor mapping_origin --confirm-relocation mapping_origin`：显式人工确认的活动锚点重定位。
+- `--current-node <node_id>`：只提供导航拓扑上下文。
 
 原则：
 
@@ -79,7 +79,7 @@ python3 scripts/go2w_agent_entry.py --go-b64 <utf8_base64> --current-node yin_si
 
 - `get_world_state`
 - `start_slam`
-- `relocate_to_node`
+- `relocate_to_anchor`
 - `navigate_to_node`
 - `pause_navigation`
 - `hold_position`
@@ -114,7 +114,7 @@ preflight
 
 其中：
 
-- `ensure_localized`：未定位时根据 `--current-node` 或最近可信点重定位。
+- `ensure_localized`：未定位时阻断自动任务并要求人工对齐 `mapping_origin` 后执行监督重定位。
 - `plan_target`：先 deterministic alias 匹配，再用 LLM。
 - `execute_navigation`：只接收 registry 目标。
 - `arrival_monitor`：距离优先，到点就暂停；yaw 只作为可选条件。
@@ -135,7 +135,7 @@ LLM 只负责把人话变成任务意图：
 不要让 LLM 直接决定底盘安全策略。安全策略由本地规则覆盖：
 
 - 目标不存在：`human_confirm`
-- 未定位：先重定位，失败则拒绝导航
+- 未定位：拒绝导航并提示人工执行活动 verified 锚点重定位
 - 低电量：拒绝非回充任务或要求确认
 - 弱网：降级通信策略
 - 到点：距离达标优先暂停
@@ -170,17 +170,19 @@ LLM 只负责把人话变成任务意图：
 
 - `auto_pause_on_arrival`
 - `calibrate_node_from_current_pose`
-- `go_preflight / go_auto_relocate`
+- `go_preflight / go_auto_relocate_blocked`
 
 ### 阶段 C：把重定位做稳
 
 目标：关机重启后少依赖人工。
 
+- `mapping_origin_anchor_id` 始终只指向一个建图坐标原点
+- 同一 PCD 可登记多个独立重定位锚点；只有现场验证为 `verified_*` 的锚点进入活动列表
 - registry 每个关键点增加 `relocalization_quality`
 - 记录每次重定位 ICP 结果
-- 如果当前点重定位失败，自动尝试邻近锚点
-- 支持 `--current-node`、`--current-area`、`--try-all-anchors`
-- 标记 `test513.pcd` 为当前主地图，避免再混用 `test.pcd`
+- 如果重定位失败，保持不运动并要求检查物理对齐、地图身份和 ICP；不自动尝试其他锚点
+- 支持操作员从活动 verified 锚点中明确选择，不把 `--current-node` 当作重定位锚点
+- 当前主地图固定为 `/home/unitree/test.pcd`，不再混用 `test513.pcd`
 
 ### 阶段 D：让 LLM 常驻
 

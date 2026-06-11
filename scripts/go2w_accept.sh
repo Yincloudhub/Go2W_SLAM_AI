@@ -12,9 +12,9 @@ usage() {
   cat <<'EOF'
 usage:
   bash scripts/go2w_accept.sh status
-  bash scripts/go2w_accept.sh relocate [ANCHOR] confirm
-  bash scripts/go2w_accept.sh verify [ANCHOR]
-  bash scripts/go2w_accept.sh check TARGET [ANCHOR]
+  bash scripts/go2w_accept.sh relocate ANCHOR confirm
+  bash scripts/go2w_accept.sh verify ANCHOR
+  bash scripts/go2w_accept.sh check TARGET
 
 status    Read-only runtime and safety state.
 relocate  Requires the literal third argument "confirm"; does not move chassis.
@@ -29,10 +29,10 @@ case "${action}" in
     exec "${PYTHON_BIN}" "${ACCEPTANCE}" --stage status
     ;;
   relocate)
-    anchor="${2:-mapping_origin}"
+    anchor="${2:-}"
     confirmation="${3:-}"
-    if [[ "${confirmation}" != "confirm" ]]; then
-      echo "relocate requires: relocate [ANCHOR] confirm" >&2
+    if [[ -z "${anchor}" || "${confirmation}" != "confirm" ]]; then
+      echo "relocate requires: relocate ANCHOR confirm" >&2
       usage >&2
       exit 2
     fi
@@ -42,14 +42,18 @@ case "${action}" in
       --confirm-relocation "${anchor}"
     ;;
   verify)
-    anchor="${2:-mapping_origin}"
+    anchor="${2:-}"
+    if [[ -z "${anchor}" ]]; then
+      echo "verify requires: verify ANCHOR" >&2
+      usage >&2
+      exit 2
+    fi
     exec "${PYTHON_BIN}" "${ACCEPTANCE}" \
       --stage verify-localization \
       --anchor "${anchor}"
     ;;
   check)
     target="${2:-}"
-    anchor="${3:-mapping_origin}"
     if [[ -z "${target}" ]]; then
       echo "check requires TARGET" >&2
       usage >&2
@@ -57,8 +61,7 @@ case "${action}" in
     fi
     exec "${PYTHON_BIN}" "${ACCEPTANCE}" \
       --stage prepare-navigation \
-      --target "${target}" \
-      --anchor "${anchor}"
+      --target "${target}"
     ;;
   -h|--help|help)
     usage

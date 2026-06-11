@@ -21,6 +21,38 @@ web = load_operator_web()
 
 
 class OperatorWebTests(unittest.TestCase):
+    @staticmethod
+    def write_relocation_registry(root: Path) -> Path:
+        path = root / "registry.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "maps": [
+                        {
+                            "map_id": "go2w_real_site",
+                            "mapping_origin_anchor_id": "mapping_origin",
+                            "relocalization_anchors": [
+                                {
+                                    "anchor_id": "mapping_origin",
+                                    "status": "verified_test",
+                                    "pose": {"x": 0.0, "y": 0.0},
+                                }
+                            ],
+                            "archived_relocalization_anchors": [
+                                {
+                                    "anchor_id": "initial_point",
+                                    "status": "candidate_failed",
+                                    "pose": {"x": 1.0, "y": 0.0},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
     def test_operator_ui_is_chinese_and_has_feedback_screen(self):
         self.assertIn("GO2W 多模态自主机器狗", web.INDEX_HTML)
         self.assertIn("智能巡检交互屏", web.INDEX_HTML)
@@ -53,9 +85,19 @@ class OperatorWebTests(unittest.TestCase):
         self.assertNotIn('id="exec-on"', web.INDEX_HTML)
         self.assertNotIn('id="weak-on"', web.INDEX_HTML)
         self.assertNotIn('data-action="current"', web.INDEX_HTML)
-        self.assertIn("保存备用锚点", web.INDEX_HTML)
+        self.assertIn("保存导航拓扑点", web.INDEX_HTML)
+        self.assertIn('select id="relocate-anchor"', web.INDEX_HTML)
+        self.assertIn("active_relocalization_anchors", web.INDEX_HTML)
+        self.assertNotIn('id="relocate-anchor" value="mapping_origin"', web.INDEX_HTML)
+        self.assertNotIn('|| "mapping_origin"', web.INDEX_HTML)
+        self.assertIn("请选择与实际位置匹配的重定位锚点", web.INDEX_HTML)
         self.assertIn("校准初始点", web.INDEX_HTML)
         self.assertIn("更新坐标", web.INDEX_HTML)
+
+    def test_embedded_ui_fallback_has_no_relocation_default(self):
+        source = Path(web.__file__).read_text(encoding="utf-8")
+        self.assertNotIn('value="mapping_origin"', source)
+        self.assertNotIn('|| "mapping_origin"', source)
 
     def test_history_keeps_compact_failure_reason(self):
         state = web.WebState()
@@ -387,6 +429,7 @@ class OperatorWebTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            registry_path = self.write_relocation_registry(root)
             app = FakeApp(
                 web.WebConfig(
                     repo_root=root,
@@ -394,12 +437,40 @@ class OperatorWebTests(unittest.TestCase):
                     gateway_client="missing",
                     start_slam_script="missing",
                     start_rviz2_script="missing",
+                    registry_path=registry_path,
                 )
             )
             self.assertTrue(app.command("/relocate mapping_origin confirm", confirmed=True)["accepted"])
             result = app.command("/relocate mapping_origin confirm", confirmed=True)
             self.assertFalse(result["accepted"])
             self.assertIn("wait", result["stderr"])
+
+    def test_archived_relocation_anchor_is_rejected_before_panel(self):
+        class FakeApp(web.OperatorWebApp):
+            def status(self, *, force=False):
+                return {"summary": {"loc": "false", "safety": "slam_health_failed"}}
+
+            def run_panel_session(self, lines):
+                raise AssertionError("archived anchor must not reach the operator panel")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry_path = self.write_relocation_registry(root)
+            app = FakeApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                    registry_path=registry_path,
+                )
+            )
+
+            result = app.command("/relocate initial_point confirm", confirmed=True)
+
+        self.assertFalse(result["accepted"])
+        self.assertIn("active and verified", result["stderr"])
 
     def test_local_state_commands(self):
         state = web.WebState(current_node="initial_point")

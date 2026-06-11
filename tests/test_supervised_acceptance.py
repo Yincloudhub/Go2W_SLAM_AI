@@ -24,6 +24,7 @@ def registry(root: Path, *, anchor_status: str = "verified_startup_relocalizatio
                         "status": "real",
                         "pcd_path": "/home/unitree/test.pcd",
                         "topology_path": "/home/unitree/topology_points.json",
+                        "mapping_origin_anchor_id": "mapping_origin",
                         "relocalization_anchors": [
                             {
                                 "anchor_id": "mapping_origin",
@@ -154,6 +155,22 @@ def args(path: Path, **overrides) -> argparse.Namespace:
     return argparse.Namespace(**values)
 
 
+class FakePersistentGatewaySession:
+    def __init__(self, samples: list[dict]) -> None:
+        self.samples = list(samples)
+        self.commands: list[dict] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return None
+
+    def command(self, command: dict) -> dict:
+        self.commands.append(command)
+        return self.samples.pop(0)
+
+
 class SupervisedAcceptanceTests(unittest.TestCase):
     @staticmethod
     def runtime_ready() -> dict:
@@ -190,18 +207,28 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             config = args(registry(Path(temp)), confirm_relocation="mapping_origin")
             not_started = {"accepted": True, "world_state": {"localization": {"status": "not_started"}}}
             samples = [localized_world(timestamp_ms=1000), localized_world(timestamp_ms=2000)]
+            session = FakePersistentGatewaySession(samples)
             with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
-                with patch.object(acceptance, "world_state", side_effect=[not_started, *samples]):
+                with patch.object(acceptance, "world_state", return_value=not_started):
                     with patch.object(
                         acceptance,
                         "run_gateway_command",
                         return_value={"accepted": True},
                     ) as gateway:
-                        code, payload = acceptance.relocate_stage(config)
+                        with patch.object(
+                            acceptance,
+                            "PersistentGatewaySession",
+                            return_value=session,
+                        ):
+                            code, payload = acceptance.relocate_stage(config)
             self.assertEqual(code, 0)
             self.assertTrue(payload["localization_verified"])
             self.assertFalse(payload["motion_commands_sent"])
             self.assertEqual(gateway.call_args.args[0]["action"], "relocate")
+            self.assertEqual(
+                session.commands,
+                [{"action": "get_world_state"}, {"action": "get_world_state"}],
+            )
 
     def test_prepare_navigation_never_sends_motion(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -216,6 +243,56 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             self.assertFalse(payload["motion_commands_sent"])
             self.assertIn("--nav-speed-mps 0.10", payload["supervised_motion_command"])
             self.assertIn("--no-auto-relocate", payload["supervised_motion_command"])
+
+    def test_prepare_navigation_does_not_require_robot_to_remain_near_relocation_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            write_lidar_summary(root)
+            state = localized_world()
+            state["world_state"]["current_pose"]["pose"] = {
+                "x": 8.0,
+                "y": -4.0,
+                "yaw": 1.2,
+            }
+            config = args(registry(root), target="safe_target", anchor="")
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                with patch.object(acceptance, "world_state", return_value=state):
+                    code, payload = acceptance.prepare_navigation_stage(config)
+            self.assertEqual(code, 0)
+            self.assertTrue(payload["ready"])
+            self.assertNotIn("anchor_check", payload)
+
+    def test_status_lists_origin_and_relocation_choices_without_default_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = registry(root)
+            config = args(path, anchor="")
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                with patch.object(acceptance, "world_state", return_value=localized_world()):
+                    code, payload = acceptance.status_stage(config)
+            self.assertEqual(code, 0)
+            self.assertEqual(payload["build_map_origin"], "mapping_origin")
+            self.assertEqual(
+                [item["anchor_id"] for item in payload["active_relocalization_anchors"]],
+                ["mapping_origin"],
+            )
+            self.assertTrue(payload["active_relocalization_anchors"][0]["is_build_map_origin"])
+            self.assertIsNone(payload["next_command"])
+
+    def test_relocation_requires_explicit_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            config = args(registry(Path(temp)), anchor="")
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                code, payload = acceptance.relocate_stage(config)
+            self.assertEqual(code, 2)
+            self.assertIn("--anchor is required", payload["reason"])
+
+    def test_localization_verification_requires_explicit_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            config = args(registry(Path(temp)), anchor="")
+            code, payload = acceptance.verify_localization_stage(config)
+            self.assertEqual(code, 2)
+            self.assertIn("--anchor is required", payload["reason"])
 
     def test_prepare_navigation_rejects_unverified_target(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -257,6 +334,28 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             )
             self.assertFalse(verified)
             self.assertTrue(all(not item["timestamp_advanced"] for item in details))
+
+    def test_relocation_verification_requires_pose_newer_than_gateway_response(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            config = args(registry(Path(temp)))
+            samples = [
+                localized_world(timestamp_ms=1000),
+                localized_world(timestamp_ms=2000),
+            ]
+            profile = acceptance.load_profile(config)
+            anchor = profile.get_anchor("mapping_origin")
+
+            verified, details = acceptance.verify_samples(
+                config,
+                profile,
+                anchor,
+                get_world=lambda: samples.pop(0),
+                minimum_timestamp_ms=1500,
+            )
+
+            self.assertFalse(verified)
+            self.assertFalse(details[0]["timestamp_advanced"])
+            self.assertTrue(details[1]["timestamp_advanced"])
 
     def test_uncalibrated_lidar_blocks_navigation_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -358,14 +457,20 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             samples = [localized_world(timestamp_ms=1000), localized_world(timestamp_ms=2000)]
             for sample in samples:
                 sample["world_state"]["current_pose"]["map_path"] = "/home/unitree/wrong.pcd"
+            session = FakePersistentGatewaySession(samples)
             with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
-                with patch.object(acceptance, "world_state", side_effect=[not_started, *samples]):
+                with patch.object(acceptance, "world_state", return_value=not_started):
                     with patch.object(
                         acceptance,
                         "run_gateway_command",
                         return_value={"accepted": True},
                     ):
-                        code, payload = acceptance.relocate_stage(config)
+                        with patch.object(
+                            acceptance,
+                            "PersistentGatewaySession",
+                            return_value=session,
+                        ):
+                            code, payload = acceptance.relocate_stage(config)
             self.assertEqual(code, 5)
             self.assertFalse(payload["localization_verified"])
             self.assertTrue(all(not sample["map_identity"]["matches"] for sample in payload["samples"]))
@@ -376,7 +481,12 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             samples = [localized_world(timestamp_ms=1000), localized_world(timestamp_ms=2000)]
             for sample in samples:
                 sample["world_state"]["localization"]["map_id"] = "wrong"
-            with patch.object(acceptance, "world_state", side_effect=samples):
+            session = FakePersistentGatewaySession(samples)
+            with patch.object(
+                acceptance,
+                "PersistentGatewaySession",
+                return_value=session,
+            ):
                 code, payload = acceptance.verify_localization_stage(config)
             self.assertEqual(code, 5)
             self.assertFalse(payload["localization_verified"])

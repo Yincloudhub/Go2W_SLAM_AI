@@ -1,5 +1,6 @@
 #include "slam_gateway/navigation_target_authorizer.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -29,6 +30,22 @@ nlohmann::json verifiedPose()
     };
 }
 
+nlohmann::json mappingOriginPose()
+{
+    return {
+        {"name", "mapping_origin"},
+        {"x", 0.0},
+        {"y", 0.0},
+        {"z", 0.0},
+        {"q_x", 0.0},
+        {"q_y", 0.0},
+        {"q_z", 0.0},
+        {"q_w", 1.0},
+        {"speed", 0.0},
+        {"mode", 0}
+    };
+}
+
 nlohmann::json registryJson()
 {
     return {
@@ -38,6 +55,26 @@ nlohmann::json registryJson()
             {
                 {"map_id", "go2w_real_site"},
                 {"pcd_path", "/home/unitree/test.pcd"},
+                {"mapping_origin_anchor_id", "mapping_origin"},
+                {"relocalization_anchors", nlohmann::json::array({
+                    {
+                        {"anchor_id", "mapping_origin"},
+                        {"status", "verified_startup"},
+                        {"pose", mappingOriginPose()}
+                    },
+                    {
+                        {"anchor_id", "candidate_anchor"},
+                        {"status", "candidate"},
+                        {"pose", mappingOriginPose()}
+                    }
+                })},
+                {"archived_relocalization_anchors", nlohmann::json::array({
+                    {
+                        {"anchor_id", "initial_point"},
+                        {"status", "candidate_failed"},
+                        {"pose", verifiedPose()}
+                    }
+                })},
                 {"topology_nodes", nlohmann::json::array({
                     {
                         {"node_id", "initial_point"},
@@ -86,6 +123,58 @@ int main()
     require(
         std::abs(allowed.authorized_pose.x - (-0.39f)) < 1e-5f,
         "authorized pose must come from the registry snapshot");
+
+    const auto relocation_allowed = authorizer.authorizeRelocation(
+        "go2w_real_site",
+        "/home/unitree/test.pcd",
+        "mapping_origin",
+        mappingOriginPose());
+    require(
+        relocation_allowed.authorized,
+        "exact active verified relocation anchor should be authorized");
+    require(
+        relocation_allowed.authorized_pose.speed == 0.0f,
+        "relocation speed must be forced to zero");
+
+    auto modified_relocation_pose = mappingOriginPose();
+    modified_relocation_pose["x"] = 0.2;
+    const auto modified_relocation = authorizer.authorizeRelocation(
+        "go2w_real_site",
+        "/home/unitree/test.pcd",
+        "mapping_origin",
+        modified_relocation_pose);
+    require(
+        !modified_relocation.authorized,
+        "modified relocation anchor pose must be rejected");
+    require(
+        modified_relocation.reason == "relocalization_anchor_pose_mismatch:x",
+        "modified relocation pose rejection reason mismatch");
+
+    const auto archived_relocation = authorizer.authorizeRelocation(
+        "go2w_real_site",
+        "/home/unitree/test.pcd",
+        "initial_point",
+        verifiedPose());
+    require(
+        !archived_relocation.authorized,
+        "archived relocation anchor must not be executable");
+    require(
+        archived_relocation.reason == "relocalization_active_anchor_not_found",
+        "archived relocation rejection reason mismatch");
+
+    auto candidate_pose = mappingOriginPose();
+    candidate_pose["name"] = "candidate_anchor";
+    const auto candidate_relocation = authorizer.authorizeRelocation(
+        "go2w_real_site",
+        "/home/unitree/test.pcd",
+        "candidate_anchor",
+        candidate_pose);
+    require(
+        !candidate_relocation.authorized,
+        "unverified active relocation anchor must be rejected");
+    require(
+        candidate_relocation.reason == "relocalization_verified_anchor_required",
+        "unverified relocation rejection reason mismatch");
 
     auto modified_pose = verifiedPose();
     modified_pose["x"] = 0.5;

@@ -15,6 +15,13 @@ struct NavigationAuthorizationResult {
     PoseData authorized_pose;
 };
 
+struct RelocalizationAuthorizationResult {
+    bool authorized{false};
+    std::string reason{"relocalization_anchor_not_authorized"};
+    nlohmann::json details{nlohmann::json::object()};
+    PoseData authorized_pose;
+};
+
 class NavigationTargetAuthorizer {
 public:
     NavigationTargetAuthorizer(std::string registry_path, std::string registry_map_id);
@@ -25,6 +32,12 @@ public:
         const std::string& target_node,
         const nlohmann::json& target_pose,
         const CurrentPose& current_pose) const;
+
+    RelocalizationAuthorizationResult authorizeRelocation(
+        const std::string& command_map_id,
+        const std::string& requested_map_path,
+        const std::string& anchor_id,
+        const nlohmann::json& initial_pose) const;
 
     const std::string& registryPath() const { return registry_path_; }
     const std::string& registryMapId() const { return registry_map_id_; }

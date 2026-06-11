@@ -40,3 +40,20 @@ def test_summary_extracts_semantic_trace_target_fields() -> None:
     assert summary["target_needs_calibration"] is True
     assert summary["target_photo_required"] is True
     assert summary["target_distance_from_robot_m"] == 2.4
+
+
+def test_summary_reports_automatic_relocation_as_blocked() -> None:
+    summary = summarize_agent_output(
+        {
+            "steps": [
+                {
+                    "step": "go_auto_relocate_blocked",
+                    "reason": "supervised anchor relocation required",
+                }
+            ]
+        }
+    )
+
+    assert summary["auto_relocated"] is False
+    assert summary["relocation_required"] is True
+    assert summary["relocation_reason"] == "supervised anchor relocation required"

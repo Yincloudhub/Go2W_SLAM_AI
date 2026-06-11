@@ -15,6 +15,7 @@
       "status": "simulation",
       "pcd_path": "/home/unitree/maps/visio_lab_floor_demo.pcd",
       "topology_path": "/home/unitree/maps/visio_lab_floor_demo.topology.json",
+      "mapping_origin_anchor_id": "start_point_anchor",
       "frame_id": "map",
       "description": "根据用户提供的Visio简图生成的第一版模拟拓扑。坐标为相对模拟坐标，用于LLM规划、评测和SFT数据构造；实机前需要用真实SLAM点位替换。",
       "relocalization_anchors": [

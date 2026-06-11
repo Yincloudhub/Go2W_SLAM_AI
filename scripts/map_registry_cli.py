@@ -35,7 +35,12 @@ def command_list(args: argparse.Namespace) -> int:
         print(f"- {profile.map_id}: {profile.name}")
         print(f"  pcd: {profile.pcd_path}")
         print(f"  topology: {profile.topology_path}")
+        print(f"  mapping origin anchor: {profile.mapping_origin_anchor_id or '(unset)'}")
         print(f"  anchors: {', '.join(a.anchor_id for a in profile.relocalization_anchors) or '(none)'}")
+        print(
+            "  archived anchors: "
+            f"{', '.join(a.anchor_id for a in profile.archived_relocalization_anchors) or '(none)'}"
+        )
         print(f"  nodes: {', '.join(n.node_id for n in profile.topology_nodes) or '(none)'}")
     return 0
 
@@ -50,6 +55,7 @@ def command_show(args: argparse.Namespace) -> int:
             "status": profile.status,
             "pcd_path": profile.pcd_path,
             "topology_path": profile.topology_path,
+            "mapping_origin_anchor_id": profile.mapping_origin_anchor_id,
             "frame_id": profile.frame_id,
             "description": profile.description,
             "rviz_topics": profile.rviz_topics,
@@ -65,6 +71,18 @@ def command_show(args: argparse.Namespace) -> int:
                     "description": a.description,
                 }
                 for a in profile.relocalization_anchors
+            ],
+            "archived_relocalization_anchors": [
+                {
+                    "anchor_id": a.anchor_id,
+                    "name": a.name,
+                    "status": a.status,
+                    "allowed_radius_m": a.allowed_radius_m,
+                    "allowed_yaw_error_deg": a.allowed_yaw_error_deg,
+                    "pose": a.pose.to_unitree_json(name=a.anchor_id),
+                    "description": a.description,
+                }
+                for a in profile.archived_relocalization_anchors
             ],
             "topology_nodes": [
                 {

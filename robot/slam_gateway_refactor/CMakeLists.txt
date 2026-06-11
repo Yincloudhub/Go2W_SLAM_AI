@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 enable_testing()
+option(BUILD_UNSAFE_KEYBOARD_CLIENT "Build the direct keyboard diagnostic client" OFF)
 
 set(UNITREE_SDK2_ROOT "" CACHE PATH "Path to unitree_sdk2 root")
 if(NOT UNITREE_SDK2_ROOT)
@@ -102,8 +103,10 @@ endif()
 
 target_link_libraries(slam_gateway_core PUBLIC pthread)
 
-add_executable(slam_keyboard_client src/keyboard_main.cpp)
-target_link_libraries(slam_keyboard_client PRIVATE slam_gateway_core)
+if(BUILD_UNSAFE_KEYBOARD_CLIENT)
+    add_executable(slam_keyboard_client src/keyboard_main.cpp)
+    target_link_libraries(slam_keyboard_client PRIVATE slam_gateway_core)
+endif()
 
 add_executable(slam_llm_command_client src/llm_command_main.cpp)
 target_link_libraries(slam_llm_command_client PRIVATE slam_gateway_core)
@@ -141,7 +144,12 @@ add_test(
     COMMAND navigation_target_authorizer_smoke_test
 )
 
-install(TARGETS slam_gateway_core slam_keyboard_client slam_llm_command_client
+set(SLAM_GATEWAY_INSTALL_TARGETS slam_gateway_core slam_llm_command_client)
+if(BUILD_UNSAFE_KEYBOARD_CLIENT)
+    list(APPEND SLAM_GATEWAY_INSTALL_TARGETS slam_keyboard_client)
+endif()
+
+install(TARGETS ${SLAM_GATEWAY_INSTALL_TARGETS}
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

@@ -6,6 +6,7 @@ from edge_autonomy.map_registry import MapRegistry, MapRegistryError, yaw_to_qua
 
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_map_registry.example.json"
+REAL_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_real_site_map_registry.json"
 
 
 class MapRegistryTests(unittest.TestCase):
@@ -21,6 +22,7 @@ class MapRegistryTests(unittest.TestCase):
         command = registry.get_map("test_current_main").relocate_command("mapping_origin")
 
         self.assertEqual(command["action"], "relocate")
+        self.assertTrue(command["operator_ack"])
         self.assertEqual(command["map_path"], "/home/unitree/test.pcd")
         self.assertEqual(command["anchor_id"], "mapping_origin")
         self.assertEqual(command["initial_pose"]["x"], 0.0)
@@ -58,6 +60,47 @@ class MapRegistryTests(unittest.TestCase):
 
         with self.assertRaises(MapRegistryError):
             registry.get_map("test_current_main").relocate_command("missing")
+
+    def test_real_registry_separates_relocation_anchor_history_from_topology(self) -> None:
+        profile = MapRegistry.from_file(REAL_REGISTRY_PATH).get_map("go2w_real_site")
+
+        self.assertEqual(
+            [anchor.anchor_id for anchor in profile.relocalization_anchors],
+            ["mapping_origin"],
+        )
+        self.assertEqual(profile.mapping_origin_anchor_id, "mapping_origin")
+        self.assertIn(
+            "initial_point",
+            [anchor.anchor_id for anchor in profile.archived_relocalization_anchors],
+        )
+        self.assertEqual(profile.get_node("initial_point").node_id, "initial_point")
+        with self.assertRaises(MapRegistryError):
+            profile.relocate_command("initial_point")
+
+    def test_unverified_active_anchor_cannot_emit_relocation_command(self) -> None:
+        data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+        data["maps"][0]["relocalization_anchors"][0]["status"] = "candidate"
+        profile = MapRegistry.from_dict(data).get_map("test_current_main")
+
+        with self.assertRaisesRegex(MapRegistryError, "not verified"):
+            profile.relocate_command("mapping_origin")
+
+    def test_multiple_verified_relocalization_anchors_are_supported(self) -> None:
+        data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+        profile_data = data["maps"][0]
+        second = json.loads(json.dumps(profile_data["relocalization_anchors"][0]))
+        second["anchor_id"] = "verified_secondary"
+        second["name"] = "verified_secondary"
+        second["status"] = "verified_field_test"
+        second["pose"]["name"] = "verified_secondary"
+        second["pose"]["x"] = 1.0
+        profile_data["relocalization_anchors"].append(second)
+        profile = MapRegistry.from_dict(data).get_map("test_current_main")
+
+        command = profile.relocate_command("verified_secondary")
+
+        self.assertEqual(command["anchor_id"], "verified_secondary")
+        self.assertEqual(command["initial_pose"]["x"], 1.0)
 
     def test_yaw_to_quaternion(self) -> None:
         q_x, q_y, q_z, q_w = yaw_to_quaternion(0.0)

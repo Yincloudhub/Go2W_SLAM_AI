@@ -176,32 +176,6 @@ def get_world_state(args: argparse.Namespace) -> dict[str, Any]:
     return make_chassis(args).world_state()
 
 
-def relocate(args: argparse.Namespace) -> dict[str, Any]:
-    init_pose = {
-        "x": args.init_x,
-        "y": args.init_y,
-        "z": 0.0,
-        "q_x": 0.0,
-        "q_y": 0.0,
-        "q_z": 0.0,
-        "q_w": 1.0,
-    }
-    return run_gateway_command(
-        {
-            "action": "relocate",
-            "map_path": args.map_path,
-            "initial_pose": init_pose,
-            "init_pose": init_pose,
-        },
-        GatewayConfig(
-            client_path=args.gateway_client,
-            network_interface=args.network_interface,
-            timeout_s=args.timeout_s,
-            startup_wait_s=args.gateway_startup_wait_s,
-        ),
-    )
-
-
 def load_registry_map(args: argparse.Namespace) -> dict[str, Any] | None:
     return make_chassis(args, startup_wait_s=0.0).registry_map()
 
@@ -217,8 +191,8 @@ def registry_node(args: argparse.Namespace, node_id: str) -> dict[str, Any] | No
     return make_chassis(args, startup_wait_s=0.0).node(node_id)
 
 
-def relocate_to_node(args: argparse.Namespace, node_id: str) -> dict[str, Any]:
-    return make_chassis(args).relocate_to_node(node_id, map_path_fallback=args.map_path)
+def relocate_to_anchor(args: argparse.Namespace, anchor_id: str) -> dict[str, Any]:
+    return make_chassis(args).relocate_to_anchor(anchor_id, map_path_fallback=args.map_path)
 
 
 def pause_navigation(args: argparse.Namespace) -> dict[str, Any]:
@@ -691,9 +665,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resolve-target-b64", default="", help="UTF-8 base64 encoded text to resolve to a registry node.")
     parser.add_argument("--preflight-only", action="store_true", help="Read gateway safety/localization state once and exit; no auto-start, no relocation, no navigation.")
     parser.add_argument("--ensure-slam", action="store_true", help="One-shot startup for LiDAR driver and unitree_slam, then wait for pointcloud/slam_info and run preflight.")
-    parser.add_argument("--current-node", default="", help="Known current node used for auto-relocation when localization is not ready.")
+    parser.add_argument("--current-node", default="", help="Known navigation topology node for planner context; never used as a relocation pose.")
     parser.add_argument("--no-auto-start-slam", action="store_true", help="For --go, do not auto-start SLAM when health is not ready.")
-    parser.add_argument("--no-auto-relocate", action="store_true", help="For --go, do not auto-relocate from --current-node.")
+    parser.add_argument("--no-auto-relocate", action="store_true", help="Deprecated compatibility flag; automatic relocation is always disabled.")
     parser.add_argument("--brief", action="store_true", help="Print a compact execution summary instead of the full trace.")
     parser.add_argument("--human", action="store_true", help="Print a Chinese operator summary instead of JSON.")
     parser.add_argument("--full-output", action="store_true", help="For --go, print the full trace instead of the default compact summary.")
@@ -733,7 +707,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for queued capture_keyframe steps.")
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
-    parser.add_argument("--relocate", action="store_true", help="Start relocation before planning/execution.")
+    parser.add_argument("--relocate", action="store_true", help="Run explicit relocation against a verified registry anchor.")
+    parser.add_argument("--relocation-anchor", default="")
+    parser.add_argument("--confirm-relocation", default="")
     parser.add_argument("--status", action="store_true", help="Print gateway world_state.")
     parser.add_argument("--watch-world", action="store_true", help="Stream live Chinese semantic world-state lines. Use --monitor-s to stop after N seconds; default runs until Ctrl+C.")
     parser.add_argument("--pause", action="store_true", help="Pause current navigation task.")
@@ -754,8 +730,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ensure-slam-interval-s", type=float, default=2.0)
     parser.add_argument("--ensure-slam-sample-timeout-s", type=int, default=5)
     parser.add_argument("--map-path", default=DEFAULT_MAP_PATH)
-    parser.add_argument("--init-x", type=float, default=0.0)
-    parser.add_argument("--init-y", type=float, default=0.0)
     parser.add_argument("--pretty", action="store_true")
     return parser
 
@@ -845,12 +819,16 @@ def main(argv: list[str] | None = None) -> int:
             reason = str(ensure_result.get("preflight_reason") or reason)
             state = ensure_result.get("preflight", {}).get("result") if isinstance(ensure_result.get("preflight"), dict) else None
             output["steps"].append({"step": "go_status_after_ensure_slam", "allowed": allowed, "reason": reason, "result": state})
-        if args.execute and not allowed and args.current_node and not args.no_auto_relocate:
-            output["steps"].append({"step": "go_auto_relocate", "node_id": args.current_node, "result": relocate_to_node(args, args.current_node)})
-            time.sleep(args.gateway_startup_wait_s)
-            state = get_world_state(args)
-            allowed, reason = gateway_allows_navigation(state)
-            output["steps"].append({"step": "go_status_after_relocate", "allowed": allowed, "reason": reason, "result": state})
+        if args.execute and not allowed:
+            output["steps"].append(
+                {
+                    "step": "go_auto_relocate_blocked",
+                    "reason": (
+                        "automatic relocation from current_node is disabled; "
+                        "physically align the robot and run supervised anchor relocation"
+                    ),
+                }
+            )
         if args.execute and not allowed:
             output["steps"].append({"step": "go_blocked", "reason": reason})
             if args.human:
@@ -864,8 +842,58 @@ def main(argv: list[str] | None = None) -> int:
         time.sleep(2)
 
     if args.relocate:
-        output["steps"].append({"step": "relocate", "result": relocate(args)})
-        time.sleep(args.gateway_startup_wait_s)
+        if not args.relocation_anchor:
+            output["steps"].append(
+                {
+                    "step": "relocate",
+                    "result": {
+                        "accepted": False,
+                        "reason": (
+                            "--relocation-anchor is required; select the active verified "
+                            "anchor matching the robot's physical pose"
+                        ),
+                    },
+                }
+            )
+            if args.human:
+                print(format_human_output(args, output))
+            else:
+                print_json(output, pretty=args.pretty)
+            return 2
+        if args.confirm_relocation != args.relocation_anchor:
+            output["steps"].append(
+                {
+                    "step": "relocate",
+                    "result": {
+                        "accepted": False,
+                        "reason": (
+                            "explicit anchor confirmation required: "
+                            f"--confirm-relocation {args.relocation_anchor}"
+                        ),
+                    },
+                }
+            )
+            if args.human:
+                print(format_human_output(args, output))
+            else:
+                print_json(output, pretty=args.pretty)
+            return 2
+        else:
+            relocation_result = relocate_to_anchor(args, args.relocation_anchor)
+            output["steps"].append(
+                {
+                    "step": "relocate",
+                    "anchor_id": args.relocation_anchor,
+                    "result": relocation_result,
+                }
+            )
+            if relocation_result.get("accepted") is not True:
+                if args.human:
+                    print(format_human_output(args, output))
+                else:
+                    print_json(output, pretty=args.pretty)
+                return 3
+            time.sleep(args.gateway_startup_wait_s)
 
     if args.status:
         state = get_world_state(args)

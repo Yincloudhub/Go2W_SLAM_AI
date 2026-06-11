@@ -45,9 +45,14 @@ If Unitree SDK2 is not in the default path:
 
 If your official SDK example uses a different library name, adjust `target_link_libraries` in `CMakeLists.txt` according to the official example.
 
-## Run keyboard client
+## Optional direct keyboard diagnostic client
+
+The keyboard client bypasses registry authorization and is therefore excluded
+from the default build and install. Build it only for isolated diagnostics:
 
 ```bash
+cmake -S . -B build -DBUILD_UNSAFE_KEYBOARD_CLIENT=ON
+cmake --build build --target slam_keyboard_client
 ./build/slam_keyboard_client eth0
 ```
 
@@ -95,10 +100,11 @@ Raw API IDs from LLM are rejected. The LLM should output task-level commands, no
 
 The machine-readable path is intentionally stricter than the keyboard path:
 
-- `navigate_to_pose` and `relocate` require finite `x` and `y` values instead of silently defaulting to the map origin.
+- `navigate_to_pose` requires a persistent supervised navigation session and a registry-authorized topology target.
+- `relocate` requires operator confirmation plus an active, verified registry anchor whose map identity and pose exactly match the startup registry snapshot.
 - `speed` must be in the safe range `(0, 0.8]` for navigation.
 - `mode` must be `0` or `1`.
-- `start_mapping`, `end_mapping`, and `stop_slam` require `operator_ack=true` or `confirm=true`.
+- `start_mapping`, `end_mapping`, `relocate`, and `stop_slam` require `operator_ack=true` or `confirm=true`.
 - `add_current_pose_waypoint` requires `operator_ack=true` or `confirm=true`, and it is rejected unless localization is fresh.
 
 ## Example LLM command

@@ -473,6 +473,53 @@ class OperatorWebApp:
                     "edge_summary": self.edge_summary(),
                     "state": self.state.snapshot(),
                 }
+            tokens = line.split()
+            if len(tokens) != 3 or tokens[2] != "confirm":
+                return {
+                    "accepted": False,
+                    "exit_code": 2,
+                    "stdout": "",
+                    "stderr": "relocate requires: /relocate ACTIVE_ANCHOR_ID confirm\n",
+                    "summary": summary,
+                    "state": self.state.snapshot(),
+                }
+            anchor_id = tokens[1]
+            try:
+                registry = self._load_registry()
+                selected = self._registry_map(registry)
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                return {
+                    "accepted": False,
+                    "exit_code": 3,
+                    "stdout": "",
+                    "stderr": f"relocate blocked: registry unavailable: {exc}\n",
+                    "summary": summary,
+                    "state": self.state.snapshot(),
+                }
+            anchor = next(
+                (
+                    item
+                    for item in selected.get("relocalization_anchors", [])
+                    if isinstance(item, dict) and item.get("anchor_id") == anchor_id
+                ),
+                None,
+            )
+            anchor_status = str(anchor.get("status") or "").strip().lower() if anchor else ""
+            if anchor is None or (
+                anchor_status != "verified"
+                and not anchor_status.startswith("verified_")
+            ):
+                return {
+                    "accepted": False,
+                    "exit_code": 3,
+                    "stdout": "",
+                    "stderr": (
+                        "relocate blocked: anchor must be active and verified: "
+                        f"{anchor_id}\n"
+                    ),
+                    "summary": summary,
+                    "state": self.state.snapshot(),
+                }
             remaining = RELOCATE_COOLDOWN_S - (now - self._last_relocate_ts)
             if remaining > 0:
                 return {
@@ -573,6 +620,22 @@ class OperatorWebApp:
                 "accepted": True,
                 "map_id": selected.get("map_id", self.config.map_id),
                 "registry": str(self.resolved_registry_path()),
+                "mapping_origin_anchor_id": selected.get(
+                    "mapping_origin_anchor_id",
+                    "",
+                ),
+                "active_relocalization_anchors": [
+                    {
+                        "anchor_id": anchor.get("anchor_id", ""),
+                        "name": anchor.get("name", anchor.get("anchor_id", "")),
+                        "status": anchor.get("status", ""),
+                    }
+                    for anchor in selected.get("relocalization_anchors", [])
+                    if isinstance(anchor, dict)
+                ],
+                "archived_relocalization_anchor_count": len(
+                    selected.get("archived_relocalization_anchors", [])
+                ),
                 "nodes": nodes,
             }
 
@@ -1396,10 +1459,14 @@ INDEX_HTML = r"""<!doctype html>
       const row = document.createElement("div");
       row.className = "row";
       row.style.marginTop = "10px";
-      row.innerHTML = '<input id="relocate-anchor" value="mapping_origin" placeholder="relocalization anchor id"><button id="relocate-anchor-btn">Relocalize</button>';
+      row.innerHTML = '<input id="relocate-anchor" value="" placeholder="verified relocalization anchor id"><button id="relocate-anchor-btn">Relocalize</button>';
       current.parentElement.insertAdjacentElement("afterend", row);
       $("relocate-anchor-btn").onclick = () => {
-        const anchor = $("relocate-anchor").value.trim() || "mapping_origin";
+        const anchor = $("relocate-anchor").value.trim();
+        if (!anchor) {
+          alert("Select the verified relocation anchor that matches the robot's physical pose.");
+          return;
+        }
         runCommand(`/relocate ${anchor} confirm`, "Confirm SLAM relocalization against this registry anchor? This does not move the chassis.", true);
       };
     }

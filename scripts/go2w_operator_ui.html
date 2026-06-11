@@ -216,11 +216,13 @@
           <summary>高级运行设置</summary>
           <div class="field-stack" style="padding:0 11px 11px">
             <div class="row">
-              <input id="current-node" placeholder="定位丢失时使用的备用锚点，例如 initial_point">
-              <button id="set-current">保存备用锚点</button>
+              <input id="current-node" placeholder="当前导航拓扑点，例如 initial_point（不用于重定位）">
+              <button id="set-current">保存导航拓扑点</button>
             </div>
             <div class="row">
-              <input id="relocate-anchor" value="mapping_origin" placeholder="重定位锚点 ID">
+              <select id="relocate-anchor" title="选择已验证的重定位锚点">
+                <option value="">请选择与实际位置匹配的重定位锚点</option>
+              </select>
               <button id="relocate-anchor-btn">执行重定位</button>
             </div>
           </div>
@@ -481,6 +483,25 @@
     }
     function renderTopology(topology) {
       topologyState = topology || { nodes: [] };
+      const anchors = topologyState.active_relocalization_anchors || [];
+      const originAnchor = topologyState.mapping_origin_anchor_id || "";
+      const anchorSelect = $("relocate-anchor");
+      if (anchorSelect) {
+        const current = anchorSelect.value;
+        const options = anchors.map((anchor) => {
+          const id = anchor.anchor_id || "";
+          const origin = id === originAnchor ? " · 建图原点" : "";
+          const label = `${anchor.name || id}${origin}`;
+          return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+        }).join("");
+        anchorSelect.innerHTML = `<option value="">请选择与实际位置匹配的重定位锚点</option>${options}`;
+        anchorSelect.disabled = anchors.length === 0;
+        if (anchors.some((anchor) => anchor.anchor_id === current)) {
+          anchorSelect.value = current;
+        } else {
+          anchorSelect.value = "";
+        }
+      }
       const nodes = topologyState.nodes || [];
       const list = $("topology-list");
       if (!nodes.length) {
@@ -711,7 +732,11 @@
     $("weak-toggle").onclick = () => appState.weak_link_mode ? runCommand("/weak off") : runCommand("/weak on");
     $("set-current").onclick = () => runCommand(`/current ${$("current-node").value.trim()}`);
     $("relocate-anchor-btn").onclick = () => {
-      const anchor = $("relocate-anchor").value.trim() || "mapping_origin";
+      const anchor = $("relocate-anchor").value.trim();
+      if (!anchor) {
+        alert("请先选择与机器狗当前真实位置匹配的重定位锚点。");
+        return;
+      }
       runCommand(`/relocate ${anchor} confirm`, "确认按该锚点执行 SLAM 重定位？此操作不会移动底盘。", true);
     };
     $("mapping-start").onclick = () => runCommand("/mapping start confirm", "确认开始建图？这会改变 SLAM 状态。", true);

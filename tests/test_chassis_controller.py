@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from edge_autonomy.chassis_controller import (
     ChassisController,
     GatewayConfig,
+    PersistentGatewaySession,
     gateway_allows_navigation,
     run_gateway_command,
 )
@@ -86,6 +87,108 @@ class ChassisControllerTests(unittest.TestCase):
                     GatewayConfig(client_path="gateway", timeout_s=1),
                 )
         process.kill.assert_called_once_with()
+
+    def test_topology_node_cannot_be_used_as_relocalization_anchor(self) -> None:
+        registry = {
+            "version": 1,
+            "default_map_id": "site",
+            "maps": [
+                {
+                    "map_id": "site",
+                    "pcd_path": "/tmp/site.pcd",
+                    "topology_nodes": [
+                        {"node_id": "initial_point", "pose": {"x": 1.0, "y": 2.0}}
+                    ],
+                    "relocalization_anchors": [],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "registry.json"
+            registry_path.write_text(json.dumps(registry), encoding="utf-8")
+            controller = ChassisController(
+                registry_path=registry_path,
+                map_id="site",
+                gateway=GatewayConfig(client_path="gateway"),
+            )
+            with patch("edge_autonomy.chassis_controller.run_gateway_command") as gateway:
+                result = controller.relocate_to_anchor(
+                    "initial_point",
+                    map_path_fallback="/tmp/fallback.pcd",
+                )
+
+        self.assertFalse(result["accepted"])
+        self.assertIn("active relocalization anchor", result["reason"])
+        gateway.assert_not_called()
+
+    def test_persistent_session_matches_response_request_id(self) -> None:
+        class FakeStdin:
+            def __init__(self):
+                self.payload = ""
+
+            def write(self, payload):
+                self.payload += payload
+
+            def flush(self):
+                return None
+
+        class FakeProcess:
+            def __init__(self):
+                self.stdin = FakeStdin()
+
+            def poll(self):
+                return None
+
+        import queue
+
+        session = PersistentGatewaySession.__new__(PersistentGatewaySession)
+        session.timeout_s = 1
+        session.process = FakeProcess()
+        session.messages = queue.Queue()
+        session.session_token = "token"
+        session.lease_timeout_ms = 2000
+        session._request_sequence = 0
+        session.active = False
+        session.async_events = []
+        session.messages.put(
+            {
+                "accepted": False,
+                "action": "get_world_state",
+                "request_id": "stale-request",
+            }
+        )
+        session.messages.put(
+            {
+                "accepted": True,
+                "action": "get_world_state",
+                "request_id": "session-request-1",
+            }
+        )
+
+        result = session.command({"action": "get_world_state"})
+
+        self.assertTrue(result["accepted"])
+        self.assertEqual(result["request_id"], "session-request-1")
+        self.assertEqual(session.async_events[0]["request_id"], "stale-request")
+
+    def test_persistent_session_reports_unready_reason_immediately(self) -> None:
+        import queue
+
+        session = PersistentGatewaySession.__new__(PersistentGatewaySession)
+        session.messages = queue.Queue()
+        session.async_events = []
+        session.messages.put(
+            {
+                "type": "navigation_session_unready",
+                "reason": "fresh_localization_with_map_identity_required",
+            }
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "fresh_localization_with_map_identity_required",
+        ):
+            session._wait_for(lambda value: False, timeout_s=1)
 
 
 if __name__ == "__main__":

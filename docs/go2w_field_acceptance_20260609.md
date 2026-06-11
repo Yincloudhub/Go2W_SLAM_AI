@@ -97,3 +97,32 @@ safety gate but is rejected because the checked-in XT16 calibration record is
 still `pending_field_measurement`. This is the first intended blocker. After
 calibration, repeat the check in a scene whose measured side clearances also
 pass the runtime thresholds before any supervised motion acceptance.
+
+## 2026-06-11 Anchor Model Cleanup
+
+- `mapping_origin_anchor_id=mapping_origin` records the unique build-map origin.
+- The registry architecture permits multiple active verified relocalization
+  anchors on the same PCD. At this checkpoint, `mapping_origin` is the only one
+  that has completed field verification.
+- The failed historical `initial_point` relocation observation and all other
+  candidates were moved to `archived_relocalization_anchors`.
+- The navigation topology node `initial_point` remains unchanged and cannot be
+  used as a relocation pose.
+- Automatic relocation from `--current-node` and raw `--init-x/--init-y`
+  relocation were removed.
+- Python, Web, the C++ operator panel, and the C++ gateway now reject archived,
+  unverified, mismatched, or unconfirmed relocation requests.
+- Consecutive localization verification now uses one persistent gateway client
+  instead of spawning a new DDS subscriber for every sample.
+- A later 2026-06-11 attempt incorrectly treated the robot's stated "initial
+  point" as the build-map origin. The stationary pose diverged from
+  `mapping_origin` by approximately 3.61 m, 5.62 m, then 7.10 m before pose
+  output stopped. This attempt is invalid as anchor verification and no
+  navigation command was issued.
+- `mapping_origin` is no longer an implicit recovery default. The operator must
+  select the active verified anchor that matches the robot's actual physical
+  pose.
+- Navigation preflight no longer requires the current pose to remain inside the
+  selected relocation anchor envelope. Anchor distance/yaw checks apply only to
+  relocation verification; navigation uses fresh SLAM/map identity and live
+  safety gates.
