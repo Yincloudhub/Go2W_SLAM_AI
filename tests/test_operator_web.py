@@ -581,6 +581,7 @@ class OperatorWebTests(unittest.TestCase):
                         "policy": {
                             "mode": "semantic_only",
                             "calibrated": True,
+                            "calibration_id": "test-calibration",
                             "safety_candidate": True,
                         },
                     }

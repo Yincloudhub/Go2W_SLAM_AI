@@ -47,7 +47,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -64,7 +64,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -82,12 +82,23 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertTrue(summary["stale"])
         self.assertIn("uncalibrated_xt16_geometry", summary["stale_reasons"])
 
+    def test_calibrated_flag_without_record_id_fails_closed(self) -> None:
+        summary = build_xt16_geometry_summary(
+            clear_roi_points(),
+            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            timestamp_ms=1,
+        )
+
+        self.assertTrue(summary["stale"])
+        self.assertFalse(summary["summary"]["calibrated"])
+        self.assertIn("missing_xt16_calibration_id", summary["stale_reasons"])
+
     def test_missing_required_roi_is_stale(self) -> None:
         points = repeated_point(0.0, -4.0)
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -115,6 +126,8 @@ class Xt16GeometryTests(unittest.TestCase):
                     "--output",
                     str(output_path),
                     "--calibrated",
+                    "--calibration-id",
+                    "test-calibration",
                     "--min-points-per-roi",
                     "5",
                 ],
@@ -132,7 +145,7 @@ class Xt16GeometryTests(unittest.TestCase):
     def test_default_axes_match_static_robot_calibration(self) -> None:
         summary = build_xt16_geometry_summary(
             clear_roi_points(),
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -149,7 +162,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -167,7 +180,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -185,7 +198,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -199,7 +212,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 
@@ -217,7 +230,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, min_points_per_roi=5),
+            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
             timestamp_ms=1,
         )
 

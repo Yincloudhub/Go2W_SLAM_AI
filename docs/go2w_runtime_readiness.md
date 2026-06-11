@@ -36,19 +36,32 @@ produce a validated task queue. It cannot bypass these deterministic checks:
 
 ```text
 operator confirmation
-  -> registered topology target
+  -> persistent C++ navigation session bound to current SLAM map
+  -> fixed registry snapshot and canonical topology target
   -> fresh localization
   -> gateway safety
   -> fresh trusted XT16 summary
   -> queue preflight
-  -> runtime watchdog marker
   -> Unitree navigation API
-  -> runtime safety polling
-  -> accepted pause on arrival, rejection, timeout, or stale state
+  -> 500 ms heartbeat / 2 s lease
+  -> 100 ms map, localization, and safety monitoring
+  -> independent pause on disconnect, timeout, map change, or unsafe state
 ```
 
 An uncalibrated or stale trusted XT16 summary fails closed for navigation.
 Manual relocation remains available so localization can be recovered.
+
+The C++ gateway loads the deployed map registry once when the persistent
+session starts. The request names a topology node, carries a pose assertion
+for diagnostics, and may request a lower speed, but executable coordinates,
+orientation, mode, and maximum speed come from the registry snapshot. Every
+request/response pair has a `request_id`; late responses and asynchronous
+lease events cannot be mistaken for the next command.
+
+There is one physical map in this runtime: `/home/unitree/test.pcd`. Unitree
+SLAM reports its backend name as `test`; the registry uses the logical profile
+ID `go2w_real_site`. Both identifiers are bound to the same PCD path, and
+navigation fails if that path changes.
 
 The depth camera is forward-facing. Its `left_clearance_m` and
 `right_clearance_m` values are left/right thirds of the forward image, not the
@@ -78,12 +91,24 @@ until a separate, explicitly confirmed topology navigation command is issued.
 
 ## Guided supervised acceptance
 
-Use the dedicated acceptance helper instead of remembering individual gateway
-commands:
+The shortest operator entry point exposes no navigation execution action:
 
 ```bash
 cd /home/unitree/Go2W_SLAM_AI
-python3 scripts/go2w_supervised_acceptance.py --stage status
+bash scripts/go2w_accept.sh status
+bash scripts/go2w_accept.sh relocate mapping_origin
+bash scripts/go2w_accept.sh verify mapping_origin
+bash scripts/go2w_accept.sh check TARGET_NODE
+```
+
+`check` only prints a separately reviewable motion command after all gates
+pass. The wrapper never executes navigation.
+
+The underlying acceptance helper remains available for JSON output and advanced
+diagnostics:
+
+```bash
+python3 scripts/go2w_supervised_acceptance.py --stage status --json
 ```
 
 The tool has four explicit stages:
@@ -105,6 +130,8 @@ The tool has four explicit stages:
 - the relocation anchor has an explicit `verified`/`verified_*` status;
 - the target has the positive `live_verified` tag and no blocking tag;
 - XT16 geometry explicitly reports `calibrated=true`;
+- XT16 reports a non-empty calibration ID from a verified repository
+  calibration record whose parameters exactly match the running sidecar;
 - the trusted obstacle summary is fresh, confident, and clear;
 - the gateway's own safety decision allows navigation.
 
@@ -133,3 +160,40 @@ python3 scripts/go2w_supervised_acceptance.py \
 
 Only run the printed motion command while the robot remains in sight and the
 operator has immediate access to the emergency stop.
+
+## XT16 calibration provenance
+
+The runtime calibration record is:
+
+```text
+configs/perception/xt16_geometry_calibration.json
+```
+
+`GO2W_XT16_GEOMETRY_CALIBRATED=1` is not sufficient by itself. Calibrated mode
+is rejected unless the record status is exactly `verified`, it contains a
+non-empty calibration ID, and every recorded geometry parameter matches the
+sidecar's effective runtime parameter. Free-form extra geometry arguments are
+not allowed in calibrated mode.
+
+The checked-in record remains `pending_field_measurement`. Promote it only
+after at least three stationary scenes have physical body-edge-to-obstacle
+measurements recorded and compared with XT16 output.
+
+## Live no-motion acceptance - 2026-06-11
+
+Robot-side verification after rebuilding:
+
+- gateway C++ smoke tests: `3/3` passed;
+- host C++ smoke tests: `6/6` passed;
+- Python tests: `202/202` passed;
+- active SLAM identity: `test` at `/home/unitree/test.pcd`;
+- localization: `localized`, fresh pose;
+- short-lived navigation client: rejected with
+  `persistent_navigation_session_required`;
+- unsupervised resume: rejected with
+  `resume_requires_new_supervised_navigation_session`;
+- persistent session: bound to the active map and fixed registry;
+- verified `initial_point` request: rejected by `local_obstacle_not_fresh`
+  because XT16 calibration is still pending.
+
+No navigation goal or chassis command was accepted during this acceptance.

@@ -55,6 +55,33 @@ int main()
     auto clear = lidarObstacle();
     require(supervisor.evaluate(health, localization, clear).allow_navigation, "fresh clear lidar should allow");
 
+    auto missing_front_confidence = clear;
+    missing_front_confidence.front_confidence = 0.0;
+    const auto missing_front_confidence_decision =
+        supervisor.evaluate(health, localization, missing_front_confidence);
+    require(!missing_front_confidence_decision.allow_navigation,
+            "missing front confidence must block despite clear clearance");
+    require(missing_front_confidence_decision.reason == "front_obstacle_confidence_too_low",
+            "missing front confidence reason mismatch");
+
+    auto missing_left_confidence = clear;
+    missing_left_confidence.left_confidence = 0.0;
+    const auto missing_left_confidence_decision =
+        supervisor.evaluate(health, localization, missing_left_confidence);
+    require(!missing_left_confidence_decision.allow_navigation,
+            "missing left confidence must block despite clear clearance");
+    require(missing_left_confidence_decision.reason == "left_obstacle_confidence_too_low",
+            "missing left confidence reason mismatch");
+
+    auto missing_right_confidence = clear;
+    missing_right_confidence.right_confidence = 0.0;
+    const auto missing_right_confidence_decision =
+        supervisor.evaluate(health, localization, missing_right_confidence);
+    require(!missing_right_confidence_decision.allow_navigation,
+            "missing right confidence must block despite clear clearance");
+    require(missing_right_confidence_decision.reason == "right_obstacle_confidence_too_low",
+            "missing right confidence reason mismatch");
+
     auto stale = clear;
     stale.stale = true;
     const auto stale_decision = supervisor.evaluate(health, localization, stale);

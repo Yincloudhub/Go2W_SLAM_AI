@@ -99,12 +99,14 @@ def _perception_readiness(
     timestamp_ms = int(obstacle.get("timestamp_ms") or 0)
     age_ms = max(0, int(time.time() * 1000) - timestamp_ms) if timestamp_ms > 0 else obstacle.get("age_ms")
     producer_summary = obstacle.get("summary") if isinstance(obstacle.get("summary"), dict) else {}
-    calibrated = producer_summary.get("calibrated")
+    calibration_id = str(producer_summary.get("calibration_id") or "").strip()
+    calibrated = producer_summary.get("calibrated") is True and bool(calibration_id)
     details = {
         "source": source,
         "stale": stale,
         "age_ms": age_ms,
         "calibrated": calibrated,
+        "calibration_id": calibration_id or None,
         "recommended_action": obstacle.get("recommended_action"),
         "blocked_directions": obstacle.get("blocked_directions", []),
         "front_clearance_m": obstacle.get("front_clearance_m"),

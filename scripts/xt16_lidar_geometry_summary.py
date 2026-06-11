@@ -81,6 +81,7 @@ def config_from_args(args: argparse.Namespace) -> Xt16GeometryConfig:
         lateral_sign=args.lateral_sign,
         vertical_sign=args.vertical_sign,
         calibrated=args.calibrated,
+        calibration_id=args.calibration_id,
     )
 
 
@@ -187,6 +188,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--print-summary", action="store_true")
     parser.add_argument("--pretty", action="store_true")
     parser.add_argument("--calibrated", action="store_true", help="Allow fresh summaries. Without this, output is stale.")
+    parser.add_argument(
+        "--calibration-id",
+        default="",
+        help="Verified calibration record ID. Required for --calibrated output to become fresh.",
+    )
     parser.add_argument("--range-m", type=float, default=6.0)
     parser.add_argument("--percentile", type=float, default=10.0)
     parser.add_argument("--min-points-per-roi", type=int, default=8)

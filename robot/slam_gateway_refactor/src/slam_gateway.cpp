@@ -405,10 +405,10 @@ SlamHealth SlamGateway::getSlamHealth() const
     h.last_pose_age_ms = h.timestamp_ms - last_pose_update_ms_;
     h.slam_alive = h.last_pose_age_ms < 5000;
     h.localization_alive = h.last_pose_age_ms < 2000;
-    // Phase-1 assumption: LiDAR/IMU/odom health should be wired from real topics later.
-    h.lidar_alive = true;
-    h.imu_alive = true;
-    h.odom_alive = true;
+    // The pose stream proves the SLAM/localization chain is updating, but it
+    // does not independently prove each upstream sensor is alive.
+    h.direct_sensor_health_observed = false;
+    h.sensor_health_source = "derived_from_slam_pose_only";
 
     if (h.last_pose_age_ms <= 500) h.status = "ok";
     else if (h.last_pose_age_ms <= 2000) h.status = "degraded";

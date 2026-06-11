@@ -6,6 +6,8 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
                                            const LocalizationState& localization,
                                            const LocalObstacleSummary& obstacle) const
 {
+    constexpr double kMinimumObstacleConfidence = 0.15;
+
     SafetyDecision d;
 
     if (health.status == "failed" || !health.slam_alive) {
@@ -59,7 +61,29 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             return d;
         }
 
-        if (obstacle.front_confidence >= 0.15 && obstacle.front_clearance_m >= 0.0 && obstacle.front_clearance_m < 0.8) {
+        if (!(obstacle.front_confidence >= kMinimumObstacleConfidence)) {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "hold";
+            d.reason = "front_obstacle_confidence_too_low";
+            return d;
+        }
+        if (!(obstacle.left_confidence >= kMinimumObstacleConfidence)) {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "hold";
+            d.reason = "left_obstacle_confidence_too_low";
+            return d;
+        }
+        if (!(obstacle.right_confidence >= kMinimumObstacleConfidence)) {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "hold";
+            d.reason = "right_obstacle_confidence_too_low";
+            return d;
+        }
+
+        if (obstacle.front_clearance_m >= 0.0 && obstacle.front_clearance_m < 0.8) {
             d.allow_navigation = false;
             d.should_pause = true;
             d.recommended_mode = "pause";
@@ -67,8 +91,8 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             return d;
         }
 
-        if ((obstacle.left_confidence >= 0.15 && obstacle.left_clearance_m >= 0.0 && obstacle.left_clearance_m < 0.8) ||
-            (obstacle.right_confidence >= 0.15 && obstacle.right_clearance_m >= 0.0 && obstacle.right_clearance_m < 0.8)) {
+        if ((obstacle.left_clearance_m >= 0.0 && obstacle.left_clearance_m < 0.8) ||
+            (obstacle.right_clearance_m >= 0.0 && obstacle.right_clearance_m < 0.8)) {
             d.allow_navigation = false;
             d.should_pause = true;
             d.recommended_mode = "pause";

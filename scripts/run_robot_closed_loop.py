@@ -5,8 +5,10 @@ import getpass
 import json
 import math
 import os
+import queue
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -114,6 +116,141 @@ def run_gateway_command(
         if "accepted" in value:
             return value
     return objects[-1]
+
+
+class PersistentNavigationSession:
+    def __init__(
+        self,
+        *,
+        client_path: str,
+        network_interface: str,
+        timeout_s: int,
+        startup_wait_s: float = 0.0,
+    ) -> None:
+        self.timeout_s = max(1, timeout_s)
+        self.process = subprocess.Popen(
+            [client_path, network_interface, "--persistent-navigation-session"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        self.messages: queue.Queue[dict[str, Any]] = queue.Queue()
+        self.reader = threading.Thread(target=self._read_output, daemon=True)
+        self.reader.start()
+        self.session_token = ""
+        self.lease_timeout_ms = 0
+        self._request_sequence = 0
+        self.active = False
+        self.async_events: list[dict[str, Any]] = []
+        if startup_wait_s > 0:
+            time.sleep(startup_wait_s)
+        ready = self._wait_for(
+            lambda value: value.get("type") == "navigation_session_ready",
+            timeout_s=self.timeout_s,
+        )
+        self.session_token = str(ready.get("session_token") or "")
+        self.lease_timeout_ms = int(ready.get("lease_timeout_ms") or 0)
+        if not self.session_token or self.lease_timeout_ms <= 0:
+            self.close()
+            raise RuntimeError("gateway did not provide a valid navigation session lease")
+
+    def _read_output(self) -> None:
+        assert self.process.stdout is not None
+        for line in self.process.stdout:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                value = json.loads(text)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                self.messages.put(value)
+        self.messages.put({"type": "_session_eof", "returncode": self.process.poll()})
+
+    def _wait_for(
+        self,
+        predicate: Any,
+        *,
+        timeout_s: float,
+    ) -> dict[str, Any]:
+        deadline = time.monotonic() + timeout_s
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("persistent gateway session response timed out")
+            try:
+                value = self.messages.get(timeout=remaining)
+            except queue.Empty as exc:
+                raise TimeoutError("persistent gateway session response timed out") from exc
+            if value.get("type") == "_session_eof":
+                raise RuntimeError(
+                    f"persistent gateway session exited unexpectedly: {value.get('returncode')}"
+                )
+            if predicate(value):
+                return value
+            self.async_events.append(value)
+
+    def command(self, command: dict[str, Any]) -> dict[str, Any]:
+        if self.process.poll() is not None:
+            raise RuntimeError("persistent gateway session is not running")
+        action = str(command.get("action") or "")
+        self._request_sequence += 1
+        request_id = f"session-request-{self._request_sequence}"
+        payload = {
+            **command,
+            "navigation_session_token": self.session_token,
+            "request_id": request_id,
+        }
+        assert self.process.stdin is not None
+        self.process.stdin.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+        self.process.stdin.flush()
+        result = self._wait_for(
+            lambda value: (
+                "accepted" in value
+                and not value.get("type")
+                and value.get("request_id") == request_id
+            ),
+            timeout_s=self.timeout_s,
+        )
+        if action == "navigate_to_pose" and result.get("accepted") is True:
+            self.active = True
+        elif action in {"pause_navigation", "stop_slam"}:
+            self.active = False
+        return result
+
+    def heartbeat(self) -> dict[str, Any]:
+        return self.command({"action": "navigation_heartbeat"})
+
+    def close(self) -> None:
+        if not hasattr(self, "process"):
+            return
+        try:
+            if self.active and self.process.poll() is None:
+                self.command({"action": "pause_navigation"})
+        except Exception:
+            pass
+        try:
+            if self.process.stdin is not None and not self.process.stdin.closed:
+                self.process.stdin.close()
+        except OSError:
+            pass
+        try:
+            self.process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=3)
+        self.active = False
+
+    def __enter__(self) -> "PersistentNavigationSession":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        self.close()
 
 
 def registry_allows_execution(registry: MapRegistry, map_id: str) -> tuple[bool, str]:
@@ -431,7 +568,13 @@ def append_llm_feedback(
         dropped_counts["operator_feedback"] = dropped_counts.get("operator_feedback", 0) + dropped_feedback
 
 
-def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, target_name: str = "") -> dict[str, Any]:
+def wait_for_arrival(
+    command: dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    target_name: str = "",
+    session: PersistentNavigationSession | None = None,
+) -> dict[str, Any]:
     target_pose = command.get("target_pose")
     if not isinstance(target_pose, dict):
         return {"arrived": False, "paused": False, "reason": "missing target_pose", "samples": []}
@@ -461,13 +604,16 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
 
     def request_pause(reason: str) -> dict[str, Any]:
         try:
-            result = run_gateway_command(
-                {"action": "pause_navigation"},
-                client_path=args.gateway_client,
-                network_interface=args.network_interface,
-                timeout_s=args.timeout_s,
-                startup_wait_s=args.gateway_startup_wait_s,
-            )
+            if session is not None:
+                result = session.command({"action": "pause_navigation"})
+            else:
+                result = run_gateway_command(
+                    {"action": "pause_navigation"},
+                    client_path=args.gateway_client,
+                    network_interface=args.network_interface,
+                    timeout_s=args.timeout_s,
+                    startup_wait_s=args.gateway_startup_wait_s,
+                )
             return {
                 "requested": True,
                 "accepted": result.get("accepted") is True,
@@ -507,13 +653,21 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
     while time.monotonic() < deadline:
         loop_start = time.monotonic()
         try:
-            state = run_gateway_command(
-                {"action": "get_world_state"},
-                client_path=args.gateway_client,
-                network_interface=args.network_interface,
-                timeout_s=args.timeout_s,
-                startup_wait_s=args.gateway_startup_wait_s,
-            )
+            if session is not None:
+                heartbeat = session.heartbeat()
+                if heartbeat.get("accepted") is not True:
+                    raise RuntimeError(
+                        f"navigation heartbeat rejected: {heartbeat.get('reason')}"
+                    )
+                state = session.command({"action": "get_world_state"})
+            else:
+                state = run_gateway_command(
+                    {"action": "get_world_state"},
+                    client_path=args.gateway_client,
+                    network_interface=args.network_interface,
+                    timeout_s=args.timeout_s,
+                    startup_wait_s=args.gateway_startup_wait_s,
+                )
             consecutive_errors = 0
         except Exception as exc:
             consecutive_errors += 1
@@ -735,6 +889,40 @@ def wait_for_arrival(command: dict[str, Any], args: argparse.Namespace, *, targe
         "reason": timeout_reason,
         "pause": pause,
     }
+
+
+def run_supervised_navigation_session(
+    command: dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    target_name: str,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    try:
+        with PersistentNavigationSession(
+            client_path=args.gateway_client,
+            network_interface=args.network_interface,
+            timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
+        ) as session:
+            result = session.command(command)
+            if result.get("accepted") is not True:
+                return result, None
+            arrival = wait_for_arrival(
+                command,
+                args,
+                target_name=target_name,
+                session=session,
+            )
+            return result, arrival
+    except Exception as exc:
+        return (
+            {
+                "accepted": False,
+                "action": command.get("action"),
+                "reason": f"persistent navigation session failed: {exc}",
+            },
+            None,
+        )
 
 
 def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
@@ -1008,19 +1196,20 @@ def execute_task_queue(
         )
         guarded_slam_command = {
             **slam_command,
-            "execution_context": "python_closed_loop_v1",
-            "runtime_watchdog": True,
+            "operator_ack": True,
         }
-        result = run_gateway_command(
+        result, session_arrival = run_supervised_navigation_session(
             guarded_slam_command,
-            client_path=args.gateway_client,
-            network_interface=args.network_interface,
-            timeout_s=args.timeout_s,
-            startup_wait_s=args.gateway_startup_wait_s,
+            args,
+            target_name=target_name,
         )
         accepted = bool(result.get("accepted", False))
         if accepted:
-            arrival = wait_for_arrival(slam_command, args, target_name=target_name)
+            arrival = session_arrival or {
+                "arrived": False,
+                "paused": True,
+                "reason": "persistent navigation session returned no arrival result",
+            }
         else:
             rejected_feedback = [
                 operator_feedback_message(

@@ -151,6 +151,8 @@ struct SlamHealth {
     bool lidar_alive{false};
     bool imu_alive{false};
     bool odom_alive{false};
+    bool direct_sensor_health_observed{false};
+    std::string sensor_health_source{"not_directly_observed"};
     bool localization_alive{false};
     int64_t last_pose_age_ms{-1};
     std::string status{"failed"};
@@ -161,9 +163,11 @@ struct SlamHealth {
             {"type", "slam_health"},
             {"timestamp_ms", timestamp_ms},
             {"slam_alive", slam_alive},
-            {"lidar_alive", lidar_alive},
-            {"imu_alive", imu_alive},
-            {"odom_alive", odom_alive},
+            {"lidar_alive", direct_sensor_health_observed ? nlohmann::json(lidar_alive) : nlohmann::json(nullptr)},
+            {"imu_alive", direct_sensor_health_observed ? nlohmann::json(imu_alive) : nlohmann::json(nullptr)},
+            {"odom_alive", direct_sensor_health_observed ? nlohmann::json(odom_alive) : nlohmann::json(nullptr)},
+            {"direct_sensor_health_observed", direct_sensor_health_observed},
+            {"sensor_health_source", sensor_health_source},
             {"localization_alive", localization_alive},
             {"last_pose_age_ms", last_pose_age_ms},
             {"status", status}
@@ -205,6 +209,8 @@ struct LocalObstacleSummary {
     int64_t timestamp_ms{0};
     std::string frame_id{"base_link"};
     std::string source{"manual_stub"};
+    bool calibration_verified{false};
+    std::string calibration_id{""};
     double range_m{6.0};
     double front_clearance_m{6.0};
     double left_clearance_m{6.0};
@@ -248,6 +254,8 @@ struct LocalObstacleSummary {
             {"timestamp_ms", timestamp_ms},
             {"frame_id", frame_id},
             {"source", source},
+            {"calibration_verified", calibration_verified},
+            {"calibration_id", calibration_id.empty() ? nlohmann::json(nullptr) : nlohmann::json(calibration_id)},
             {"range_m", range_m},
             {"front_clearance_m", front_clearance_m},
             {"left_clearance_m", left_clearance_m},

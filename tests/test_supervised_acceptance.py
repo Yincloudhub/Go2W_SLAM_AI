@@ -72,7 +72,10 @@ def write_lidar_summary(root: Path, *, calibrated: bool = True) -> Path:
                 "left_clearance_m": 2.0,
                 "right_clearance_m": 2.0,
                 "rear_clearance_m": 2.0,
-                "summary": {"calibrated": calibrated},
+                "summary": {
+                    "calibrated": calibrated,
+                    "calibration_id": "test-calibration" if calibrated else None,
+                },
             }
         ),
         encoding="utf-8",
@@ -244,8 +247,14 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             samples = [localized_world(timestamp_ms=1000), localized_world(timestamp_ms=2000)]
             for sample in samples:
                 del sample["world_state"]["current_pose"]["timestamp_ms"]
-            anchor = acceptance.load_profile(config).get_anchor("mapping_origin")
-            verified, details = acceptance.verify_samples(config, anchor, get_world=lambda: samples.pop(0))
+            profile = acceptance.load_profile(config)
+            anchor = profile.get_anchor("mapping_origin")
+            verified, details = acceptance.verify_samples(
+                config,
+                profile,
+                anchor,
+                get_world=lambda: samples.pop(0),
+            )
             self.assertFalse(verified)
             self.assertTrue(all(not item["timestamp_advanced"] for item in details))
 
@@ -276,6 +285,102 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             self.assertEqual(code, 6)
             self.assertFalse(payload["map_identity"]["matches"])
             self.assertIsNone(payload["supervised_motion_command"])
+
+    def test_matching_map_id_cannot_override_wrong_reported_map_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            write_lidar_summary(root)
+            state = localized_world()
+            state["world_state"]["current_pose"]["map_id"] = "test"
+            state["world_state"]["current_pose"]["map_path"] = "/home/unitree/wrong.pcd"
+            state["world_state"]["localization"]["map_path"] = "/home/unitree/wrong.pcd"
+            config = args(registry(root), target="safe_target")
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                with patch.object(acceptance, "world_state", return_value=state):
+                    code, payload = acceptance.prepare_navigation_stage(config)
+            self.assertEqual(code, 6)
+            self.assertFalse(payload["map_identity"]["matches"])
+            self.assertIn("path does not match", payload["map_identity"]["reason"])
+            self.assertIsNone(payload["supervised_motion_command"])
+
+    def test_conflicting_pose_and_localization_map_paths_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            write_lidar_summary(root)
+            state = localized_world()
+            state["world_state"]["localization"]["map_path"] = "/home/unitree/wrong.pcd"
+            config = args(registry(root), target="safe_target")
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                with patch.object(acceptance, "world_state", return_value=state):
+                    code, payload = acceptance.prepare_navigation_stage(config)
+            self.assertEqual(code, 6)
+            self.assertFalse(payload["map_identity"]["matches"])
+            self.assertIsNone(payload["supervised_motion_command"])
+
+    def test_correct_map_path_cannot_override_conflicting_map_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            write_lidar_summary(root)
+            state = localized_world()
+            state["world_state"]["localization"]["map_id"] = "wrong"
+            config = args(registry(root), target="safe_target")
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                with patch.object(acceptance, "world_state", return_value=state):
+                    code, payload = acceptance.prepare_navigation_stage(config)
+            self.assertEqual(code, 6)
+            self.assertFalse(payload["map_identity"]["matches"])
+            self.assertEqual(
+                payload["map_identity"]["conflicting_map_ids"],
+                {"localization": "wrong"},
+            )
+            self.assertIsNone(payload["supervised_motion_command"])
+
+    def test_matching_map_id_without_any_map_path_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            write_lidar_summary(root)
+            state = localized_world()
+            state["world_state"]["current_pose"]["map_path"] = ""
+            state["world_state"]["localization"]["map_path"] = ""
+            config = args(registry(root), target="safe_target")
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                with patch.object(acceptance, "world_state", return_value=state):
+                    code, payload = acceptance.prepare_navigation_stage(config)
+            self.assertEqual(code, 6)
+            self.assertFalse(payload["map_identity"]["matches"])
+            self.assertIn("path was not reported", payload["map_identity"]["reason"])
+            self.assertIsNone(payload["supervised_motion_command"])
+
+    def test_relocation_verification_rejects_wrong_actual_map(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            config = args(registry(Path(temp)), confirm_relocation="mapping_origin")
+            not_started = {"accepted": True, "world_state": {"localization": {"status": "not_started"}}}
+            samples = [localized_world(timestamp_ms=1000), localized_world(timestamp_ms=2000)]
+            for sample in samples:
+                sample["world_state"]["current_pose"]["map_path"] = "/home/unitree/wrong.pcd"
+            with patch.object(acceptance, "runtime_process_status", return_value=self.runtime_ready()):
+                with patch.object(acceptance, "world_state", side_effect=[not_started, *samples]):
+                    with patch.object(
+                        acceptance,
+                        "run_gateway_command",
+                        return_value={"accepted": True},
+                    ):
+                        code, payload = acceptance.relocate_stage(config)
+            self.assertEqual(code, 5)
+            self.assertFalse(payload["localization_verified"])
+            self.assertTrue(all(not sample["map_identity"]["matches"] for sample in payload["samples"]))
+
+    def test_verify_localization_rejects_wrong_actual_map(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            config = args(registry(Path(temp)))
+            samples = [localized_world(timestamp_ms=1000), localized_world(timestamp_ms=2000)]
+            for sample in samples:
+                sample["world_state"]["localization"]["map_id"] = "wrong"
+            with patch.object(acceptance, "world_state", side_effect=samples):
+                code, payload = acceptance.verify_localization_stage(config)
+            self.assertEqual(code, 5)
+            self.assertFalse(payload["localization_verified"])
+            self.assertTrue(all(not sample["map_identity"]["matches"] for sample in payload["samples"]))
 
     def test_rejected_gateway_response_never_prepares_navigation(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "sensor": "XT16",
+  "sensor_serial": "AW4EFF24934EFF50",
+  "calibration_id": "",
+  "status": "pending_field_measurement",
+  "verified_at": null,
+  "verified_by": null,
+  "parameters": {
+    "range_m": 6.0,
+    "percentile": 10.0,
+    "min_points_per_roi": 8,
+    "front_half_width_m": 0.45,
+    "side_forward_m": 0.75,
+    "rear_half_width_m": 0.45,
+    "footprint_front_m": 0.35,
+    "footprint_rear_m": 0.45,
+    "footprint_half_width_m": 0.4,
+    "min_z_m": -0.25,
+    "body_min_z_m": -0.1,
+    "max_z_m": 1.2,
+    "clearance_cluster_gap_m": 0.15,
+    "support_bin_m": 0.05,
+    "min_spatial_bins": 2,
+    "pending_min_points": 3,
+    "min_cloud_points_for_no_return": 1000,
+    "no_return_confidence": 0.5,
+    "forward_axis": "y",
+    "lateral_axis": "x",
+    "vertical_axis": "z",
+    "forward_sign": -1.0,
+    "lateral_sign": 1.0,
+    "vertical_sign": 1.0
+  },
+  "evidence": {
+    "field_record": "docs/go2w_field_acceptance_20260609.md",
+    "required_stationary_measured_scenes": 3,
+    "completed_stationary_measured_scenes": 0,
+    "notes": "Do not promote to verified until physical body-edge clearances are measured and compared in at least three stationary scenes."
+  }
+}

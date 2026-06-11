@@ -33,6 +33,25 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         for forbidden in ("kill ", "pkill", "systemctl", "subprocess", "os.system"):
             self.assertNotIn(forbidden, text)
 
+    def test_short_acceptance_wrapper_has_no_navigation_execution_action(self):
+        text = (REPO_ROOT / "scripts" / "go2w_accept.sh").read_text(encoding="utf-8")
+        self.assertIn("status)", text)
+        self.assertIn("relocate)", text)
+        self.assertIn("verify)", text)
+        self.assertIn("check)", text)
+        self.assertIn("relocate [ANCHOR] confirm", text)
+        self.assertIn('confirmation="${3:-}"', text)
+        self.assertIn('[[ "${confirmation}" != "confirm" ]]', text)
+        self.assertNotIn("--execute", text)
+        self.assertNotIn("navigate_to", text)
+
+    def test_xt16_calibrated_mode_requires_repository_record_guard(self):
+        text = (REPO_ROOT / "scripts" / "go2w_xt16_geometry_sidecar.sh").read_text(encoding="utf-8")
+        self.assertIn("xt16_calibration_guard.py", text)
+        self.assertIn("calibration_rejected", text)
+        self.assertIn("extra_args_not_allowed", text)
+        self.assertIn("--calibration-id", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -71,6 +71,7 @@ add_library(slam_gateway_core
     src/topology_manager.cpp
     src/lidar_geometry_perception.cpp
     src/safety_supervisor.cpp
+    src/navigation_target_authorizer.cpp
     src/llm_command_processor.cpp
 )
 
@@ -126,6 +127,19 @@ target_include_directories(lidar_geometry_perception_smoke_test PRIVATE
     ${SDK_INCLUDE_DIRS}
 )
 add_test(NAME slam_gateway_lidar_geometry_perception_smoke_test COMMAND lidar_geometry_perception_smoke_test)
+
+add_executable(navigation_target_authorizer_smoke_test
+    src/navigation_target_authorizer_smoke_test.cpp
+    src/navigation_target_authorizer.cpp
+)
+target_include_directories(navigation_target_authorizer_smoke_test PRIVATE
+    ${PROJECT_INCLUDE_DIR}
+    ${SDK_INCLUDE_DIRS}
+)
+add_test(
+    NAME slam_gateway_navigation_target_authorizer_smoke_test
+    COMMAND navigation_target_authorizer_smoke_test
+)
 
 install(TARGETS slam_gateway_core slam_keyboard_client slam_llm_command_client
     RUNTIME DESTINATION bin

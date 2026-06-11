@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <string>
+#include <utility>
 
 namespace slam_gateway {
 namespace {
@@ -49,11 +50,13 @@ bool hasOperatorAck(const nlohmann::json& cmd)
     return confirm != cmd.end() && confirm->is_boolean() && confirm->get<bool>();
 }
 
-bool hasRuntimeWatchdog(const nlohmann::json& cmd)
+bool hasNavigationSessionAuthority(const nlohmann::json& cmd,
+                                   const std::string& configured_token)
 {
-    if (cmd.value("runtime_watchdog", false) != true) return false;
-    const std::string context = cmd.value("execution_context", "");
-    return context == "queue_executor_v1" || context == "python_closed_loop_v1";
+    if (configured_token.empty()) return false;
+    const auto token = cmd.find("navigation_session_token");
+    if (token == cmd.end() || !token->is_string()) return false;
+    return token->get<std::string>() == configured_token;
 }
 
 bool isFreshEnoughForWaypoint(const LocalizationState& loc)
@@ -65,8 +68,14 @@ bool isFreshEnoughForWaypoint(const LocalizationState& loc)
 
 }  // namespace
 
-LlmCommandProcessor::LlmCommandProcessor(SlamGateway& gateway)
-    : gateway_(gateway)
+LlmCommandProcessor::LlmCommandProcessor(SlamGateway& gateway,
+                                         std::string navigation_session_token,
+                                         const NavigationTargetAuthorizer* target_authorizer,
+                                         std::function<std::string()> navigation_execution_guard)
+    : gateway_(gateway),
+      navigation_session_token_(std::move(navigation_session_token)),
+      target_authorizer_(target_authorizer),
+      navigation_execution_guard_(std::move(navigation_execution_guard))
 {
 }
 
@@ -167,11 +176,21 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
     }
 
     if (action == "navigate_to_pose") {
-        if (!hasRuntimeWatchdog(cmd)) {
-            return reject("runtime_watchdog_required_for_navigation");
+        if (!hasNavigationSessionAuthority(cmd, navigation_session_token_)) {
+            return reject("persistent_navigation_session_required");
+        }
+        if (!hasOperatorAck(cmd)) {
+            return reject("operator_ack_required_for_navigation");
+        }
+        const std::string target_node = cmd.value("target_node", "");
+        if (target_node.empty()) {
+            return reject("target_node_required_for_navigation");
         }
         if (!cmd.contains("target_pose") || !cmd["target_pose"].is_object()) {
             return reject("missing_target_pose");
+        }
+        if (cmd["target_pose"].value("name", "") != target_node) {
+            return reject("target_pose_name_must_match_target_node");
         }
         const std::string requested_map_path = cmd.value("map_path", "");
         if (requested_map_path.empty()) {
@@ -190,6 +209,23 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
                 {"world_state", gateway_.buildWorldStateJson()}
             };
         }
+        if (target_authorizer_ == nullptr) {
+            return reject("navigation_target_authorizer_not_configured");
+        }
+        const auto authorization = target_authorizer_->authorize(
+            cmd.value("map_id", ""),
+            requested_map_path,
+            target_node,
+            cmd["target_pose"],
+            current_pose);
+        if (!authorization.authorized) {
+            return {
+                {"accepted", false},
+                {"reason", authorization.reason},
+                {"authorization", authorization.details},
+                {"world_state", gateway_.buildWorldStateJson()}
+            };
+        }
         const std::string pose_error = validatePoseJson(cmd["target_pose"], true);
         if (!pose_error.empty()) {
             return reject(pose_error);
@@ -198,7 +234,13 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         if (!safety.allow_navigation) {
             return {{"accepted", false}, {"reason", "safety_blocked"}, {"safety", safety.toJson()}, {"world_state", gateway_.buildWorldStateJson()}};
         }
-        PoseData goal = parsePose(cmd["target_pose"]);
+        if (navigation_execution_guard_) {
+            const std::string guard_reason = navigation_execution_guard_();
+            if (!guard_reason.empty()) {
+                return reject("navigation_session_guard_blocked:" + guard_reason);
+            }
+        }
+        PoseData goal = authorization.authorized_pose;
         return ok(action, gateway_.submitNavigationGoal(goal));
     }
 
@@ -207,14 +249,7 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
     }
 
     if (action == "resume_navigation") {
-        if (!hasRuntimeWatchdog(cmd)) {
-            return reject("runtime_watchdog_required_for_resume");
-        }
-        auto safety = gateway_.getSafetyDecision();
-        if (!safety.allow_navigation) {
-            return {{"accepted", false}, {"reason", "safety_blocked"}, {"safety", safety.toJson()}, {"world_state", gateway_.buildWorldStateJson()}};
-        }
-        return ok(action, gateway_.resumeNavigation());
+        return reject("resume_requires_new_supervised_navigation_session");
     }
 
     if (action == "stop_slam") {

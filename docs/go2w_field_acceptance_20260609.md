@@ -50,7 +50,13 @@ from the robot body. Because the robot also moved forward `1.4 m`, the two
 positions do not isolate lateral error against the same table edge.
 
 Do not set `GO2W_XT16_GEOMETRY_CALIBRATED=1` until measured body-edge-to-table
-distances are compared with XT16 left/right clearances in one stationary pose.
+distances are compared with XT16 left/right clearances in at least three
+stationary scenes.
+
+The runtime now additionally requires
+`configs/perception/xt16_geometry_calibration.json` to have status `verified`,
+a non-empty calibration ID, and parameters identical to the running sidecar.
+The checked-in record is intentionally `pending_field_measurement`.
 
 ## Invalid Historical Samples
 
@@ -68,3 +74,26 @@ calibration baseline. The authoritative runtime validity ledger is:
 - Navigation: blocked by design
 - LLM: may plan, explain, and request clarification, but cannot bypass map,
   localization, target-verification, perception, or gateway safety gates
+
+## 2026-06-11 Closure Check
+
+The current pose stream was independently checked against the map after the
+latest manual movement. The live pose remained consistent with the map, so the
+earlier distance disagreement is classified as physical movement/terrain-mode
+sliding or odometry estimation, not a relocalization jump.
+
+The execution chain now uses a persistent C++ session:
+
+1. bind the session to the live SLAM map identity;
+2. load one fixed topology registry snapshot;
+3. resolve the named target to the registry's canonical pose;
+4. require fresh localization and trusted calibrated XT16 geometry;
+5. start a 500 ms heartbeat with a 2 s lease before submitting navigation;
+6. monitor map identity, localization, and safety every 100 ms;
+7. use an independent pause client if supervision is lost.
+
+Live no-motion acceptance confirmed that `initial_point` reaches the final
+safety gate but is rejected because the checked-in XT16 calibration record is
+still `pending_field_measurement`. This is the first intended blocker. After
+calibration, repeat the check in a scene whose measured side clearances also
+pass the runtime thresholds before any supervised motion acceptance.

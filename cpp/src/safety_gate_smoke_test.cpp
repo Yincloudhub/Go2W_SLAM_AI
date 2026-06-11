@@ -19,7 +19,7 @@ nlohmann::json world(double front, double left, double right)
             {"slam_health", {{"status", "ok"}, {"slam_alive", true}, {"localization_alive", true}}},
             {"safety", {{"allow_navigation", true}, {"reason", "ok"}}},
             {"local_obstacle", {
-                {"source", "stereo_depth"},
+                {"source", "lidar_pointcloud"},
                 {"stale", false},
                 {"age_ms", 100},
                 {"confidence", 0.8},
@@ -40,7 +40,7 @@ nlohmann::json world(double front, double left, double right)
 int main()
 {
     go2w::SafetyGate gate;
-    require(gate.evaluateWorldState(world(2.0, 2.0, 2.0)).allowed, "fresh stereo depth should pass");
+    require(gate.evaluateWorldState(world(2.0, 2.0, 2.0)).allowed, "fresh XT16 geometry should pass");
     require(!gate.evaluateWorldState(world(2.0, 2.0, 0.6)).allowed, "right-side obstacle should block");
 
     auto stale = world(2.0, 2.0, 2.0);
@@ -53,7 +53,11 @@ int main()
 
     auto stub = world(6.0, 6.0, 6.0);
     stub["world_state"]["local_obstacle"]["source"] = "manual_stub";
-    require(gate.evaluateWorldState(stub).allowed, "manual clearance stub should not override gateway safety");
+    require(!gate.evaluateWorldState(stub).allowed, "manual clearance stub must fail closed");
+
+    auto stereo_only = world(6.0, 6.0, 6.0);
+    stereo_only["world_state"]["local_obstacle"]["source"] = "stereo_depth";
+    require(!gate.evaluateWorldState(stereo_only).allowed, "forward stereo alone must not authorize navigation");
 
     auto missing_safety = world(2.0, 2.0, 2.0);
     missing_safety["world_state"].erase("safety");

@@ -131,14 +131,16 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
     if (obstacle && obstacle->is_object()) {
         const std::string obstacle_source = obstacle->value("source", "");
         const bool trusted_obstacle_source =
-            obstacle_source == "stereo_depth" ||
             obstacle_source == "lidar_pointcloud" ||
             obstacle_source == "lidar_pointcloud+stereo_depth";
+        if (!trusted_obstacle_source) {
+            return blocked("local_obstacle source is not trusted: " + obstacle_source, "hold");
+        }
         const double obstacle_age_ms = obstacle->value("age_ms", -1.0);
-        if (trusted_obstacle_source && (obstacle->value("stale", true) || obstacle_age_ms < 0.0)) {
+        if (obstacle->value("stale", true) || obstacle_age_ms < 0.0) {
             return blocked("trusted local_obstacle is stale", "hold");
         }
-        const bool fresh_obstacle = trusted_obstacle_source && !obstacle->value("stale", true) &&
+        const bool fresh_obstacle = !obstacle->value("stale", true) &&
             obstacle_age_ms >= 0.0;
         if (fresh_obstacle) {
             const std::string obstacle_action = stringAt(*world, {"local_obstacle", "recommended_action"});

@@ -37,6 +37,7 @@ class Xt16GeometryConfig:
     lateral_sign: float = 1.0
     vertical_sign: float = 1.0
     calibrated: bool = False
+    calibration_id: str = ""
 
 
 def _point_value(point: Any, key: str) -> float | None:
@@ -250,6 +251,8 @@ def build_xt16_geometry_summary(
     latency_ms: float | None = None,
 ) -> dict[str, Any]:
     cfg = config or Xt16GeometryConfig()
+    calibration_id = cfg.calibration_id.strip()
+    calibration_verified = bool(cfg.calibrated and calibration_id)
     body_values: dict[str, list[DirectionalSample]] = {
         direction: [] for direction in ("front", "left", "right", "rear")
     }
@@ -336,8 +339,10 @@ def build_xt16_geometry_summary(
     confidence = round(min(roi_confidence["front"], roi_confidence["left"], roi_confidence["right"]), 3)
     missing_required = [name for name, value in {"front": front, "left": left, "right": right}.items() if value is None]
     stale_reasons: list[str] = []
-    if not cfg.calibrated:
+    if not calibration_verified:
         stale_reasons.append("uncalibrated_xt16_geometry")
+    if cfg.calibrated and not calibration_id:
+        stale_reasons.append("missing_xt16_calibration_id")
     if missing_required:
         stale_reasons.append("missing_required_roi:" + ",".join(missing_required))
     if pending_body_directions:
@@ -412,7 +417,8 @@ def build_xt16_geometry_summary(
             "min_spatial_bins": cfg.min_spatial_bins,
             "min_cloud_points_for_no_return": cfg.min_cloud_points_for_no_return,
             "no_return_confidence": cfg.no_return_confidence,
-            "calibrated": cfg.calibrated,
+            "calibrated": calibration_verified,
+            "calibration_id": calibration_id or None,
             "height_bands_m": {
                 "low_hazard": [cfg.min_z_m, body_min_z_m],
                 "body": [body_min_z_m, cfg.max_z_m],

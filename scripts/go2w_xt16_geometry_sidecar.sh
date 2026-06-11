@@ -15,9 +15,32 @@ NICE_LEVEL="${GO2W_XT16_GEOMETRY_NICE_LEVEL:-5}"
 TOPIC="${GO2W_XT16_POINTCLOUD_TOPIC:-/unitree/slam_lidar/points}"
 RATE_LIMIT_HZ="${GO2W_XT16_GEOMETRY_RATE_LIMIT_HZ:-5}"
 SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-500}"
-MIN_POINTS_PER_ROI="${GO2W_XT16_GEOMETRY_MIN_POINTS_PER_ROI:-8}"
-BODY_MIN_Z_M="${GO2W_XT16_GEOMETRY_BODY_MIN_Z_M:--0.10}"
-CALIBRATED="${GO2W_XT16_GEOMETRY_CALIBRATED:-0}"
+CALIBRATION_REQUESTED="${GO2W_XT16_GEOMETRY_CALIBRATED:-0}"
+CALIBRATION_RECORD="${GO2W_XT16_CALIBRATION_RECORD:-${REPO_ROOT}/configs/perception/xt16_geometry_calibration.json}"
+export GO2W_XT16_GEOMETRY_RANGE_M="${GO2W_XT16_GEOMETRY_RANGE_M:-6.0}"
+export GO2W_XT16_GEOMETRY_PERCENTILE="${GO2W_XT16_GEOMETRY_PERCENTILE:-10.0}"
+export GO2W_XT16_GEOMETRY_MIN_POINTS_PER_ROI="${GO2W_XT16_GEOMETRY_MIN_POINTS_PER_ROI:-8}"
+export GO2W_XT16_GEOMETRY_FRONT_HALF_WIDTH_M="${GO2W_XT16_GEOMETRY_FRONT_HALF_WIDTH_M:-0.45}"
+export GO2W_XT16_GEOMETRY_SIDE_FORWARD_M="${GO2W_XT16_GEOMETRY_SIDE_FORWARD_M:-0.75}"
+export GO2W_XT16_GEOMETRY_REAR_HALF_WIDTH_M="${GO2W_XT16_GEOMETRY_REAR_HALF_WIDTH_M:-0.45}"
+export GO2W_XT16_GEOMETRY_FOOTPRINT_FRONT_M="${GO2W_XT16_GEOMETRY_FOOTPRINT_FRONT_M:-0.35}"
+export GO2W_XT16_GEOMETRY_FOOTPRINT_REAR_M="${GO2W_XT16_GEOMETRY_FOOTPRINT_REAR_M:-0.45}"
+export GO2W_XT16_GEOMETRY_FOOTPRINT_HALF_WIDTH_M="${GO2W_XT16_GEOMETRY_FOOTPRINT_HALF_WIDTH_M:-0.40}"
+export GO2W_XT16_GEOMETRY_MIN_Z_M="${GO2W_XT16_GEOMETRY_MIN_Z_M:--0.25}"
+export GO2W_XT16_GEOMETRY_BODY_MIN_Z_M="${GO2W_XT16_GEOMETRY_BODY_MIN_Z_M:--0.10}"
+export GO2W_XT16_GEOMETRY_MAX_Z_M="${GO2W_XT16_GEOMETRY_MAX_Z_M:-1.20}"
+export GO2W_XT16_GEOMETRY_CLUSTER_GAP_M="${GO2W_XT16_GEOMETRY_CLUSTER_GAP_M:-0.15}"
+export GO2W_XT16_GEOMETRY_SUPPORT_BIN_M="${GO2W_XT16_GEOMETRY_SUPPORT_BIN_M:-0.05}"
+export GO2W_XT16_GEOMETRY_MIN_SPATIAL_BINS="${GO2W_XT16_GEOMETRY_MIN_SPATIAL_BINS:-2}"
+export GO2W_XT16_GEOMETRY_PENDING_MIN_POINTS="${GO2W_XT16_GEOMETRY_PENDING_MIN_POINTS:-3}"
+export GO2W_XT16_GEOMETRY_MIN_CLOUD_POINTS="${GO2W_XT16_GEOMETRY_MIN_CLOUD_POINTS:-1000}"
+export GO2W_XT16_GEOMETRY_NO_RETURN_CONFIDENCE="${GO2W_XT16_GEOMETRY_NO_RETURN_CONFIDENCE:-0.5}"
+export GO2W_XT16_GEOMETRY_FORWARD_AXIS="${GO2W_XT16_GEOMETRY_FORWARD_AXIS:-y}"
+export GO2W_XT16_GEOMETRY_LATERAL_AXIS="${GO2W_XT16_GEOMETRY_LATERAL_AXIS:-x}"
+export GO2W_XT16_GEOMETRY_VERTICAL_AXIS="${GO2W_XT16_GEOMETRY_VERTICAL_AXIS:-z}"
+export GO2W_XT16_GEOMETRY_FORWARD_SIGN="${GO2W_XT16_GEOMETRY_FORWARD_SIGN:--1.0}"
+export GO2W_XT16_GEOMETRY_LATERAL_SIGN="${GO2W_XT16_GEOMETRY_LATERAL_SIGN:-1.0}"
+export GO2W_XT16_GEOMETRY_VERTICAL_SIGN="${GO2W_XT16_GEOMETRY_VERTICAL_SIGN:-1.0}"
 
 mkdir -p "${SERVICE_DIR}"
 
@@ -79,7 +102,8 @@ print_status() {
   fi
   echo "summary_path=${SUMMARY_PATH}"
   echo "topic=${TOPIC}"
-  echo "calibrated=${CALIBRATED}"
+  echo "calibration_requested=${CALIBRATION_REQUESTED}"
+  echo "calibration_record=${CALIBRATION_RECORD}"
   summary_health || true
 }
 
@@ -120,16 +144,47 @@ start_sidecar() {
   fi
   : > "${LOG_FILE}"
   local calibrated_args=()
-  if [[ "${CALIBRATED}" == "1" || "${CALIBRATED}" == "true" || "${CALIBRATED}" == "yes" ]]; then
-    calibrated_args=(--calibrated)
+  if [[ "${CALIBRATION_REQUESTED}" == "1" || "${CALIBRATION_REQUESTED}" == "true" || "${CALIBRATION_REQUESTED}" == "yes" ]]; then
+    if [[ -n "${GO2W_XT16_GEOMETRY_EXTRA_ARGS:-}" ]]; then
+      echo "xt16_geometry=calibration_rejected reason=extra_args_not_allowed" >&2
+      return 1
+    fi
+    local calibration_id
+    if ! calibration_id="$("${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_calibration_guard.py" --record "${CALIBRATION_RECORD}")"; then
+      echo "xt16_geometry=calibration_rejected reason=${calibration_id}" >&2
+      return 1
+    fi
+    calibrated_args=(--calibrated --calibration-id "${calibration_id}")
   fi
   # shellcheck disable=SC2086
   nohup nice -n "${NICE_LEVEL}" "${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_lidar_geometry_summary.py" \
     --topic "${TOPIC}" \
     --output "${SUMMARY_PATH}" \
     --rate-limit-hz "${RATE_LIMIT_HZ}" \
-    --min-points-per-roi "${MIN_POINTS_PER_ROI}" \
-    --body-min-z-m "${BODY_MIN_Z_M}" \
+    --range-m "${GO2W_XT16_GEOMETRY_RANGE_M}" \
+    --percentile "${GO2W_XT16_GEOMETRY_PERCENTILE}" \
+    --min-points-per-roi "${GO2W_XT16_GEOMETRY_MIN_POINTS_PER_ROI}" \
+    --front-half-width-m "${GO2W_XT16_GEOMETRY_FRONT_HALF_WIDTH_M}" \
+    --side-forward-m "${GO2W_XT16_GEOMETRY_SIDE_FORWARD_M}" \
+    --rear-half-width-m "${GO2W_XT16_GEOMETRY_REAR_HALF_WIDTH_M}" \
+    --footprint-front-m "${GO2W_XT16_GEOMETRY_FOOTPRINT_FRONT_M}" \
+    --footprint-rear-m "${GO2W_XT16_GEOMETRY_FOOTPRINT_REAR_M}" \
+    --footprint-half-width-m "${GO2W_XT16_GEOMETRY_FOOTPRINT_HALF_WIDTH_M}" \
+    --min-z-m "${GO2W_XT16_GEOMETRY_MIN_Z_M}" \
+    --body-min-z-m "${GO2W_XT16_GEOMETRY_BODY_MIN_Z_M}" \
+    --max-z-m "${GO2W_XT16_GEOMETRY_MAX_Z_M}" \
+    --clearance-cluster-gap-m "${GO2W_XT16_GEOMETRY_CLUSTER_GAP_M}" \
+    --support-bin-m "${GO2W_XT16_GEOMETRY_SUPPORT_BIN_M}" \
+    --min-spatial-bins "${GO2W_XT16_GEOMETRY_MIN_SPATIAL_BINS}" \
+    --pending-min-points "${GO2W_XT16_GEOMETRY_PENDING_MIN_POINTS}" \
+    --min-cloud-points-for-no-return "${GO2W_XT16_GEOMETRY_MIN_CLOUD_POINTS}" \
+    --no-return-confidence "${GO2W_XT16_GEOMETRY_NO_RETURN_CONFIDENCE}" \
+    --forward-axis "${GO2W_XT16_GEOMETRY_FORWARD_AXIS}" \
+    --lateral-axis "${GO2W_XT16_GEOMETRY_LATERAL_AXIS}" \
+    --vertical-axis "${GO2W_XT16_GEOMETRY_VERTICAL_AXIS}" \
+    --forward-sign "${GO2W_XT16_GEOMETRY_FORWARD_SIGN}" \
+    --lateral-sign "${GO2W_XT16_GEOMETRY_LATERAL_SIGN}" \
+    --vertical-sign "${GO2W_XT16_GEOMETRY_VERTICAL_SIGN}" \
     "${calibrated_args[@]}" \
     ${GO2W_XT16_GEOMETRY_EXTRA_ARGS:-} \
     > "${LOG_FILE}" 2>&1 < /dev/null &

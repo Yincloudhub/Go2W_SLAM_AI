@@ -36,11 +36,19 @@ void writeSummary(
     double right,
     double front_confidence,
     double left_confidence,
-    double right_confidence)
+    double right_confidence,
+    bool calibrated = true,
+    const char* calibration_id = "xt16-smoke-verified")
 {
     nlohmann::json summary;
     summary["timestamp_ms"] = slam_gateway::wallClockNowMs();
     summary["source"] = source;
+    if (std::string(source) == "lidar_pointcloud") {
+        summary["parameters"] = {
+            {"calibrated", calibrated},
+            {"calibration_id", calibration_id}
+        };
+    }
     summary["stale"] = stale;
     summary["confidence"] = 0.9;
     summary["front_clearance_m"] = front;
@@ -68,6 +76,27 @@ int main()
     const auto stale_primary = perception.getFusedSummaryOrFallback(lidar_path, 1000, stereo_path, 1000);
     require(stale_primary.source == "lidar_pointcloud", "stale XT16 must remain the selected source");
     require(stale_primary.stale, "stale XT16 must remain fail-closed");
+
+    writeSummary(
+        lidar_path,
+        "lidar_pointcloud",
+        false,
+        2.0,
+        2.0,
+        2.0,
+        0.8,
+        0.7,
+        0.6,
+        true,
+        "");
+    const auto missing_calibration_id = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(
+        missing_calibration_id.stale,
+        "XT16 summary without a verified calibration ID must fail closed");
 
     writeSummary(lidar_path, "lidar_pointcloud", false, 2.0, 2.0, 2.0, 0.8, 0.7, 0.6);
     writeSummary(stereo_path, "stereo_depth", false, 0.6, 3.0, 1.0, 0.95, 0.9, 0.85);

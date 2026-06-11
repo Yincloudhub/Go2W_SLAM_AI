@@ -14,6 +14,13 @@ double numberOr(const nlohmann::json& value, const char* key, double fallback)
     return it->get<double>();
 }
 
+std::string stringOr(const nlohmann::json& value, const char* key, const std::string& fallback)
+{
+    const auto it = value.find(key);
+    if (it == value.end() || !it->is_string()) return fallback;
+    return it->get<std::string>();
+}
+
 double optionalNestedNumberOr(
     const nlohmann::json& value,
     const char* object_key,
@@ -135,6 +142,9 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
         summary.timestamp_ms = j.value("timestamp_ms", int64_t{0});
         summary.frame_id = j.value("frame_id", "camera_depth_optical_frame");
         summary.source = j.value("source", "unverified");
+        const auto parameters = j.value("parameters", nlohmann::json::object());
+        summary.calibration_verified = parameters.value("calibrated", false);
+        summary.calibration_id = stringOr(parameters, "calibration_id", "");
         summary.range_m = numberOr(j, "range_m", 6.0);
         summary.front_clearance_m = numberOr(j, "front_clearance_m", -1.0);
         summary.left_clearance_m = numberOr(j, "left_clearance_m", -1.0);
@@ -168,12 +178,16 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
             knownClearance(summary.front_clearance_m) &&
             knownClearance(summary.left_clearance_m) &&
             knownClearance(summary.right_clearance_m);
+        const bool lidar_calibration_valid =
+            summary.source != "lidar_pointcloud" ||
+            (summary.calibration_verified && !summary.calibration_id.empty());
         summary.stale =
             j.value("stale", false) ||
             summary.timestamp_ms <= 0 ||
             summary.age_ms < 0 ||
             summary.age_ms > std::max<int64_t>(1, max_age_ms) ||
-            !has_required_clearance;
+            !has_required_clearance ||
+            !lidar_calibration_valid;
         updateDerivedState(summary);
         return summary;
     } catch (...) {

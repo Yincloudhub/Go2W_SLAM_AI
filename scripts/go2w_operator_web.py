@@ -201,6 +201,7 @@ class WebConfig:
     semantic_stale_ms: int = 3000
     edge_summary_path: Path = Path("artifacts/edge_perception_summary.json")
     edge_stale_ms: int = 3000
+    collection_status_path: Path = Path("~/go2w_dataset/collection_status.json")
     status_cache_ms: int = 1500
     ensure_slam_on_start: bool = False
     registry_path: Path = DEFAULT_REGISTRY_PATH
@@ -408,6 +409,7 @@ class OperatorWebApp:
         result["stereo_motion_guard"] = self.stereo_motion_guard()
         result["semantic_summary"] = self.semantic_summary()
         result["edge_summary"] = self.edge_summary()
+        result["collection_status"] = self.collection_status()
         result["capabilities"] = self.capabilities()
         with self.lock:
             result["state"] = self.state.snapshot()
@@ -868,6 +870,36 @@ class OperatorWebApp:
             }
         except Exception as exc:  # noqa: BLE001
             return {"available": False, "path": str(path), "error": str(exc)}
+
+    def collection_status(self) -> Dict[str, Any]:
+        path = self.config.collection_status_path.expanduser()
+        if not path.is_absolute():
+            path = self.config.repo_root / path
+        if not path.exists():
+            return {
+                "available": False,
+                "path": str(path),
+                "status": "not_started",
+                "message_zh": "尚未开始多传感器采集。",
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            timestamp_ms = int(data.get("timestamp_ms") or 0)
+            age_ms = max(0, int(time.time() * 1000) - timestamp_ms) if timestamp_ms else None
+            return {
+                "available": True,
+                "path": str(path),
+                "age_ms": age_ms,
+                "data": data,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "available": False,
+                "path": str(path),
+                "status": "invalid",
+                "message_zh": "采集状态文件无法读取。",
+                "error": str(exc),
+            }
 
     def edge_summary(self) -> Dict[str, Any]:
         path = self.config.edge_summary_path
@@ -1429,6 +1461,9 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
         if parsed_path.path == "/api/edge-summary":
             self.send_json({"edge_summary": self.app.edge_summary()})
             return
+        if parsed_path.path == "/api/collection-status":
+            self.send_json({"collection_status": self.app.collection_status()})
+            return
         if parsed_path.path == "/api/topology":
             try:
                 self.send_json(self.app.topology())
@@ -1541,6 +1576,10 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--semantic-stale-ms", type=int, default=int(env.get("GO2W_SEMANTIC_STALE_MS", "3000")))
     parser.add_argument("--edge-summary-path", default=env.get("GO2W_EDGE_SUMMARY_PATH", "artifacts/edge_perception_summary.json"))
     parser.add_argument("--edge-stale-ms", type=int, default=int(env.get("GO2W_EDGE_STALE_MS", "3000")))
+    parser.add_argument(
+        "--collection-status-path",
+        default=env.get("GO2W_COLLECTION_STATUS_PATH", "~/go2w_dataset/collection_status.json"),
+    )
     parser.add_argument("--status-cache-ms", type=int, default=int(env.get("GO2W_STATUS_CACHE_MS", "1500")))
     parser.add_argument("--registry", default=env.get("GO2W_REGISTRY", str(DEFAULT_REGISTRY_PATH)))
     parser.add_argument("--map-id", default=env.get("GO2W_MAP_ID", DEFAULT_MAP_ID))
@@ -1578,6 +1617,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         semantic_stale_ms=max(1, args.semantic_stale_ms),
         edge_summary_path=Path(args.edge_summary_path).expanduser(),
         edge_stale_ms=max(1, args.edge_stale_ms),
+        collection_status_path=Path(args.collection_status_path).expanduser(),
         status_cache_ms=max(0, args.status_cache_ms),
         ensure_slam_on_start=args.ensure_slam_on_start,
         registry_path=Path(args.registry).expanduser(),

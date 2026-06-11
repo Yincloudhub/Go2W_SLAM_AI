@@ -124,28 +124,69 @@ def map_identity_check(response: dict[str, Any], profile: MapProfile) -> dict[st
     world = response.get("world_state") if isinstance(response, dict) else None
     current_pose = world.get("current_pose") if isinstance(world, dict) else None
     localization = world.get("localization") if isinstance(world, dict) else None
-    if not isinstance(current_pose, dict):
-        return {"matches": False, "reason": "missing current_pose map identity"}
-    current_map_id = str(current_pose.get("map_id") or "")
-    current_map_path = str(current_pose.get("map_path") or "")
-    if not current_map_path and isinstance(localization, dict):
-        current_map_path = str(localization.get("map_path") or "")
-    expected_ids = {profile.map_id, Path(profile.pcd_path).stem}
-    matches = (
-        bool(current_map_path)
-        and Path(current_map_path) == Path(profile.pcd_path)
-    ) or (
-        bool(current_map_id)
-        and current_map_id in expected_ids
-        and current_map_id != "debug_map"
+    current_map_id = str(current_pose.get("map_id") or "").strip() if isinstance(current_pose, dict) else ""
+    pose_map_path = str(current_pose.get("map_path") or "").strip() if isinstance(current_pose, dict) else ""
+    localization_map_id = (
+        str(localization.get("map_id") or "").strip() if isinstance(localization, dict) else ""
     )
+    localization_map_path = (
+        str(localization.get("map_path") or "").strip() if isinstance(localization, dict) else ""
+    )
+    expected_ids = {profile.map_id, Path(profile.pcd_path).stem}
+    reported_ids = {
+        source: value
+        for source, value in (
+            ("current_pose", current_map_id),
+            ("localization", localization_map_id),
+        )
+        if value
+    }
+    reported_paths = {
+        source: value
+        for source, value in (
+            ("current_pose", pose_map_path),
+            ("localization", localization_map_path),
+        )
+        if value
+    }
+    conflicting_ids = {
+        source: value
+        for source, value in reported_ids.items()
+        if value == "debug_map" or value not in expected_ids
+    }
+    conflicting_paths = {
+        source: value
+        for source, value in reported_paths.items()
+        if Path(value) != Path(profile.pcd_path)
+    }
+    if not isinstance(current_pose, dict):
+        matches = False
+        reason = "missing current_pose map identity"
+    elif conflicting_ids:
+        matches = False
+        reason = "active SLAM map id does not match registry"
+    elif conflicting_paths:
+        matches = False
+        reason = "active SLAM map path does not match registry"
+    elif not reported_paths:
+        matches = False
+        reason = "active SLAM map path was not reported; map id alone is insufficient"
+    else:
+        matches = True
+        reason = "active SLAM map identity matches registry"
     return {
         "matches": matches,
         "current_map_id": current_map_id,
-        "current_map_path": current_map_path,
+        "current_map_path": pose_map_path or localization_map_path,
+        "current_pose_map_path": pose_map_path,
+        "localization_map_id": localization_map_id,
+        "localization_map_path": localization_map_path,
+        "conflicting_map_ids": conflicting_ids,
+        "conflicting_map_paths": conflicting_paths,
         "expected_map_id": profile.map_id,
+        "expected_map_ids": sorted(expected_ids),
         "expected_map_path": profile.pcd_path,
-        "reason": "active SLAM map matches registry" if matches else "active SLAM map does not match registry",
+        "reason": reason,
     }
 
 
@@ -310,6 +351,7 @@ def status_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
 
 def verify_samples(
     args: argparse.Namespace,
+    profile: MapProfile,
     anchor: RelocalizationAnchor,
     *,
     get_world: Callable[[], dict[str, Any]],
@@ -344,13 +386,15 @@ def verify_samples(
         timestamp = finite_number(current_pose.get("timestamp_ms")) if isinstance(current_pose, dict) else None
         timestamp_valid = timestamp is not None and timestamp > 0
         timestamp_advanced = timestamp_valid and (last_timestamp is None or timestamp > last_timestamp)
-        sample_ok = ok and timestamp_advanced
+        map_identity = map_identity_check(response, profile)
+        sample_ok = ok and timestamp_advanced and map_identity["matches"]
         samples.append(
             {
                 "index": index + 1,
                 "ok": sample_ok,
                 "timestamp_ms": timestamp,
                 "timestamp_advanced": timestamp_advanced,
+                "map_identity": map_identity,
                 **checks,
             }
         )
@@ -382,12 +426,17 @@ def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
             "reason": f"anchor {anchor.anchor_id} is not verified: {anchor.status}",
         }
     before = world_state(args)
-    if localization_is_healthy(before, max_pose_age_ms=args.max_pose_age_ms):
+    before_map_identity = map_identity_check(before, profile)
+    if (
+        localization_is_healthy(before, max_pose_age_ms=args.max_pose_age_ms)
+        and before_map_identity["matches"]
+    ):
         return 3, {
             "stage": "relocate",
             "accepted": False,
             "motion_commands_sent": False,
             "reason": "localization is already healthy and fresh; recovery relocation is not allowed",
+            "map_identity": before_map_identity,
             "world": compact_world(before),
         }
     if args.confirm_relocation != anchor.anchor_id:
@@ -425,7 +474,7 @@ def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
         }
     if args.relocation_settle_s > 0:
         time.sleep(args.relocation_settle_s)
-    verified, samples = verify_samples(args, anchor, get_world=lambda: world_state(args))
+    verified, samples = verify_samples(args, profile, anchor, get_world=lambda: world_state(args))
     return (0 if verified else 5), {
         "stage": "relocate",
         "accepted": True,
@@ -443,7 +492,8 @@ def relocate_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
 
 
 def verify_localization_stage(args: argparse.Namespace) -> tuple[int, dict[str, Any]]:
-    anchor = load_profile(args).get_anchor(args.anchor)
+    profile = load_profile(args)
+    anchor = profile.get_anchor(args.anchor)
     if not verified_anchor(anchor):
         return 3, {
             "stage": "verify-localization",
@@ -452,7 +502,7 @@ def verify_localization_stage(args: argparse.Namespace) -> tuple[int, dict[str, 
             "localization_verified": False,
             "reason": f"anchor {anchor.anchor_id} is not verified: {anchor.status}",
         }
-    verified, samples = verify_samples(args, anchor, get_world=lambda: world_state(args))
+    verified, samples = verify_samples(args, profile, anchor, get_world=lambda: world_state(args))
     return (0 if verified else 5), {
         "stage": "verify-localization",
         "motion_commands_sent": False,

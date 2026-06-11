@@ -287,6 +287,27 @@
       </section>
 
       <section>
+        <div class="screen-head">
+          <div>
+            <h2>多传感器采集</h2>
+            <small>缺少单路数据时继续保存其他在线 topic</small>
+          </div>
+          <span id="collection-health" class="pill">尚未开始</span>
+        </div>
+        <div class="field-stack" style="margin-top:10px">
+          <strong id="collection-message">等待采集任务</strong>
+          <div class="metrics">
+            <div class="metric"><label>前视相机</label><strong id="collection-front-camera">未检查</strong></div>
+            <div class="metric"><label>点云</label><strong id="collection-pointcloud">未检查</strong></div>
+            <div class="metric"><label>IMU</label><strong id="collection-imu">未检查</strong></div>
+            <div class="metric"><label>里程计</label><strong id="collection-odometry">未检查</strong></div>
+            <div class="metric"><label>姿态</label><strong id="collection-attitude">未检查</strong></div>
+            <div class="metric"><label>输出目录</label><strong id="collection-output">暂无</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
         <h2>实时状态</h2>
         <div class="metrics">
           <div class="metric"><label>任务阶段</label><strong id="m-phase">未知</strong></div>
@@ -576,6 +597,46 @@
         ? `${node} / ${sensor} / ${mode} / ${age}`
         : `${node} / 离线或摘要过期 / ${age}`;
     }
+    function updateCollection(collection) {
+      const health = $("collection-health");
+      const message = $("collection-message");
+      if (!collection || !collection.available || !collection.data) {
+        health.textContent = "尚未开始";
+        health.className = "pill";
+        message.textContent = (collection && collection.message_zh) || "等待采集任务";
+        return;
+      }
+      const data = collection.data || {};
+      const sensors = data.sensors || {};
+      const severity = data.severity || "info";
+      const labels = {
+        front_camera: "collection-front-camera",
+        pointcloud: "collection-pointcloud",
+        imu: "collection-imu",
+        odometry: "collection-odometry",
+        attitude: "collection-attitude"
+      };
+      for (const [role, elementId] of Object.entries(labels)) {
+        const sensor = sensors[role] || {};
+        const topic = sensor.topic ? ` / ${sensor.topic}` : "";
+        $(elementId).textContent = `${sensor.status_zh || "未检查"}${topic}`;
+      }
+      message.textContent = data.message_zh || "采集状态已更新";
+      $("collection-output").textContent = data.output || "暂无";
+      if (severity === "ok") {
+        health.textContent = data.phase === "completed" ? "采集完成" : "采集正常";
+        health.className = "pill ok";
+      } else if (severity === "warning") {
+        health.textContent = "降级采集";
+        health.className = "pill warn";
+      } else if (severity === "error") {
+        health.textContent = "当前无数据";
+        health.className = "pill danger";
+      } else {
+        health.textContent = "正在检查";
+        health.className = "pill";
+      }
+    }
     async function api(path, options = {}) {
       const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -595,6 +656,7 @@
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);
+        updateCollection(result.collection_status);
         setScreen(summary, result.semantic_summary);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
@@ -623,6 +685,7 @@
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);
+        updateCollection(result.collection_status);
         setScreen(summary, result.semantic_summary);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {

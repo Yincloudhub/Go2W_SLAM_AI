@@ -1,4 +1,5 @@
 import json
+import queue
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -6,7 +7,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from edge_autonomy.map_registry import MapRegistry
-from scripts.run_robot_closed_loop import generate_llm_feedback_result, operator_feedback_message, wait_for_arrival
+from scripts.run_robot_closed_loop import (
+    PersistentNavigationSession,
+    generate_llm_feedback_result,
+    operator_feedback_message,
+    run_supervised_navigation_session,
+    wait_for_arrival,
+)
 from scripts.run_robot_closed_loop import execute_task_queue
 
 
@@ -19,6 +26,103 @@ class FailingBackend:
 
 
 class QueueFeedbackTests(unittest.TestCase):
+    def test_persistent_session_matches_responses_by_request_id(self) -> None:
+        class FakeStdin:
+            def __init__(self):
+                self.payload = ""
+
+            def write(self, payload):
+                self.payload += payload
+
+            def flush(self):
+                return None
+
+        class FakeProcess:
+            def __init__(self):
+                self.stdin = FakeStdin()
+
+            def poll(self):
+                return None
+
+        session = PersistentNavigationSession.__new__(PersistentNavigationSession)
+        session.timeout_s = 1
+        session.process = FakeProcess()
+        session.messages = queue.Queue()
+        session.session_token = "token"
+        session.lease_timeout_ms = 2000
+        session._request_sequence = 0
+        session.active = False
+        session.async_events = []
+        session.messages.put(
+            {
+                "accepted": False,
+                "action": "get_world_state",
+                "request_id": "stale-request",
+            }
+        )
+        session.messages.put(
+            {
+                "accepted": True,
+                "action": "get_world_state",
+                "request_id": "session-request-1",
+            }
+        )
+
+        result = session.command({"action": "get_world_state"})
+
+        self.assertTrue(result["accepted"])
+        self.assertEqual(result["request_id"], "session-request-1")
+        self.assertEqual(session.async_events[0]["request_id"], "stale-request")
+        sent = json.loads(session.process.stdin.payload)
+        self.assertEqual(sent["request_id"], "session-request-1")
+
+    def test_supervised_navigation_reuses_persistent_session(self) -> None:
+        commands = []
+
+        class FakeSession:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return None
+
+            def command(self, command):
+                commands.append(command)
+                return {"accepted": True, "action": command["action"]}
+
+        args = SimpleNamespace(
+            gateway_client="gateway",
+            network_interface="eth0",
+            timeout_s=3,
+            gateway_startup_wait_s=0.0,
+        )
+        command = {
+            "action": "navigate_to_pose",
+            "operator_ack": True,
+            "target_node": "wp_a",
+            "target_pose": {"name": "wp_a", "x": 1.0, "y": 2.0},
+        }
+        arrival = {"arrived": True, "paused": True}
+
+        with patch(
+            "scripts.run_robot_closed_loop.PersistentNavigationSession",
+            return_value=FakeSession(),
+        ):
+            with patch(
+                "scripts.run_robot_closed_loop.wait_for_arrival",
+                return_value=arrival,
+            ) as wait:
+                result, observed_arrival = run_supervised_navigation_session(
+                    command,
+                    args,
+                    target_name="A",
+                )
+
+        self.assertTrue(result["accepted"])
+        self.assertEqual(observed_arrival, arrival)
+        self.assertEqual(commands, [command])
+        self.assertIs(wait.call_args.kwargs["session"].__class__, FakeSession)
+
     def test_dry_run_queue_is_not_marked_completed(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)
         task_queue = {
