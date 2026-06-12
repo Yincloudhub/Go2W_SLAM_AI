@@ -126,3 +126,46 @@ pass the runtime thresholds before any supervised motion acceptance.
   selected relocation anchor envelope. Anchor distance/yaw checks apply only to
   relocation verification; navigation uses fresh SLAM/map identity and live
   safety gates.
+
+## 2026-06-12 Restart and Relocation Investigation
+
+- The robot was restarted and placed at the operator-reported build-map
+  origin. XT16, Unitree SLAM, XT16 geometry, and forward stereo depth were
+  restarted.
+- The live scene was close to the successful June 9 baseline: front about
+  `4.209 m`, left `0.570 m`, right `0.027 m`; forward depth center about
+  `4.514 m`.
+- The first explicit `mapping_origin` relocation failed with Unitree error
+  `509` and ICP score `0.0325202`, slightly above the configured `0.03`
+  threshold.
+- One controlled retry returned accepted at the request layer, but Unitree SLAM
+  did not publish a usable `/slam_info` or relocation odometry stream.
+  Read-only status therefore remained `debug_map` / `not_started`.
+- No navigation or chassis motion command was sent. The unlocalized state and
+  pending XT16 calibration continued to block navigation.
+- Investigation found a diagnostic defect: consecutive verification previously
+  opened a persistent navigation session, whose startup correctly requires
+  fresh localization. That prevented the verifier from observing the
+  transition from `not_started` to `localized`. The verifier now uses a
+  persistent read-only world-state session that can observe this transition
+  and rejects every non-`get_world_state` action.
+
+Current conclusion: the deterministic safety boundary behaved correctly. The
+remaining field issue is repeatable physical alignment / vendor ICP and pose
+publication, not a permitted unsafe navigation path.
+
+## 2026-06-12 Closure Hardening
+
+- Navigation now fails closed as soon as localization or SLAM health becomes
+  `degraded`; the previous conservative-mode allowance was removed because the
+  submitted Unitree goal speed was not actually reduced.
+- Automatic pause uses up to three attempts. A rejected pause no longer clears
+  the Python session's active state, so disconnect handling can try again.
+- C++ OperatorPanel real commands now reuse the Python persistent supervised
+  executor. Direct C++ queue navigation is explicitly disabled until it owns
+  the same lease, request-correlation, and runtime monitoring contract.
+- OperatorPanel relocation now runs the supervised relocation stage and reports
+  success only after consecutive localization samples pass.
+- Real map profiles must declare one `mapping_origin_anchor_id`.
+- Historical topology edge distances are not exposed to the LLM unless an edge
+  is explicitly marked `distance_verified=true`.

@@ -107,11 +107,11 @@ class GatewaySafetyContractTests(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertIn("pose is stale", reason)
 
-    def test_degraded_localization_is_allowed_when_gateway_safety_allows(self):
+    def test_degraded_localization_is_blocked_even_when_gateway_payload_allows(self):
         allowed, reason = gateway_allows_navigation(world_state(localization_status="degraded", pose_age_ms=1500))
 
-        self.assertTrue(allowed, reason)
-        self.assertIn("gateway allows navigation", reason)
+        self.assertFalse(allowed)
+        self.assertIn("localization is degraded", reason)
 
 
 if __name__ == "__main__":

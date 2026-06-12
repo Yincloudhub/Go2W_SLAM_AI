@@ -42,6 +42,9 @@ class LlmContextTests(unittest.TestCase):
         self.assertIn("navigate_to_verified_node", context["world_state_summary"]["allowed_actions"])
         self.assertEqual(context["capability_contract"]["planning_style"], "capability_bounded_task_planning")
         self.assertIn("relative_motion", {item["name"] for item in context["capability_contract"]["not_wired"]})
+        for edge in context["world_state_summary"]["topology"]["edges"]:
+            self.assertFalse(edge["distance_verified"])
+            self.assertIsNone(edge["expected_distance_m"])
 
     def test_capture_keyframe_capability_reflects_configured_command(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)

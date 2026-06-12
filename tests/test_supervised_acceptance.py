@@ -156,7 +156,7 @@ def args(path: Path, **overrides) -> argparse.Namespace:
 
 
 class FakePersistentGatewaySession:
-    def __init__(self, samples: list[dict]) -> None:
+    def __init__(self, samples: list[dict], **kwargs) -> None:
         self.samples = list(samples)
         self.commands: list[dict] = []
 
@@ -229,6 +229,24 @@ class SupervisedAcceptanceTests(unittest.TestCase):
                 session.commands,
                 [{"action": "get_world_state"}, {"action": "get_world_state"}],
             )
+
+    def test_persistent_verification_uses_read_only_world_state_session(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            config = args(registry(Path(temp)))
+            samples = [localized_world(timestamp_ms=1000), localized_world(timestamp_ms=2000)]
+            captured = {}
+
+            def make_session(**kwargs):
+                captured.update(kwargs)
+                return FakePersistentGatewaySession(samples)
+
+            with patch.object(acceptance, "PersistentGatewaySession", side_effect=make_session):
+                profile = acceptance.load_profile(config)
+                anchor = profile.get_anchor("mapping_origin")
+                verified, _ = acceptance.verify_persistent_samples(config, profile, anchor)
+
+            self.assertTrue(verified)
+            self.assertFalse(captured["navigation_session"])
 
     def test_prepare_navigation_never_sends_motion(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

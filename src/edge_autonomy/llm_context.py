@@ -269,7 +269,10 @@ def build_planner_context(
                         "from": edge.from_node,
                         "to": edge.to_node,
                         "bidirectional": edge.bidirectional,
-                        "expected_distance_m": edge.expected_distance_m,
+                        "expected_distance_m": (
+                            edge.expected_distance_m if edge.distance_verified else None
+                        ),
+                        "distance_verified": edge.distance_verified,
                         "description": edge.description,
                     }
                     for edge in profile.topology_edges

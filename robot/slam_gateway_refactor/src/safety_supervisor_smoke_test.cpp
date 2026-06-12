@@ -106,6 +106,25 @@ int main()
     require(!stereo_decision.allow_navigation, "forward stereo alone must not authorize side-safe navigation");
     require(stereo_decision.reason == "local_obstacle_source_not_trusted", "stereo-only reason mismatch");
 
+    auto degraded_localization = localization;
+    degraded_localization.status = "degraded";
+    degraded_localization.pose_age_ms = 700;
+    const auto degraded_localization_decision =
+        supervisor.evaluate(health, degraded_localization, clear);
+    require(!degraded_localization_decision.allow_navigation,
+            "degraded localization must fail closed");
+    require(degraded_localization_decision.should_pause,
+            "degraded localization must request pause");
+
+    auto degraded_health = health;
+    degraded_health.status = "degraded";
+    const auto degraded_health_decision =
+        supervisor.evaluate(degraded_health, localization, clear);
+    require(!degraded_health_decision.allow_navigation,
+            "degraded SLAM health must fail closed");
+    require(degraded_health_decision.reason == "slam_health_degraded",
+            "degraded SLAM health reason mismatch");
+
     std::cout << "slam_gateway_safety_supervisor_smoke_test=passed\n";
     return 0;
 }

@@ -4,7 +4,7 @@ import math
 from typing import Any
 
 
-LOCALIZED_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
+LOCALIZED_STATUSES = {"localized", "localized_or_tracking", "tracking"}
 TRUSTED_OBSTACLE_SOURCES = {"lidar_pointcloud", "lidar_pointcloud+stereo_depth"}
 
 
@@ -26,7 +26,7 @@ def _dict_at(value: dict[str, Any], key: str) -> dict[str, Any] | None:
 def gateway_allows_navigation(
     world_state_result: dict[str, Any],
     *,
-    max_localization_pose_age_ms: float = 2000.0,
+    max_localization_pose_age_ms: float = 500.0,
     max_obstacle_age_ms: float | None = None,
     min_roi_confidence: float = 0.15,
     min_clearance_m: float = 0.8,
@@ -55,7 +55,7 @@ def gateway_allows_navigation(
     slam_health = _dict_at(world_state, "slam_health")
     if slam_health is not None:
         health_status = str(slam_health.get("status", ""))
-        if health_status in {"failed", "lost", "not_started"}:
+        if health_status != "ok":
             return False, f"slam health is {health_status}"
         for key in ("slam_alive", "localization_alive"):
             if key in slam_health and slam_health.get(key) is not True:

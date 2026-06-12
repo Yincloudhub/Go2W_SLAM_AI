@@ -281,6 +281,9 @@ check_topic_once() {
     return 0
   fi
   sample="$(timeout "${timeout_s}" ros2 topic echo "${topic}" --qos-reliability reliable --no-arr 2>/dev/null | sed -n '1{p;q;}')" || true
+  if [[ -z "${sample}" ]]; then
+    sample="$(timeout "${timeout_s}" ros2 topic echo "${topic}" --qos-reliability best_effort --no-arr 2>/dev/null | sed -n '1{p;q;}')" || true
+  fi
   if [[ -n "${sample}" ]]; then
     echo "topic ready: ${topic}"
   else

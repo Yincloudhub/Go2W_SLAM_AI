@@ -173,6 +173,15 @@ class QueueFeedbackTests(unittest.TestCase):
                     "status": "real",
                     "pcd_path": "/tmp/site.pcd",
                     "topology_path": "/tmp/site.json",
+                    "mapping_origin_anchor_id": "mapping_origin",
+                    "relocalization_anchors": [
+                        {
+                            "anchor_id": "mapping_origin",
+                            "name": "mapping_origin",
+                            "status": "verified_test",
+                            "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                        }
+                    ],
                     "topology_nodes": [
                         {
                             "node_id": "wp_a",

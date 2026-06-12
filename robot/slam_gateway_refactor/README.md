@@ -84,6 +84,17 @@ Then send one JSON command per line through stdin:
 cat config/llm_command_examples.jsonl | ./build/slam_llm_command_client eth0
 ```
 
+For repeated diagnostics while localization is missing or transitioning, use
+the persistent read-only session:
+
+```bash
+./build/slam_llm_command_client eth0 --persistent-world-state-session
+```
+
+It accepts only `get_world_state`, requires a unique `request_id` for every
+query, creates no navigation lease, and rejects all motion or SLAM mutation
+actions with `world_state_session_is_read_only`.
+
 Allowed high-level actions:
 
 - `get_world_state`

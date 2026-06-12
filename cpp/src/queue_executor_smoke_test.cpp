@@ -40,10 +40,57 @@ go2w::SemanticRoute captureRoute()
     return route;
 }
 
+go2w::SemanticRoute navigationRoute()
+{
+    go2w::SemanticRoute route;
+    route.matched = true;
+    route.task_queue = {
+        {"queue_id", "queue_navigation_guard_test"},
+        {"mode", "sequential"},
+        {"status", "planned"},
+        {"source", "scripted"},
+        {"targets", nlohmann::json::array({"node_a"})},
+        {"communication_policy", {
+            {"mode", "normal"},
+            {"send", nlohmann::json::array({"task_state"})},
+            {"drop", nlohmann::json::array()},
+        }},
+        {"steps", nlohmann::json::array({
+            {
+                {"task_id", "navigate_1"},
+                {"action", "navigate"},
+                {"status", "pending"},
+                {"target_node", "node_a"},
+                {"target_name", "Node A"},
+            },
+        })},
+    };
+    route.slam_commands = nlohmann::json::array({
+        {
+            {"action", "navigate_to_pose"},
+            {"target_node", "node_a"},
+            {"target_pose", {{"x", 1.0}, {"y", 0.0}}},
+        },
+    });
+    return route;
+}
+
 }  // namespace
 
 int main()
 {
+    {
+        go2w::QueueExecutorConfig config;
+        config.execute_enabled = true;
+        const auto result = go2w::QueueExecutor(config).execute(navigationRoute());
+        require(result.exit_code == 6, "direct C++ navigation must remain disabled");
+        require(!result.execution.value("executed", true), "blocked navigation must not be marked executed");
+        require(
+            result.execution.value("blocked_reason", "").find("persistent Python supervised executor") !=
+                std::string::npos,
+            "blocked navigation must name the supervised executor");
+    }
+
     {
         go2w::QueueExecutorConfig config;
         config.execute_enabled = true;

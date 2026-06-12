@@ -68,7 +68,7 @@ def build_startup_plan(
             StartupStep(
                 name="gateway_world_state_probe",
                 command=[gateway_client, network_interface],
-                required=False,
+                required=True,
                 timeout_s=15,
                 starts_motion=False,
             )

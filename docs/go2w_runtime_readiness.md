@@ -115,12 +115,18 @@ The shortest operator entry point exposes no navigation execution action:
 cd /home/unitree/Go2W_SLAM_AI
 bash scripts/go2w_accept.sh status
 bash scripts/go2w_accept.sh relocate SELECTED_ANCHOR confirm
-bash scripts/go2w_accept.sh verify mapping_origin
+bash scripts/go2w_accept.sh verify SELECTED_ANCHOR
 bash scripts/go2w_accept.sh check TARGET_NODE
+bash scripts/go2w_accept.sh snapshot TEST_ID [SELECTED_ANCHOR]
 ```
 
 `check` only prints a separately reviewable motion command after all gates
 pass. The wrapper never executes navigation.
+
+`snapshot` is also read-only. It records the Git revision and dirty state,
+registry and PCD hashes, XT16 calibration identity, compact sensor summaries,
+processes, runtime status, operator measurements, and optionally five
+consecutive localization samples for the selected anchor.
 
 The underlying acceptance helper remains available for JSON output and advanced
 diagnostics:
@@ -135,9 +141,11 @@ The tool has four explicit stages:
 2. `relocate`: only a verified registry anchor is accepted, and the exact
    anchor ID must also be supplied through `--confirm-relocation`. Relocation
    initializes SLAM coordinates and does not command chassis motion.
-3. `verify-localization`: reuses one persistent gateway subscriber across all
-   samples and checks pose age, SLAM health, monotonic timestamps, anchor
-   radius, and yaw tolerance.
+3. `verify-localization`: reuses one persistent read-only world-state gateway
+   subscriber across all samples and checks pose age, SLAM health, monotonic
+   timestamps, anchor radius, and yaw tolerance. This diagnostic session does
+   not require localization to be healthy before it starts and cannot issue a
+   motion or SLAM mutation command.
 4. `prepare-navigation`: validates the target and live navigation gate, then
    prints a 0.1 m/s supervised command. It never executes navigation itself
    and does not require the robot to remain near its previous relocation anchor.
@@ -208,7 +216,7 @@ Robot-side verification after rebuilding:
 
 - gateway C++ smoke tests: `3/3` passed;
 - host C++ smoke tests: `6/6` passed;
-- Python tests: `202/202` passed;
+- Python tests at that checkpoint: `202/202` passed;
 - active SLAM identity: `test` at `/home/unitree/test.pcd`;
 - localization: `localized`, fresh pose;
 - short-lived navigation client: rejected with
@@ -220,3 +228,22 @@ Robot-side verification after rebuilding:
   because XT16 calibration is still pending.
 
 No navigation goal or chassis command was accepted during this acceptance.
+
+The count above is historical evidence, not the current suite total. Use the
+latest field record and current test output for the active revision.
+
+## Live no-motion closure verification - 2026-06-12
+
+- gateway C++ smoke tests: `3/3` passed on the robot;
+- host C++ smoke tests: `6/6` passed on the robot;
+- Python tests: `229/229` passed locally and on the robot;
+- shell syntax checks passed on the robot;
+- persistent world-state session returned live read-only state and rejected
+  `pause_navigation` with `world_state_session_is_read_only`;
+- repeated localization verification returned five explicit `not_started`
+  samples rather than failing during session startup;
+- no navigation or chassis motion command was sent.
+
+The remaining field blocker is physical/vendor relocation convergence and pose
+publication. XT16 calibration also remains pending, so navigation remains
+blocked even after localization recovers.

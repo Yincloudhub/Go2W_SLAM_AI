@@ -18,7 +18,7 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
         return d;
     }
 
-    if (localization.status == "lost" || localization.status == "not_started") {
+    if (localization.status != "localized") {
         d.allow_navigation = false;
         d.should_pause = true;
         d.recommended_mode = "stop";
@@ -101,12 +101,19 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
         }
     }
 
-    if (health.status == "degraded" || localization.status == "degraded" ||
-        (fresh_obstacle && obstacle.recommended_action == "go_slow")) {
+    if (health.status == "degraded") {
+        d.allow_navigation = false;
+        d.should_pause = true;
+        d.recommended_mode = "stop";
+        d.reason = "slam_health_degraded";
+        return d;
+    }
+
+    if (fresh_obstacle && obstacle.recommended_action == "go_slow") {
         d.allow_navigation = true;
         d.should_pause = false;
         d.recommended_mode = "conservative";
-        d.reason = "degraded_or_near_obstacle";
+        d.reason = "near_obstacle";
         return d;
     }
 

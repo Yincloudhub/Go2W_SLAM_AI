@@ -90,7 +90,7 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
     const auto* health = objectAt(*world, {"slam_health"});
     if (health && health->is_object()) {
         const std::string status = health->value("status", "");
-        if (status == "failed" || status == "lost" || status == "not_started") {
+        if (status != "ok") {
             return blocked("slam health is " + (status.empty() ? std::string("unknown") : status));
         }
         if (health->contains("slam_alive") && !health->value("slam_alive", false)) return blocked("slam is not alive");
@@ -101,11 +101,11 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
     if (!loc || !loc->is_object()) return blocked("missing localization");
     {
         const std::string status = loc->value("status", "");
-        if (!status.empty() && status != "localized_or_tracking" && status != "tracking" && status != "localized" && status != "degraded") {
+        if (!status.empty() && status != "localized_or_tracking" && status != "tracking" && status != "localized") {
             return blocked("localization is " + status);
         }
         const double pose_age = loc->value("pose_age_ms", -1.0);
-        if (pose_age < 0.0 || pose_age > 2000.0) return blocked("localization pose is stale or missing");
+        if (pose_age < 0.0 || pose_age > 500.0) return blocked("localization pose is stale or missing");
         const double confidence = loc->value("confidence", 1.0);
         if (confidence <= 0.0) return blocked("localization confidence is too low");
     }

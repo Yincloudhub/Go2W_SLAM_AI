@@ -77,6 +77,29 @@ struct NavigationLease {
     std::string invalid_reason;
 };
 
+struct PauseOutcome {
+    slam_gateway::ServiceResult result;
+    int attempts{0};
+};
+
+PauseOutcome pauseWithRetries(
+    NavigationPauseClient& client,
+    std::mutex& client_mutex,
+    int max_attempts = 3)
+{
+    PauseOutcome outcome;
+    std::lock_guard<std::mutex> lock(client_mutex);
+    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+        outcome.attempts = attempt;
+        outcome.result = client.pause();
+        if (outcome.result.ok) break;
+        if (attempt < max_attempts) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    return outcome;
+}
+
 std::string runtimeSessionBlockReason(
     const slam_gateway::SlamGateway& gateway,
     const std::string& session_map_id,
@@ -87,7 +110,7 @@ std::string runtimeSessionBlockReason(
     if (pose.map_id != session_map_id || pose.map_path != session_map_path) {
         return "navigation_session_map_identity_changed";
     }
-    if (localization.status != "localized" && localization.status != "degraded") {
+    if (localization.status != "localized") {
         return "navigation_session_localization_invalid";
     }
     if (localization.pose_age_ms < 0 || localization.pose_age_ms > 2000) {
@@ -112,13 +135,17 @@ int main(int argc, const char** argv)
 {
     if (argc < 2) {
         std::cout << "Usage: " << argv[0]
-                  << " networkInterface [--persistent-navigation-session]"
+                  << " networkInterface [--persistent-navigation-session|--persistent-world-state-session]"
                   << std::endl;
         return -1;
     }
 
     const bool persistent_navigation_session =
         argc >= 3 && std::string(argv[2]) == "--persistent-navigation-session";
+    const bool persistent_world_state_session =
+        argc >= 3 && std::string(argv[2]) == "--persistent-world-state-session";
+    const bool persistent_session =
+        persistent_navigation_session || persistent_world_state_session;
     const std::string session_token =
         persistent_navigation_session ? makeSessionToken() : "";
 
@@ -131,6 +158,7 @@ int main(int argc, const char** argv)
         kDefaultRegistryMapId);
     NavigationPauseClient pause_client;
     pause_client.Init();
+    std::mutex pause_client_mutex;
 
     std::atomic<bool> monitor_running{persistent_navigation_session};
     std::mutex gateway_mutex;
@@ -245,21 +273,29 @@ int main(int argc, const char** argv)
                     lease.invalid = true;
                     lease.invalid_reason = reason;
                 }
-                const auto paused = pause_client.pause();
+                const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
                 writeJsonLine(
                     {
                         {"type", "navigation_lease_expired"},
                         {"event_id", makeSessionToken()},
-                        {"accepted", paused.ok},
+                        {"accepted", paused.result.ok},
                         {"action", "pause_navigation"},
                         {"reason", reason},
                         {"heartbeat_age_ms", heartbeat_age_ms},
-                        {"status_code", paused.status_code},
-                        {"data", paused.data}
+                        {"pause_attempts", paused.attempts},
+                        {"status_code", paused.result.status_code},
+                        {"data", paused.result.data}
                     },
                     output_mutex);
             }
         });
+    } else if (persistent_world_state_session) {
+        writeJsonLine(
+            {
+                {"type", "world_state_session_ready"},
+                {"read_only", true}
+            },
+            output_mutex);
     } else {
         writeJsonLine({{"type", "command_client_ready"}}, output_mutex);
     }
@@ -271,13 +307,24 @@ int main(int argc, const char** argv)
             const auto cmd = nlohmann::json::parse(line);
             const std::string action = cmd.value("action", "");
             const std::string request_id = cmd.value("request_id", "");
-            if (persistent_navigation_session && request_id.empty()) {
+            if (persistent_session && request_id.empty()) {
                 writeJsonLine(
                     {
                         {"accepted", false},
                         {"action", action},
                         {"request_id", nullptr},
                         {"reason", "request_id_required"}
+                    },
+                    output_mutex);
+                continue;
+            }
+            if (persistent_world_state_session && action != "get_world_state") {
+                writeJsonLine(
+                    {
+                        {"accepted", false},
+                        {"action", action},
+                        {"request_id", request_id},
+                        {"reason", "world_state_session_is_read_only"}
                     },
                     output_mutex);
                 continue;
@@ -320,7 +367,7 @@ int main(int argc, const char** argv)
                     }
                 }
                 if (pause_for_runtime_block) {
-                    pause_client.pause();
+                    pauseWithRetries(pause_client, pause_client_mutex);
                 }
                 if (!lease_ok) {
                     writeJsonLine(
@@ -391,14 +438,15 @@ int main(int argc, const char** argv)
                     }
                 }
                 if (must_pause) {
-                    const auto paused = pause_client.pause();
+                    const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
                     result = {
                         {"accepted", false},
                         {"action", action},
                         {"request_id", request_id},
                         {"reason", "navigation_session_invalid_after_submit:" + invalid_reason},
-                        {"pause_accepted", paused.ok},
-                        {"pause_status_code", paused.status_code}
+                        {"pause_accepted", paused.result.ok},
+                        {"pause_attempts", paused.attempts},
+                        {"pause_status_code", paused.result.status_code}
                     };
                 }
             } else if (action == "pause_navigation" || action == "stop_slam") {
@@ -423,16 +471,17 @@ int main(int argc, const char** argv)
         lease.active = false;
     }
     if (pause_on_close) {
-        const auto paused = pause_client.pause();
+        const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
         writeJsonLine(
             {
                 {"type", "navigation_session_closed"},
                 {"event_id", makeSessionToken()},
-                {"accepted", paused.ok},
+                {"accepted", paused.result.ok},
                 {"action", "pause_navigation"},
                 {"reason", "navigation_session_disconnected"},
-                {"status_code", paused.status_code},
-                {"data", paused.data}
+                {"pause_attempts", paused.attempts},
+                {"status_code", paused.result.status_code},
+                {"data", paused.result.data}
             },
             output_mutex);
     }

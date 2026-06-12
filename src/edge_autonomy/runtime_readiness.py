@@ -74,7 +74,7 @@ def _slam_readiness(world: dict[str, Any]) -> tuple[bool, str]:
     if not isinstance(health, dict):
         return False, "missing slam health"
     status = str(health.get("status") or "")
-    if status not in {"ok", "degraded"}:
+    if status != "ok":
         return False, f"slam health is {status or 'unknown'}"
     if health.get("slam_alive") is not True:
         return False, "slam_alive is not true"
@@ -133,7 +133,7 @@ def assess_runtime_readiness(
     startup_ok: bool,
     lidar_summary: dict[str, Any] | None = None,
     llm_configured: bool = False,
-    max_localization_pose_age_ms: float = 2000.0,
+    max_localization_pose_age_ms: float = 500.0,
     max_perception_age_ms: int = 1500,
 ) -> dict[str, Any]:
     response = world_state_result if isinstance(world_state_result, dict) else {}

@@ -514,6 +514,20 @@ QueueExecutionResult QueueExecutor::execute(const SemanticRoute& route) const
     const int max_feedback_events = nonNegativeOr(config_.feedback_policy.max_feedback_events, 120);
     const int max_llm_feedback_events = nonNegativeOr(config_.feedback_policy.max_llm_feedback_events, 40);
 
+    if (config_.execute_enabled) {
+        for (const auto& step : steps) {
+            if (step.value("action", "") != "navigate") continue;
+            execution["executed"] = false;
+            execution["blocked_reason"] =
+                "direct C++ navigation execution is disabled; use the persistent Python supervised executor";
+            result.exit_code = 6;
+            result.execution = execution;
+            result.stdout_text =
+                "navigation blocked: direct C++ queue execution does not own a persistent gateway lease\n";
+            return result;
+        }
+    }
+
     for (const auto& step : steps) {
         const std::string step_id = step.value("task_id", step.value("step_id", ""));
         const std::string action = step.value("action", "");

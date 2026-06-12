@@ -18,11 +18,11 @@
   -> pause_navigation
 ```
 
-关键发现：
+当时的历史发现（已被后续统一地图决策取代）：
 
 - `/home/unitree/test.pcd` 在尹思园工位重定位失败，ICP 分数略高于阈值。
 - `/home/unitree/test513.pcd` 用同一尹思园位姿重定位成功。
-- 因此真实现场 registry 的 `pcd_path` 和默认 `map_path` 已切到 `/home/unitree/test513.pcd`。
+- 当时曾临时切换到 `/home/unitree/test513.pcd`。该临时结论现已废止；当前唯一主地图固定为 `/home/unitree/test.pcd`，`test513.pcd` 不得进入运行链路。
 - 真实 LLM 会输出包含 `target_node` 的半截 JSON，之前会报 schema 错误；现在已增加 `repair_partial_navigation_plan` 修复层。
 - 赵博点导航时距离已经到 `0.043m`，但 yaw 没满足导致未自动暂停；现在默认改成“距离达标就暂停，yaw 只记录”，需要强制朝向时再加 `--require-arrival-yaw`。
 
@@ -114,7 +114,7 @@ preflight
 
 其中：
 
-- `ensure_localized`：未定位时阻断自动任务并要求人工对齐 `mapping_origin` 后执行监督重定位。
+- `ensure_localized`：未定位时阻断自动任务，并要求人工选择与当前物理位置一致的活动 verified 重定位锚点。`mapping_origin` 只是唯一建图原点和当前唯一已验证锚点，不是未来所有重定位的固定位置。
 - `plan_target`：先 deterministic alias 匹配，再用 LLM。
 - `execute_navigation`：只接收 registry 目标。
 - `arrival_monitor`：距离优先，到点就暂停；yaw 只作为可选条件。

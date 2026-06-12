@@ -666,6 +666,9 @@ CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
     const SemanticRouter router(loadRegistry(), config_.map_id);
     const SemanticRoute route = router.planText(text, config_.nav_speed_mps, config_.nav_mode);
     if (route.matched) {
+        if (config_.execute_enabled) {
+            return fallbackPythonCommand(text);
+        }
         return executeSemanticRoute(route);
     }
     if (!config_.llm_http_url.empty()) {
@@ -824,7 +827,9 @@ CommandResult OperatorPanel::fallbackLlmHttpCommand(const std::string& text) con
         return result;
     }
 
-    CommandResult execution = executeSemanticRoute(route);
+    CommandResult execution = config_.execute_enabled
+        ? fallbackPythonCommand(route_text)
+        : executeSemanticRoute(route);
     result.exit_code = execution.exit_code;
     result.stdout_text = out.str() + execution.stdout_text;
     result.stderr_text = execution.stderr_text;
@@ -941,18 +946,21 @@ CommandResult OperatorPanel::relocateAnchor(const std::string& anchor_id, bool c
         return result;
     }
 
-    const auto command = nlohmann::json{
-        {"action", "relocate"},
-        {"operator_ack", true},
-        {"map_id", config_.map_id},
-        {"map_path", map->value("pcd_path", "/home/unitree/test.pcd")},
-        {"anchor_id", anchor->value("anchor_id", target_anchor)},
-        {"initial_pose", anchorRelocatePose(*anchor)},
-    };
-    const auto response = sendGatewayCommand(command);
-    result.exit_code = response.value("accepted", false) ? 0 : 3;
-    result.stdout_text = relocationSummary(response) + "\n" + response.dump(2) + "\n";
-    return result;
+    std::ostringstream cmd;
+    cmd << "cd " << shellQuote(config_.repo_root)
+        << " && PYTHONPATH=src " << shellQuote(config_.python)
+        << " scripts/go2w_supervised_acceptance.py"
+        << " --stage relocate"
+        << " --registry " << shellQuote(registryPath())
+        << " --map-id " << shellQuote(config_.map_id)
+        << " --anchor " << shellQuote(target_anchor)
+        << " --confirm-relocation " << shellQuote(target_anchor)
+        << " --gateway-client " << shellQuote(config_.gateway_client)
+        << " --network-interface " << shellQuote(config_.network_interface)
+        << " --timeout-s " << config_.gateway_timeout_s
+        << " --gateway-startup-wait-s " << config_.gateway_startup_wait_s
+        << " --json";
+    return runShellCommandWithInput(cmd.str(), "");
 }
 
 CommandResult OperatorPanel::previewTopologyWaypoint(const std::string& name) const
@@ -1104,7 +1112,7 @@ void OperatorPanel::printHelp() const
               << "  /watch [秒]          连续显示世界状态；0 表示一直显示\n"
               << "  /weak on|off         切换弱网摘要显示\n"
               << "  /execute on|off      是否允许真实下发运动；默认 off\n"
-              << "  /current NODE_ID     设置当前位置锚点，用于自动重定位\n"
+              << "  /current NODE_ID     设置导航规划的当前拓扑点，不用于重定位\n"
               << "  /help                显示帮助\n"
               << "  /quit                退出\n"
               << "  其他文本             作为中文 LLM 指令发送\n";
@@ -1175,7 +1183,7 @@ bool OperatorPanel::handleSlashCommand(const std::string& line)
     }
     if (line.rfind("/current ", 0) == 0) {
         config_.current_node = trimAscii(line.substr(9));
-        std::cout << "当前位置锚点: " << config_.current_node << "\n";
+        std::cout << "当前导航拓扑点: " << config_.current_node << "\n";
         return markOk();
     }
 

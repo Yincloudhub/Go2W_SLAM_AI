@@ -1,5 +1,10 @@
 # GO2W PCD 地图切换与拓扑点仓库实施手册
 
+> **历史文档（2026-06-12 起停用）**：本文中的双 PCD、`test_current_main`
+> 和裸 JSON 重定位示例不得用于当前实机。当前只使用逻辑地图
+> `go2w_real_site` 与物理文件 `/home/unitree/test.pcd`；重定位必须通过
+> 活动 verified 锚点和监督验收入口完成。
+
 本文档解决一个具体问题：不要再靠记忆管理 `/home/unitree/test.pcd`、`/home/unitree/test513.pcd` 和 `topology_points.json`，而是把它们放进一个“地图集 registry”，由配置文件统一绑定：
 
 1. 当前使用哪张 PCD。

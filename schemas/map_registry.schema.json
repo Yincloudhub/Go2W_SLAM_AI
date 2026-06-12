@@ -23,6 +23,15 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["map_id", "name", "pcd_path", "topology_path"],
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"const": "real"}},
+            "required": ["status"]
+          },
+          "then": {"required": ["mapping_origin_anchor_id"]}
+        }
+      ],
       "properties": {
         "map_id": {"type": "string"},
         "name": {"type": "string"},
@@ -112,6 +121,7 @@
         "to": {"type": "string"},
         "bidirectional": {"type": "boolean"},
         "expected_distance_m": {"type": "number", "minimum": 0},
+        "distance_verified": {"type": "boolean"},
         "description": {"type": "string"}
       }
     },

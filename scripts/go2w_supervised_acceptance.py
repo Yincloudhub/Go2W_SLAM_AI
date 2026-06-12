@@ -42,7 +42,6 @@ LOCALIZATION_HEALTHY_STATUSES = {
     "localized",
     "localized_or_tracking",
     "tracking",
-    "degraded",
 }
 
 
@@ -118,7 +117,7 @@ def localization_is_healthy(response: dict[str, Any], *, max_pose_age_ms: float)
         str(localization.get("status") or "") in LOCALIZATION_HEALTHY_STATUSES
         and pose_age_ms is not None
         and 0 <= pose_age_ms <= max_pose_age_ms
-        and str(health.get("status") or "") in {"ok", "degraded"}
+        and str(health.get("status") or "") == "ok"
         and health.get("slam_alive") is True
         and health.get("localization_alive") is True
     )
@@ -437,6 +436,7 @@ def verify_persistent_samples(
             network_interface=args.network_interface,
             timeout_s=args.timeout_s,
             startup_wait_s=args.gateway_startup_wait_s,
+            navigation_session=False,
         ) as session:
             return verify_samples(
                 args,

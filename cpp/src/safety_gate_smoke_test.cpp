@@ -70,7 +70,7 @@ int main()
     auto degraded_localization = world(2.0, 2.0, 2.0);
     degraded_localization["world_state"]["localization"]["status"] = "degraded";
     degraded_localization["world_state"]["localization"]["pose_age_ms"] = 1500;
-    require(gate.evaluateWorldState(degraded_localization).allowed, "degraded localization should follow gateway safety");
+    require(!gate.evaluateWorldState(degraded_localization).allowed, "degraded localization must fail closed");
 
     std::cout << "go2w_safety_gate_smoke_test=passed\n";
     return 0;

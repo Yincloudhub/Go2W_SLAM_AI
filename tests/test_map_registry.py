@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from edge_autonomy.map_registry import MapRegistry, MapRegistryError, yaw_to_quaternion
+from edge_autonomy.map_registry import MapProfile, MapRegistry, MapRegistryError, yaw_to_quaternion
 
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_map_registry.example.json"
@@ -10,6 +10,18 @@ REAL_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / 
 
 
 class MapRegistryTests(unittest.TestCase):
+    def test_real_map_requires_mapping_origin_anchor(self) -> None:
+        with self.assertRaisesRegex(MapRegistryError, "mapping_origin_anchor_id"):
+            MapProfile.from_dict(
+                {
+                    "map_id": "site",
+                    "name": "site",
+                    "status": "real",
+                    "pcd_path": "/tmp/site.pcd",
+                    "topology_path": "/tmp/site.json",
+                }
+            )
+
     def test_load_example_registry(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)
 
@@ -109,6 +121,22 @@ class MapRegistryTests(unittest.TestCase):
         self.assertEqual(q_y, 0.0)
         self.assertEqual(q_z, 0.0)
         self.assertEqual(q_w, 1.0)
+
+    def test_topology_edge_distance_is_untrusted_by_default(self) -> None:
+        profile = MapProfile.from_dict(
+            {
+                "map_id": "simulation",
+                "name": "simulation",
+                "status": "simulation",
+                "pcd_path": "/tmp/site.pcd",
+                "topology_path": "/tmp/site.json",
+                "topology_edges": [
+                    {"from": "a", "to": "b", "expected_distance_m": 1.0}
+                ],
+            }
+        )
+
+        self.assertFalse(profile.topology_edges[0].distance_verified)
 
     def test_missing_pose_coordinates_are_rejected(self) -> None:
         data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))

@@ -147,6 +147,7 @@ class ChassisControllerTests(unittest.TestCase):
         session.messages = queue.Queue()
         session.session_token = "token"
         session.lease_timeout_ms = 2000
+        session.navigation_session = True
         session._request_sequence = 0
         session.active = False
         session.async_events = []
@@ -170,6 +171,96 @@ class ChassisControllerTests(unittest.TestCase):
         self.assertTrue(result["accepted"])
         self.assertEqual(result["request_id"], "session-request-1")
         self.assertEqual(session.async_events[0]["request_id"], "stale-request")
+
+    def test_read_only_persistent_session_omits_navigation_token(self) -> None:
+        class FakeStdin:
+            def __init__(self):
+                self.payload = ""
+
+            def write(self, payload):
+                self.payload += payload
+
+            def flush(self):
+                return None
+
+        class FakeProcess:
+            def __init__(self):
+                self.stdin = FakeStdin()
+
+            def poll(self):
+                return None
+
+        import queue
+
+        session = PersistentGatewaySession.__new__(PersistentGatewaySession)
+        session.timeout_s = 1
+        session.process = FakeProcess()
+        session.messages = queue.Queue()
+        session.session_token = ""
+        session.lease_timeout_ms = 0
+        session.navigation_session = False
+        session._request_sequence = 0
+        session.active = False
+        session.async_events = []
+        session.messages.put(
+            {
+                "accepted": True,
+                "action": "get_world_state",
+                "request_id": "session-request-1",
+            }
+        )
+
+        result = session.command({"action": "get_world_state"})
+        payload = json.loads(session.process.stdin.payload)
+
+        self.assertTrue(result["accepted"])
+        self.assertNotIn("navigation_session_token", payload)
+        self.assertEqual(payload["request_id"], "session-request-1")
+
+    def test_read_only_persistent_session_rejects_heartbeat_locally(self) -> None:
+        session = PersistentGatewaySession.__new__(PersistentGatewaySession)
+        session.navigation_session = False
+
+        with self.assertRaisesRegex(RuntimeError, "does not support"):
+            session.heartbeat()
+
+    def test_rejected_pause_keeps_navigation_session_active(self) -> None:
+        class FakeStdin:
+            def write(self, payload):
+                return len(payload)
+
+            def flush(self):
+                return None
+
+        class FakeProcess:
+            stdin = FakeStdin()
+
+            def poll(self):
+                return None
+
+        import queue
+
+        session = PersistentGatewaySession.__new__(PersistentGatewaySession)
+        session.timeout_s = 1
+        session.process = FakeProcess()
+        session.messages = queue.Queue()
+        session.session_token = "token"
+        session.navigation_session = True
+        session._request_sequence = 0
+        session.active = True
+        session.async_events = []
+        session.messages.put(
+            {
+                "accepted": False,
+                "action": "pause_navigation",
+                "request_id": "session-request-1",
+            }
+        )
+
+        result = session.command({"action": "pause_navigation"})
+
+        self.assertFalse(result["accepted"])
+        self.assertTrue(session.active)
 
     def test_persistent_session_reports_unready_reason_immediately(self) -> None:
         import queue

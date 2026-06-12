@@ -1,5 +1,10 @@
 # 机器狗 LLM 闭环框架说明
 
+> **停用说明（2026-06-12）**：本文保留为历史实现记录，包含
+> `test513.pcd`、`--current-node` 自动重定位等已废止逻辑。现场操作以
+> `go2w_runtime_readiness.md` 和 `go2w_field_test_and_material_plan_20260612.md`
+> 为准。当前唯一主地图是 `/home/unitree/test.pcd`。
+
 本文档说明当前机器狗本地 LLM 闭环的代码结构、数据流和人工操作入口。目标是避免每次都依赖开发者手动下发命令，让现场人员可以自己验证、暂停、校准和继续扩展点位。
 
 ## 0. 推荐简化入口
@@ -18,7 +23,7 @@ python3 scripts/go2w_agent_entry.py \
 
 - 读取 live world_state。
 - SLAM 未就绪时尝试启动 SLAM。
-- 如果提供 `--current-node`，未定位时用该节点做重定位。
+- `--current-node` 只提供导航拓扑上下文，不能用于重定位。
 - 调用真实 LLM light 模式解析目标。
 - 修复轻量模型常见的半截 JSON 输出。
 - 通过 registry 和 gateway 安全门控。
@@ -32,7 +37,7 @@ python3 scripts/go2w_agent_entry.py \
 --require-arrival-yaw --arrival-yaw-rad 0.18
 ```
 
-当前真实现场地图使用 `/home/unitree/test513.pcd`。不要再把 `/home/unitree/test.pcd` 作为默认重定位地图。
+当前真实现场唯一主地图使用 `/home/unitree/test.pcd`。`test513.pcd` 只保留为历史文件，不得进入运行链路。
 
 如果需要完整调试输出：
 

@@ -75,10 +75,17 @@ class PersistentGatewaySession:
         network_interface: str,
         timeout_s: int,
         startup_wait_s: float = 0.0,
+        navigation_session: bool = True,
     ) -> None:
         self.timeout_s = max(1, timeout_s)
+        self.navigation_session = navigation_session
+        session_flag = (
+            "--persistent-navigation-session"
+            if navigation_session
+            else "--persistent-world-state-session"
+        )
         self.process = subprocess.Popen(
-            [client_path, network_interface, "--persistent-navigation-session"],
+            [client_path, network_interface, session_flag],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -98,8 +105,13 @@ class PersistentGatewaySession:
         if startup_wait_s > 0:
             time.sleep(startup_wait_s)
         try:
+            ready_type = (
+                "navigation_session_ready"
+                if navigation_session
+                else "world_state_session_ready"
+            )
             ready = self._wait_for(
-                lambda value: value.get("type") == "navigation_session_ready",
+                lambda value: value.get("type") == ready_type,
                 timeout_s=self.timeout_s,
             )
         except Exception:
@@ -107,7 +119,7 @@ class PersistentGatewaySession:
             raise
         self.session_token = str(ready.get("session_token") or "")
         self.lease_timeout_ms = int(ready.get("lease_timeout_ms") or 0)
-        if not self.session_token or self.lease_timeout_ms <= 0:
+        if navigation_session and (not self.session_token or self.lease_timeout_ms <= 0):
             self.close()
             raise RuntimeError("gateway did not provide a valid navigation session lease")
 
@@ -154,11 +166,9 @@ class PersistentGatewaySession:
         action = str(command.get("action") or "")
         self._request_sequence += 1
         request_id = f"session-request-{self._request_sequence}"
-        payload = {
-            **command,
-            "navigation_session_token": self.session_token,
-            "request_id": request_id,
-        }
+        payload = {**command, "request_id": request_id}
+        if getattr(self, "navigation_session", True):
+            payload["navigation_session_token"] = self.session_token
         assert self.process.stdin is not None
         self.process.stdin.write(
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
@@ -174,11 +184,16 @@ class PersistentGatewaySession:
         )
         if action == "navigate_to_pose" and result.get("accepted") is True:
             self.active = True
-        elif action in {"pause_navigation", "stop_slam"}:
+        elif (
+            action in {"pause_navigation", "stop_slam"}
+            and result.get("accepted") is True
+        ):
             self.active = False
         return result
 
     def heartbeat(self) -> dict[str, Any]:
+        if not getattr(self, "navigation_session", True):
+            raise RuntimeError("world-state session does not support navigation heartbeat")
         return self.command({"action": "navigation_heartbeat"})
 
     def close(self) -> None:
@@ -186,7 +201,11 @@ class PersistentGatewaySession:
             return
         try:
             if self.active and self.process.poll() is None:
-                self.command({"action": "pause_navigation"})
+                for _ in range(3):
+                    result = self.command({"action": "pause_navigation"})
+                    if result.get("accepted") is True:
+                        break
+                    time.sleep(0.1)
         except Exception:
             pass
         try:

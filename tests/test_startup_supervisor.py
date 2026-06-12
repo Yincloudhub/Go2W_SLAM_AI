@@ -15,6 +15,7 @@ class StartupSupervisorTests(unittest.TestCase):
 
         self.assertEqual([step.name for step in plan], ["slam_stack", "gateway_world_state_probe"])
         self.assertTrue(all(not step.starts_motion for step in plan))
+        self.assertTrue(all(step.required for step in plan))
 
     def test_dry_run_does_not_execute_commands(self) -> None:
         step = build_startup_plan(
@@ -54,7 +55,7 @@ class StartupSupervisorTests(unittest.TestCase):
             {"name": "slam_stack", "required": True, "ok": True, "dry_run": False, "starts_motion": False},
             {
                 "name": "gateway_world_state_probe",
-                "required": False,
+                "required": True,
                 "ok": True,
                 "returncode": 0,
                 "stdout": "ready\n" + json.dumps(gateway_response),
@@ -115,7 +116,7 @@ class StartupSupervisorTests(unittest.TestCase):
             {"name": "slam_stack", "required": True, "ok": True, "dry_run": False, "starts_motion": False},
             {
                 "name": "gateway_world_state_probe",
-                "required": False,
+                "required": True,
                 "ok": True,
                 "returncode": 0,
                 "response": gateway_response,

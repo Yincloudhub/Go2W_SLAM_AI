@@ -179,6 +179,7 @@ class TopologyEdge:
     to_node: str
     bidirectional: bool = True
     expected_distance_m: float | None = None
+    distance_verified: bool = False
     description: str = ""
 
     @classmethod
@@ -188,6 +189,7 @@ class TopologyEdge:
             to_node=str(data["to"]),
             bidirectional=bool(data.get("bidirectional", True)),
             expected_distance_m=float(data["expected_distance_m"]) if data.get("expected_distance_m") is not None else None,
+            distance_verified=bool(data.get("distance_verified", False)),
             description=str(data.get("description", "")),
         )
 
@@ -241,6 +243,10 @@ class MapProfile:
         if overlap:
             raise MapRegistryError(
                 f"map '{map_id}' has anchors present in both active and archive: {', '.join(overlap)}"
+            )
+        if profile.status == "real" and not profile.mapping_origin_anchor_id:
+            raise MapRegistryError(
+                f"real map '{map_id}' must define mapping_origin_anchor_id"
             )
         if (
             profile.mapping_origin_anchor_id

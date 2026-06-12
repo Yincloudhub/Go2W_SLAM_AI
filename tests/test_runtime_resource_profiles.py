@@ -39,14 +39,17 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("relocate)", text)
         self.assertIn("verify)", text)
         self.assertIn("check)", text)
+        self.assertIn("snapshot)", text)
         self.assertIn("relocate ANCHOR confirm", text)
         self.assertIn("verify ANCHOR", text)
         self.assertIn("check TARGET", text)
+        self.assertIn("snapshot TEST_ID [ANCHOR]", text)
         self.assertIn('confirmation="${3:-}"', text)
         self.assertIn('[[ -z "${anchor}" || "${confirmation}" != "confirm" ]]', text)
         self.assertNotIn('${2:-mapping_origin}', text)
         self.assertNotIn("--execute", text)
         self.assertNotIn("navigate_to", text)
+        self.assertIn("capture_go2w_field_acceptance.py", text)
 
     def test_xt16_calibrated_mode_requires_repository_record_guard(self):
         text = (REPO_ROOT / "scripts" / "go2w_xt16_geometry_sidecar.sh").read_text(encoding="utf-8")

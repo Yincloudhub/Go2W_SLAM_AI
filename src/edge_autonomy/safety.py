@@ -124,7 +124,7 @@ class SafetySupervisor:
                 requires_human_ack=True,
             )
 
-        if localization_state.status in {"lost", "not_started", "map_mismatch"}:
+        if localization_state.status != "localized":
             return SafetyDecision(
                 action=SupervisorAction.PAUSE,
                 reason=f"localization is not valid: {localization_state.status}",
@@ -160,14 +160,18 @@ class SafetySupervisor:
                 speed_limit_scale=0.0,
             )
 
-        if (
-            slam_health.status == "degraded"
-            or localization_state.status == "degraded"
-            or local_obstacle.recommended_action == "go_slow"
-        ):
+        if slam_health.status == "degraded":
+            return SafetyDecision(
+                action=SupervisorAction.PAUSE,
+                reason="slam health is degraded",
+                speed_limit_scale=0.0,
+                requires_human_ack=True,
+            )
+
+        if local_obstacle.recommended_action == "go_slow":
             return SafetyDecision(
                 action=SupervisorAction.SLOW_DOWN,
-                reason="degraded localization or near obstacle",
+                reason="near obstacle",
                 speed_limit_scale=0.4,
             )
 

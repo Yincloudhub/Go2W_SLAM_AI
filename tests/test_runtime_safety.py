@@ -39,7 +39,7 @@ class RuntimeSafetyTests(unittest.TestCase):
 
         self.assertEqual(decision.action, SupervisorAction.EMERGENCY_STOP)
 
-    def test_degraded_state_slows_down(self) -> None:
+    def test_degraded_state_pauses(self) -> None:
         decision = self.supervisor.evaluate_runtime(
             SlamHealth(
                 timestamp_ms=1,
@@ -55,7 +55,7 @@ class RuntimeSafetyTests(unittest.TestCase):
             self.clear_obstacle,
         )
 
-        self.assertEqual(decision.action, SupervisorAction.SLOW_DOWN)
+        self.assertEqual(decision.action, SupervisorAction.PAUSE)
 
     def test_clear_runtime_state_passes(self) -> None:
         decision = self.supervisor.evaluate_runtime(self.health, self.localization, self.clear_obstacle)
