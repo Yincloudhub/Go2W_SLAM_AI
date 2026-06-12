@@ -208,7 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rear-half-width-m", type=float, default=0.45)
     parser.add_argument("--footprint-front-m", type=float, default=0.25)
     parser.add_argument("--footprint-rear-m", type=float, default=0.50)
-    parser.add_argument("--footprint-half-width-m", type=float, default=0.25)
+    parser.add_argument("--footprint-half-width-m", type=float, default=0.30)
     parser.add_argument("--min-z-m", type=float, default=-0.25)
     parser.add_argument("--body-min-z-m", type=float, default=-0.10)
     parser.add_argument("--max-z-m", type=float, default=1.20)

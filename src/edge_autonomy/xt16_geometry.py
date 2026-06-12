@@ -20,7 +20,7 @@ class Xt16GeometryConfig:
     rear_half_width_m: float = 0.45
     footprint_front_m: float = 0.25
     footprint_rear_m: float = 0.50
-    footprint_half_width_m: float = 0.25
+    footprint_half_width_m: float = 0.30
     min_z_m: float = -0.25
     body_min_z_m: float = -0.10
     max_z_m: float = 1.20

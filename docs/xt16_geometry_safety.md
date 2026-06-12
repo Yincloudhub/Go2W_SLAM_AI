@@ -19,10 +19,12 @@ The current pending footprint is an engineering estimate from the published
 
 - front: `0.25 m`
 - rear: `0.50 m`
-- half-width: `0.25 m`
+- half-width: `0.30 m`
 
 It intentionally stays close to the physical body envelope. Expanding the mask
 to suppress an unexplained return can hide a real obstacle and is prohibited.
+The photograph confirms the XT16 is approximately centered laterally, so the
+left and right footprint use the same value.
 The values remain `pending_field_measurement` until five stationary measured
 scenes pass the calibration workflow.
 
