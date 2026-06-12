@@ -2,6 +2,31 @@
 
 This note defines how to add a binocular/stereo depth camera without increasing latency in the GO2W closed-loop runtime.
 
+## 2026-06-12 Competition Architecture Update
+
+The old implementation has two independent RealSense owners:
+
+- `go2w_stereo_depth_sidecar.sh` opens D435 through `pyrealsense2`.
+- `go2w_deepyolo_sidecar.sh` starts a headless binary that also opens D435.
+
+They must not run concurrently in the competition runtime. A JSON-level merge is
+not sufficient because it does not solve USB/device ownership or timestamp
+alignment.
+
+The target is one `D435CaptureOwner` at 15 FPS with two non-blocking processors:
+
+- `DepthRoiProcessor` at 5-10 Hz;
+- `YoloTensorRTProcessor` at about 3 Hz in the resident profile.
+
+Both processors publish into `artifacts/d435_perception_summary.json` using the
+same sensor timestamp and frame sequence. During migration, the unified service
+may atomically generate `stereo_depth_summary.json` and
+`vision_semantic_summary.json` as compatibility views. The final runtime manager
+will replace the two independent sidecar managers.
+
+See `go2w_competition_edge_autonomy_handoff_20260612.md` for the implementation
+order and acceptance criteria.
+
 ## Current Performance Position
 
 The closed-loop path already has the main protections needed for real-time behavior:
@@ -72,12 +97,12 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
    safety fusion.
 7. If the relevant ROI confidence is below threshold, ignore that ROI for
    blocking decisions.
-8. Camera absence must not prevent SLAM startup, localization, or dry-run planning. Until XT16 point-cloud geometry is wired into the gateway, it must block real navigation.
+8. Camera absence must not prevent SLAM startup, localization, or dry-run planning. XT16 is the primary geometry source; D435 is a forward-facing conservative supplement.
 9. Do not log raw frames by default; keep only short ring buffers for debugging.
 
 ## Failure Strategy
 
-- SLAM valid, camera stale: keep localization and dry-run planning online, but block real navigation until XT16 point-cloud geometry is wired.
+- SLAM valid, camera stale: keep localization and planning online. The decision layer degrades D435-dependent capabilities; Gateway still decides motion from the configured primary geometry policy.
 - LiDAR clear, camera near obstacle with confidence: slow or pause conservatively.
 - LiDAR blocked, camera clear: stay blocked; stereo cannot relax the LiDAR safety decision.
 - Camera process crash: mark source unavailable, keep the runtime alive, and block new real navigation.
@@ -88,11 +113,11 @@ Do not pass raw stereo images, full depth maps, or dense camera point clouds int
 
 ## Current Motion-Safety Wiring
 
-`scripts/go2w_stereo_depth_sidecar.sh` now keeps the D435 ROI summary fresh at low rate. The robot gateway, Python preflight, C++ `SafetyGate`, and Web UI execute toggle consume only the latest compact value. They never wait for camera processing to finish and never read raw camera frames.
+`scripts/go2w_stereo_depth_sidecar.sh` is the current compatibility producer for the D435 ROI summary. It must not run at the same time as the current DeepYOLO detector because both open the same camera. The robot gateway, Python preflight, C++ `SafetyGate`, and Web UI consume only compact values and never wait for camera processing.
 
-The summary is currently an additional hard gate because XT16 point-cloud geometry has not yet been wired into `LidarGeometryPerception`. A missing, stale, low-confidence, or near-obstacle D435 summary blocks real motion while still allowing SLAM startup, localization debugging, topology inspection, and dry-run planning.
+XT16 point-cloud geometry is now wired into `LidarGeometryPerception`, but its field calibration must be verified before competition use. D435 remains a forward-facing conservative supplement and must not be treated as left/right/rear coverage.
 
-This is an incident-response safety floor, not the final architecture. The formal next step remains implementing XT16 point-cloud-derived front/left/right clearance and then fusing D435 conservatively so either sensor can increase caution but neither can silently relax a LiDAR block.
+The formal next step is replacing the two camera owners with the unified D435 service described above. Either source may increase caution, but D435 or YOLO must never silently relax an XT16 block.
 
 ## Robot-Side Summary Exporter
 
@@ -147,9 +172,9 @@ The robot currently also has a TensorRT YOLO + RealSense prototype under:
 /home/unitree/DeepYolo
 ```
 
-That prototype should stay an optional perception side process. The GO2W runtime
-must not depend on its window display, TensorRT loop, raw color frames, raw depth
-frames, or unbounded JSONL logs.
+That prototype remains the current TensorRT implementation, but its capture loop
+must be folded into the unified D435 service. The GO2W runtime must not depend on
+its window display, raw color frames, raw depth frames, or unbounded JSONL logs.
 
 The repo-owned bridge is:
 
@@ -184,7 +209,8 @@ python3 scripts/deepyolo_semantic_bridge.py \
   --pretty
 ```
 
-For a controlled longer-running check, use the optional sidecar manager:
+For a controlled diagnostic check, use the optional sidecar manager only after
+stopping the standalone stereo-depth sidecar:
 
 ```bash
 bash scripts/go2w_deepyolo_sidecar.sh build
@@ -201,6 +227,9 @@ process. New detector JSONL files are stored under the service artifact
 directory and old streams are pruned to a small retained set. It remains
 optional: UI, SLAM startup, localization, and LiDAR-only navigation do not wait
 for it.
+
+This is a migration-only operation. It is not the final competition startup
+layout because it owns the same D435 device as the standalone depth sidecar.
 
 The generated headless detector and sidecar `resident` profile are paced for
 long-term residency by default:

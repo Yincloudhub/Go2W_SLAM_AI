@@ -2,6 +2,22 @@
 
 日期：2026-05-27
 
+## 2026-06-12 比赛架构收束
+
+后续实现以
+[`go2w_competition_edge_autonomy_handoff_20260612.md`](go2w_competition_edge_autonomy_handoff_20260612.md)
+为当前基线。本节优先于本文后续较早的 `SafetyGate`、双侧车和多执行路径描述。
+
+核心调整：
+
+- 比赛唯一真实执行链为 `TaskQueue -> MissionDecisionEngine -> SLAM Gateway -> Unitree SDK`。
+- Gateway 是最终运动权威；上层安全检查用于预检和解释，不再叠加多个相互独立的权威。
+- 所有传感器先转成带时间戳、新鲜度、置信度和标定状态的统一语义，再进入 `WorldState / PerceptionContext`。
+- D435 深度摘要与 DeepYOLO 改为单一 RGBD 采集进程下的两个处理器，禁止两个侧车同时争抢相机。
+- 弱网必须由实际通信策略执行器控制上传、缓存和补传，本地自治闭环不依赖网络。
+- LLM 只做歧义理解、任务拆解、重规划和解释，不直接控制底层运动。
+- 当前先不训练或 LoRA；先完成上下文、执行协议、约束输出、日志和评测闭环。
+
 ## 定位
 
 当前项目不建议继续用“伪 6G”作为主表述。更稳的定位是：

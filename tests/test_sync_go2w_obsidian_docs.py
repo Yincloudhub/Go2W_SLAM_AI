@@ -27,6 +27,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
                 "docs/multimodal_edge_autonomous_robot_plan.md",
                 "docs/edge_perception_node_contract.md",
                 "docs/go2w_near_field_collision_incident_2026-06-01.md",
+                "docs/go2w_competition_edge_autonomy_handoff_20260612.md",
             )
             for index, source in enumerate(sources):
                 path = repo / source
@@ -39,11 +40,15 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             index_text = (overview / "00-项目总览与阅读路径.md").read_text(encoding="utf-8")
             self.assertEqual(index_text.count(START), 1)
             self.assertEqual(index_text.count(END), 1)
-            self.assertIn("updated: 2026-06-02", index_text)
+            self.assertIn("updated: 2026-06-12", index_text)
             self.assertEqual(desktop.read_text(encoding="utf-8"), "source-0\n")
             self.assertEqual(
                 (overview / "12-现场录点与晚间测试操作手册.md").read_text(encoding="utf-8"),
                 "source-0\n",
+            )
+            self.assertEqual(
+                (overview / "16-比赛边缘自治架构与新Session交接.md").read_text(encoding="utf-8"),
+                "source-4\n",
             )
 
     def test_export_overview_only_copies_markdown_and_replaces_credentials(self):

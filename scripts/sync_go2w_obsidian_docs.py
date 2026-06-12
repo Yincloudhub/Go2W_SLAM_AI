@@ -35,23 +35,29 @@ COPIES = (
         Path("docs/go2w_near_field_collision_incident_2026-06-01.md"),
         Path("15-近场碰撞事故与恢复验证.md"),
     ),
+    (
+        Path("docs/go2w_competition_edge_autonomy_handoff_20260612.md"),
+        Path("16-比赛边缘自治架构与新Session交接.md"),
+    ),
 )
 
 
 INDEX_BLOCK = f"""{START}
-## 2026-06-02 现场录点交接
+## 2026-06-12 比赛边缘自治交接
 
 - [[12-现场录点与晚间测试操作手册]]
 - [[13-多模态边缘自主机器狗系统规划]]
 - [[14-TI雷达NX边缘感知节点契约]]
 - [[15-近场碰撞事故与恢复验证]]
+- [[16-比赛边缘自治架构与新Session交接]]
 
 当前操作边界：
 
-- 机器人上电后先充电和复查，建议电量达到 `35%` 以上再做站立录点或真实运动。
-- 沿用现有地图录点时不要开启建图。
-- 真实运动必须满足 `loc=true`、`map=true`、`safety=ok` 和 D435 深度摘要新鲜。
-- TI 雷达 / NX 当前只保留可选摘要接口，默认 `semantic_only`，不会授权运动。
+- 比赛唯一真实执行链为 `TaskQueue -> MissionDecisionEngine -> SLAM Gateway -> Unitree SDK`。
+- Gateway 是最终运动权威，LLM 不得生成底层速度、任意坐标或 Unitree API ID。
+- D435 深度与 DeepYOLO 当前不能同时独立打开相机，下一阶段合并为单采集、多处理器。
+- TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
+- 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
 {END}
 """
 
@@ -64,7 +70,7 @@ def upsert_block(text: str, block: str = INDEX_BLOCK) -> str:
     return text.rstrip() + "\n\n" + block.rstrip() + "\n"
 
 
-def update_frontmatter_date(text: str, updated: str = "2026-06-02") -> str:
+def update_frontmatter_date(text: str, updated: str = "2026-06-12") -> str:
     lines = text.splitlines()
     if not lines or lines[0] != "---":
         return text
