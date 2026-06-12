@@ -72,8 +72,11 @@ struct NavigationLease {
     std::mutex mutex;
     bool active{false};
     bool invalid{false};
+    bool pause_pending{false};
     uint64_t generation{0};
     int64_t deadline_ms{0};
+    int64_t next_pause_retry_ms{0};
+    int pause_attempts_total{0};
     std::string invalid_reason;
 };
 
@@ -113,7 +116,7 @@ std::string runtimeSessionBlockReason(
     if (localization.status != "localized") {
         return "navigation_session_localization_invalid";
     }
-    if (localization.pose_age_ms < 0 || localization.pose_age_ms > 2000) {
+    if (localization.pose_age_ms < 0 || localization.pose_age_ms > 500) {
         return "navigation_session_localization_stale";
     }
     const auto safety = gateway.getSafetyDecision();
@@ -240,12 +243,51 @@ int main(int argc, const char** argv)
         lease_monitor = std::thread([&]() {
             while (monitor_running.load()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                const int64_t loop_now_ms = monotonicNowMs();
+                bool retry_pending_pause = false;
+                std::string pending_reason;
+                {
+                    std::lock_guard<std::mutex> lock(lease.mutex);
+                    retry_pending_pause =
+                        lease.pause_pending && loop_now_ms >= lease.next_pause_retry_ms;
+                    if (retry_pending_pause) {
+                        lease.next_pause_retry_ms = loop_now_ms + 1000;
+                        pending_reason = lease.invalid_reason;
+                    }
+                }
+                if (retry_pending_pause) {
+                    const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                    int attempts_total = 0;
+                    {
+                        std::lock_guard<std::mutex> lock(lease.mutex);
+                        lease.pause_attempts_total += paused.attempts;
+                        attempts_total = lease.pause_attempts_total;
+                        if (paused.result.ok) {
+                            lease.pause_pending = false;
+                            lease.active = false;
+                        }
+                    }
+                    writeJsonLine(
+                        {
+                            {"type", "navigation_pause_retry"},
+                            {"event_id", makeSessionToken()},
+                            {"accepted", paused.result.ok},
+                            {"action", "pause_navigation"},
+                            {"reason", pending_reason},
+                            {"pause_attempts", paused.attempts},
+                            {"pause_attempts_total", attempts_total},
+                            {"status_code", paused.result.status_code},
+                            {"data", paused.result.data}
+                        },
+                        output_mutex);
+                    continue;
+                }
                 {
                     std::lock_guard<std::mutex> lock(lease.mutex);
                     if (!lease.active || lease.invalid) continue;
                 }
 
-                const int64_t now_ms = monotonicNowMs();
+                const int64_t now_ms = loop_now_ms;
                 std::string reason =
                     runtimeSessionBlockReason(gateway, session_map_id, session_map_path);
                 uint64_t generation = 0;
@@ -271,9 +313,18 @@ int main(int argc, const char** argv)
                     }
                     lease.active = false;
                     lease.invalid = true;
+                    lease.pause_pending = true;
+                    lease.next_pause_retry_ms = monotonicNowMs() + 1000;
                     lease.invalid_reason = reason;
                 }
                 const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                int attempts_total = 0;
+                {
+                    std::lock_guard<std::mutex> lock(lease.mutex);
+                    lease.pause_attempts_total += paused.attempts;
+                    attempts_total = lease.pause_attempts_total;
+                    if (paused.result.ok) lease.pause_pending = false;
+                }
                 writeJsonLine(
                     {
                         {"type", "navigation_lease_expired"},
@@ -283,6 +334,8 @@ int main(int argc, const char** argv)
                         {"reason", reason},
                         {"heartbeat_age_ms", heartbeat_age_ms},
                         {"pause_attempts", paused.attempts},
+                        {"pause_attempts_total", attempts_total},
+                        {"pause_pending", !paused.result.ok},
                         {"status_code", paused.result.status_code},
                         {"data", paused.result.data}
                     },
@@ -355,6 +408,8 @@ int main(int argc, const char** argv)
                         pause_for_runtime_block = lease.active;
                         lease.active = false;
                         lease.invalid = true;
+                        lease.pause_pending = pause_for_runtime_block;
+                        lease.next_pause_retry_ms = monotonicNowMs() + 1000;
                         lease.invalid_reason = runtime_reason;
                     }
                     if (lease.invalid) {
@@ -367,7 +422,10 @@ int main(int argc, const char** argv)
                     }
                 }
                 if (pause_for_runtime_block) {
-                    pauseWithRetries(pause_client, pause_client_mutex);
+                    const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                    std::lock_guard<std::mutex> lock(lease.mutex);
+                    lease.pause_attempts_total += paused.attempts;
+                    if (paused.result.ok) lease.pause_pending = false;
                 }
                 if (!lease_ok) {
                     writeJsonLine(
@@ -433,12 +491,21 @@ int main(int argc, const char** argv)
                                 : "navigation_heartbeat_timeout_during_submit";
                             lease.active = false;
                             lease.invalid = true;
+                            lease.pause_pending = true;
+                            lease.next_pause_retry_ms = monotonicNowMs() + 1000;
                             lease.invalid_reason = invalid_reason;
                         }
                     }
                 }
                 if (must_pause) {
                     const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                    int attempts_total = 0;
+                    {
+                        std::lock_guard<std::mutex> lock(lease.mutex);
+                        lease.pause_attempts_total += paused.attempts;
+                        attempts_total = lease.pause_attempts_total;
+                        if (paused.result.ok) lease.pause_pending = false;
+                    }
                     result = {
                         {"accepted", false},
                         {"action", action},
@@ -446,12 +513,23 @@ int main(int argc, const char** argv)
                         {"reason", "navigation_session_invalid_after_submit:" + invalid_reason},
                         {"pause_accepted", paused.result.ok},
                         {"pause_attempts", paused.attempts},
+                        {"pause_attempts_total", attempts_total},
+                        {"pause_pending", !paused.result.ok},
                         {"pause_status_code", paused.result.status_code}
                     };
                 }
             } else if (action == "pause_navigation" || action == "stop_slam") {
                 std::lock_guard<std::mutex> lock(lease.mutex);
-                lease.active = false;
+                if (result.value("accepted", false)) {
+                    lease.active = false;
+                    lease.pause_pending = false;
+                } else if (action == "pause_navigation" && lease.active) {
+                    lease.active = false;
+                    lease.invalid = true;
+                    lease.pause_pending = true;
+                    lease.next_pause_retry_ms = monotonicNowMs();
+                    lease.invalid_reason = "explicit_pause_rejected";
+                }
             }
             writeJsonLine(result, output_mutex);
         } catch (const std::exception& e) {
@@ -467,8 +545,9 @@ int main(int argc, const char** argv)
     bool pause_on_close = false;
     {
         std::lock_guard<std::mutex> lock(lease.mutex);
-        pause_on_close = lease.active;
+        pause_on_close = lease.active || lease.pause_pending;
         lease.active = false;
+        lease.pause_pending = false;
     }
     if (pause_on_close) {
         const auto paused = pauseWithRetries(pause_client, pause_client_mutex);

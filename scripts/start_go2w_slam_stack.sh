@@ -12,6 +12,7 @@ SLAM_PARAM_FILE="${SLAM_PARAM_FILE:-/unitree/module/unitree_slam/config/slam_int
 LOG_DIR="${GO2W_SLAM_LOG_DIR:-${REPO_ROOT}/artifacts/slam_stack}"
 STARTUP_WAIT_S="${GO2W_SLAM_STARTUP_WAIT_S:-8}"
 STABILITY_WAIT_S="${GO2W_SLAM_STABILITY_WAIT_S:-4}"
+RESTART_STALE_PROCESSES="${GO2W_RESTART_STALE_PROCESSES:-1}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -234,6 +235,29 @@ run_unitree_binary() {
   )
 }
 
+restart_unitree_binary() {
+  local name="$1"
+  local pids=""
+  pids="$(pidof "${name}" 2>/dev/null || true)"
+  if [[ -n "${pids}" ]]; then
+    echo "restarting stale ${name}: ${pids}"
+    kill ${pids} >/dev/null 2>&1 || true
+    local deadline=$((SECONDS + 5))
+    while pidof "${name}" >/dev/null 2>&1 && (( SECONDS < deadline )); do
+      sleep 1
+    done
+    pids="$(pidof "${name}" 2>/dev/null || true)"
+    if [[ -n "${pids}" ]]; then
+      kill -9 ${pids} >/dev/null 2>&1 || true
+    fi
+  fi
+  run_unitree_binary "${name}"
+  wait_for_process "${name}"
+  sleep "${STABILITY_WAIT_S}"
+  require_process_alive "${name}"
+  fail_on_startup_log_error "${name}"
+}
+
 wait_for_process() {
   local name="$1"
   local deadline=$((SECONDS + STARTUP_WAIT_S))
@@ -286,8 +310,28 @@ check_topic_once() {
   fi
   if [[ -n "${sample}" ]]; then
     echo "topic ready: ${topic}"
+    return 0
   else
     echo "warning: topic not confirmed yet: ${topic}" >&2
+    return 1
+  fi
+}
+
+require_driver_topic() {
+  local process_name="$1"
+  local topic="$2"
+  local timeout_s="$3"
+  if check_topic_once "${topic}" "${timeout_s}"; then
+    return 0
+  fi
+  if [[ "${RESTART_STALE_PROCESSES}" != "1" ]]; then
+    echo "error: ${process_name} exists but ${topic} is silent; stale-process restart is disabled" >&2
+    return 1
+  fi
+  restart_unitree_binary "${process_name}"
+  if ! check_topic_once "${topic}" "${timeout_s}"; then
+    echo "error: ${topic} stayed silent after one controlled ${process_name} restart" >&2
+    return 1
   fi
 }
 
@@ -311,7 +355,7 @@ wait_for_process xt16_driver
 sleep "${STABILITY_WAIT_S}"
 require_process_alive xt16_driver
 fail_on_startup_log_error xt16_driver
-check_topic_once /unitree/slam_lidar/points 6
+require_driver_topic xt16_driver /unitree/slam_lidar/points 6
 
 if [[ "${GO2W_START_XT16_GEOMETRY:-0}" == "1" ]]; then
   if ! bash "${SCRIPT_DIR}/go2w_xt16_geometry_sidecar.sh" restart-if-stale; then
@@ -324,7 +368,9 @@ wait_for_process unitree_slam
 sleep "${STABILITY_WAIT_S}"
 require_process_alive unitree_slam
 fail_on_startup_log_error unitree_slam
-check_topic_once /slam_info 4
+if ! check_topic_once /slam_info 4; then
+  echo "note: /slam_info may remain silent until a relocation request; localization verification decides readiness" >&2
+fi
 require_process_alive unitree_slam
 fail_on_startup_log_error unitree_slam
 

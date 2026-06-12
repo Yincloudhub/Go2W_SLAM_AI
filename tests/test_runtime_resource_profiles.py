@@ -58,6 +58,23 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("extra_args_not_allowed", text)
         self.assertIn("--calibration-id", text)
 
+    def test_slam_startup_self_heals_silent_xt16_once(self):
+        text = (REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh").read_text(encoding="utf-8")
+        self.assertIn('RESTART_STALE_PROCESSES="${GO2W_RESTART_STALE_PROCESSES:-1}"', text)
+        self.assertIn("restart_unitree_binary()", text)
+        self.assertIn("require_driver_topic xt16_driver /unitree/slam_lidar/points 6", text)
+        self.assertIn("--qos-reliability best_effort", text)
+        self.assertIn("/slam_info may remain silent until a relocation request", text)
+
+    def test_gateway_retries_pending_pause_until_accepted(self):
+        text = (
+            REPO_ROOT / "robot" / "slam_gateway_refactor" / "src" / "llm_command_main.cpp"
+        ).read_text(encoding="utf-8")
+        self.assertIn("bool pause_pending{false};", text)
+        self.assertIn('"type", "navigation_pause_retry"', text)
+        self.assertIn("lease.pause_pending && loop_now_ms >= lease.next_pause_retry_ms", text)
+        self.assertIn('{"pause_pending", !paused.result.ok}', text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -247,3 +247,17 @@ latest field record and current test output for the active revision.
 The remaining field blocker is physical/vendor relocation convergence and pose
 publication. XT16 calibration also remains pending, so navigation remains
 blocked even after localization recovers.
+
+Startup now distinguishes two cases:
+
+- XT16 has a process but no pointcloud: the startup script performs one
+  controlled driver restart, tries reliable and best-effort QoS, then fails if
+  the pointcloud is still silent.
+- Unitree SLAM has no `/slam_info` before relocation: this is not treated as a
+  stale process because the topic may legitimately start only after relocation.
+  The required gateway probe and subsequent five-sample localization check
+  determine readiness.
+
+If an automatic navigation pause is rejected, the persistent gateway session
+keeps a `pause_pending` fault and retries every second while the session is
+alive. A failed pause is never reported as a completed stop.
