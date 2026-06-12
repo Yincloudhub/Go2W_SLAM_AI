@@ -39,7 +39,7 @@ int main()
         gateway,
         {
             {"current_node", "wp_1"},
-            {"motion_allowed", true},
+            {"execution_enabled", true},
             {"task_phase", "planning"},
             {"perception_summaries", nlohmann::json::array({
                 {
@@ -55,6 +55,10 @@ int main()
     require(world.value("schema_version", 0) == 1, "schema_version mismatch");
     require(world.value("localized", false), "world should be localized");
     require(world.value("motion_allowed", false), "motion should be allowed");
+    require(world.value("execution_enabled", false), "execution gate should be enabled");
+    require(world.value("safety_allow_navigation", false), "safety should allow navigation");
+    require(!world.value("chassis_motion_active", true), "idle navigation must not be shown as moving");
+    require(world.contains("local_obstacle"), "full local obstacle summary should be retained");
     require(world.value("obstacle_status", std::string("")) == "clear", "obstacle status mismatch");
     require(world.contains("available_tools") && world.at("available_tools").is_array(), "missing available tools");
     require(arrayContainsString(world.at("available_tools"), "record_keyframe_event"), "unconfigured capture should be semantic event only");
@@ -63,6 +67,16 @@ int main()
     require(arrayContainsString(world_with_capture.at("available_tools"), "capture_keyframe"), "configured capture should be advertised");
     require(world_with_capture.at("capture_keyframe").value("configured", false), "configured capture state should be visible");
     require(world.at("perception_summaries").at(0).value("source", std::string("")) == "nx_ti_radar", "edge summary mismatch");
+
+    auto blocked_gateway = gateway;
+    blocked_gateway["world_state"]["safety"]["allow_navigation"] = false;
+    blocked_gateway["world_state"]["safety"]["reason"] = "local_obstacle_not_fresh";
+    const auto blocked_world = go2w::buildWorldStateV1(
+        blocked_gateway,
+        {{"execution_enabled", true}});
+    require(blocked_world.value("execution_enabled", false), "execution gate should remain visible");
+    require(!blocked_world.value("safety_allow_navigation", true), "safety rejection must remain visible");
+    require(!blocked_world.value("motion_allowed", true), "execution gate must not override safety rejection");
 
     const nlohmann::json task_queue = {
         {"targets", {"wp_1"}},

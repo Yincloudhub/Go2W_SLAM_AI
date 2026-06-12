@@ -145,6 +145,14 @@ class MapRegistryTests(unittest.TestCase):
         with self.assertRaises(MapRegistryError):
             MapRegistry.from_dict(data)
 
+    def test_duplicate_topology_alias_is_rejected(self) -> None:
+        data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+        data["maps"][0]["topology_nodes"][0]["aliases"].append("shared_lab")
+        data["maps"][0]["topology_nodes"][1]["aliases"].append("shared_lab")
+
+        with self.assertRaisesRegex(MapRegistryError, "ambiguous topology term"):
+            MapRegistry.from_dict(data)
+
 
 if __name__ == "__main__":
     unittest.main()

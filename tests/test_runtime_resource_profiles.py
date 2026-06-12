@@ -65,8 +65,8 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         producer = (REPO_ROOT / "scripts" / "xt16_lidar_geometry_summary.py").read_text(encoding="utf-8")
         self.assertIn("ReliabilityPolicy.BEST_EFFORT", producer)
         self.assertIn("depth=1", producer)
-        self.assertIn("--footprint-front-m\", type=float, default=0.25", producer)
-        self.assertIn("--footprint-rear-m\", type=float, default=0.50", producer)
+        self.assertIn("--footprint-front-m\", type=float, default=0.30", producer)
+        self.assertIn("--footprint-rear-m\", type=float, default=0.30", producer)
         self.assertIn("--footprint-half-width-m\", type=float, default=0.30", producer)
         self.assertIn("--footprint-filter-margin-m\", type=float, default=0.02", producer)
 

@@ -19,6 +19,7 @@ struct ResolvedTarget {
 
 struct SemanticRoute {
     bool matched = false;
+    bool ambiguous = false;
     bool multi_target = false;
     bool capture_requested = false;
     std::string reason;
@@ -40,6 +41,7 @@ private:
     const nlohmann::json* findMap() const;
     std::vector<ResolvedTarget> resolveTargets(const std::string& text) const;
     bool commandRequestsCapture(const std::string& text) const;
+    bool commandRequestsSequence(const std::string& text) const;
     bool nodeHasTag(const nlohmann::json& node, const std::string& tag) const;
     bool nodeDisabled(const nlohmann::json& node) const;
     nlohmann::json poseToUnitreeJson(const nlohmann::json& node, double speed_mps, int mode) const;

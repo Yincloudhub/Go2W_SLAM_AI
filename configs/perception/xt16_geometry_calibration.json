@@ -13,8 +13,8 @@
     "front_half_width_m": 0.45,
     "side_forward_m": 0.75,
     "rear_half_width_m": 0.45,
-    "footprint_front_m": 0.25,
-    "footprint_rear_m": 0.5,
+    "footprint_front_m": 0.3,
+    "footprint_rear_m": 0.3,
     "footprint_half_width_m": 0.3,
     "footprint_filter_margin_m": 0.02,
     "min_z_m": -0.25,
@@ -41,6 +41,6 @@
     "artifact_sha256": {},
     "acceptance_max_abs_error_m": 0.15,
     "max_abs_error_m": null,
-    "notes": "The footprint is an engineering estimate from the 70 x 43 cm body envelope and the centered, rear-biased XT16 mounting. A 2 cm filter-only tolerance removes boundary self-returns while reported clearance remains referenced to the nominal body edge. Do not promote to verified until physical body-edge clearances are measured and compared in five stationary scenes."
+    "notes": "The provisional footprint uses a symmetric 0.30 m body-edge offset in all four directions because the XT16 is mounted centrally. A 2 cm filter-only tolerance removes boundary self-returns while reported clearance remains referenced to the nominal body edge. This estimate can under-represent the full moving envelope and must remain pending until physical body-edge clearances are measured and compared in five stationary scenes."
   }
 }

@@ -3,7 +3,7 @@
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去实验室门口巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1200,\"latency_ms\":45,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"nodes\":[{\"node_id\":\"corridor_a\",\"pose\":{\"x\":2.0,\"y\":-0.7999999999999999,\"yaw\":0.0}},{\"node_id\":\"lab_door\",\"pose\":{\"x\":3.2,\"y\":-1.4,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去实验室门口巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1200,\"latency_ms\":45,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"nodes\":[{\"node_id\":\"corridor_a\",\"pose\":{\"x\":2.0,\"y\":-0.7999999999999999,\"yaw\":0.0}},{\"node_id\":\"lab_door\",\"pose\":{\"x\":3.2,\"y\":-1.4,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -11,13 +11,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 弱网情况下继续去实验室门口巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":90,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"nodes\":[{\"node_id\":\"lab_door\",\"pose\":{\"x\":3.2,\"y\":-1.4,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 弱网情况下继续去实验室门口巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":90,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"nodes\":[{\"node_id\":\"lab_door\",\"pose\":{\"x\":3.2,\"y\":-1.4,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -25,13 +25,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去实验室门口看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":140,\"latency_ms\":650,\"packet_loss_ratio\":0.12},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"lab_door\",\"distance_m\":0.6}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"safe_observation_node\":\"corridor_a\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"nodes\":[{\"node_id\":\"corridor_a\",\"pose\":{\"x\":2.2,\"y\":-0.9999999999999999,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"lab_door\",\"pose\":{\"x\":3.2,\"y\":-1.4,\"yaw\":1.57},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去实验室门口看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":140,\"latency_ms\":650,\"packet_loss_ratio\":0.12},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"lab_door\",\"distance_m\":0.6}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"safe_observation_node\":\"corridor_a\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"nodes\":[{\"node_id\":\"corridor_a\",\"pose\":{\"x\":2.2,\"y\":-0.9999999999999999,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"lab_door\",\"pose\":{\"x\":3.2,\"y\":-1.4,\"yaw\":1.57},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -39,13 +39,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续去实验室门口，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续去实验室门口，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -53,13 +53,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 进入实验室门口，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":-1.2,\"yaw\":1.57},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"lab_door\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"corridor_a\",\"target_node\":\"lab_door\",\"candidate_path\":[\"corridor_a\",\"lab_door\"],\"blocked_edges\":[\"corridor_a->lab_door\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 进入实验室门口，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":-1.2,\"yaw\":1.57},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"lab_door\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"corridor_a\",\"target_node\":\"lab_door\",\"candidate_path\":[\"corridor_a\",\"lab_door\"],\"blocked_edges\":[\"corridor_a->lab_door\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -67,13 +67,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 地面可能湿滑，慢速去实验室门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 地面可能湿滑，慢速去实验室门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -81,13 +81,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续低优先级巡检实验室门口，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":16},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"lab_door\",\"target_node\":\"charging_station\",\"candidate_path\":[\"lab_door\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续低优先级巡检实验室门口，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":16},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"lab_door\",\"target_node\":\"charging_station\",\"candidate_path\":[\"lab_door\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -95,13 +95,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 定位好像不稳定，但我还想去实验室门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"lab_door\",\"candidate_path\":[\"uncertain\",\"lab_door\"],\"target_distance_m\":18}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 定位好像不稳定，但我还想去实验室门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"lab_door\",\"candidate_path\":[\"uncertain\",\"lab_door\"],\"target_distance_m\":18}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -109,13 +109,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 快速穿过人群去实验室门口，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 快速穿过人群去实验室门口，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"lab_door\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"lab_door\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -123,13 +123,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去203 房间门口巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1160,\"latency_ms\":46,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"nodes\":[{\"node_id\":\"room_203_front\",\"pose\":{\"x\":3.8,\"y\":8.6,\"yaw\":0.0}},{\"node_id\":\"room_203\",\"pose\":{\"x\":5.0,\"y\":8.0,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去203 房间门口巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1160,\"latency_ms\":46,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"nodes\":[{\"node_id\":\"room_203_front\",\"pose\":{\"x\":3.8,\"y\":8.6,\"yaw\":0.0}},{\"node_id\":\"room_203\",\"pose\":{\"x\":5.0,\"y\":8.0,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -137,13 +137,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 弱网情况下继续去203 房间门口巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":95,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"nodes\":[{\"node_id\":\"room_203\",\"pose\":{\"x\":5.0,\"y\":8.0,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 弱网情况下继续去203 房间门口巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":95,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"nodes\":[{\"node_id\":\"room_203\",\"pose\":{\"x\":5.0,\"y\":8.0,\"yaw\":1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -151,13 +151,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去203 房间门口看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":900,\"latency_ms\":70,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"room_203\",\"distance_m\":0.65}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"safe_observation_node\":\"room_203_front\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"nodes\":[{\"node_id\":\"room_203_front\",\"pose\":{\"x\":4.0,\"y\":8.4,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"room_203\",\"pose\":{\"x\":5.0,\"y\":8.0,\"yaw\":1.57},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去203 房间门口看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":900,\"latency_ms\":70,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"room_203\",\"distance_m\":0.65}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"safe_observation_node\":\"room_203_front\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"nodes\":[{\"node_id\":\"room_203_front\",\"pose\":{\"x\":4.0,\"y\":8.4,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"room_203\",\"pose\":{\"x\":5.0,\"y\":8.0,\"yaw\":1.57},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -165,13 +165,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续去203 房间门口，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"room_203_front\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"blocked_nodes\":[\"room_203_front\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续去203 房间门口，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"room_203_front\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"room_203_front\",\"room_203\"],\"blocked_nodes\":[\"room_203_front\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -179,13 +179,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 进入203 房间门口，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":4.3,\"y\":8.2,\"yaw\":1.57},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"room_203\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"room_203_front\",\"target_node\":\"room_203\",\"candidate_path\":[\"room_203_front\",\"room_203\"],\"blocked_edges\":[\"room_203_front->room_203\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 进入203 房间门口，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":4.3,\"y\":8.2,\"yaw\":1.57},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"room_203\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"room_203_front\",\"target_node\":\"room_203\",\"candidate_path\":[\"room_203_front\",\"room_203\"],\"blocked_edges\":[\"room_203_front->room_203\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -193,13 +193,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 地面可能湿滑，慢速去203 房间门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"room_203\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 地面可能湿滑，慢速去203 房间门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"room_203\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -207,13 +207,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续低优先级巡检203 房间门口，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":17},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"room_203\",\"target_node\":\"charging_station\",\"candidate_path\":[\"room_203\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续低优先级巡检203 房间门口，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":17},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"room_203\",\"target_node\":\"charging_station\",\"candidate_path\":[\"room_203\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -221,13 +221,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 定位好像不稳定，但我还想去203 房间门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"room_203\",\"candidate_path\":[\"uncertain\",\"room_203\"],\"target_distance_m\":22}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 定位好像不稳定，但我还想去203 房间门口。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"room_203\",\"candidate_path\":[\"uncertain\",\"room_203\"],\"target_distance_m\":22}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -235,13 +235,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 快速穿过人群去203 房间门口，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"room_203\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 快速穿过人群去203 房间门口，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"room_203\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"room_203\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -249,13 +249,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去充电区巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1120,\"latency_ms\":47,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"start_area\",\"charging_station\"],\"nodes\":[{\"node_id\":\"start_area\",\"pose\":{\"x\":-1.7999999999999998,\"y\":1.6,\"yaw\":0.0}},{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去充电区巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1120,\"latency_ms\":47,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"start_area\",\"charging_station\"],\"nodes\":[{\"node_id\":\"start_area\",\"pose\":{\"x\":-1.7999999999999998,\"y\":1.6,\"yaw\":0.0}},{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -263,13 +263,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 弱网情况下继续去充电区巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":100,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"start_area\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 弱网情况下继续去充电区巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":100,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"start_area\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -277,13 +277,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去充电区看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":140,\"latency_ms\":650,\"packet_loss_ratio\":0.12},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"charging_station\",\"distance_m\":0.7}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"safe_observation_node\":\"start_area\",\"candidate_path\":[\"start_area\",\"start_area\",\"charging_station\"],\"nodes\":[{\"node_id\":\"start_area\",\"pose\":{\"x\":-1.6,\"y\":1.4,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去充电区看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":140,\"latency_ms\":650,\"packet_loss_ratio\":0.12},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"charging_station\",\"distance_m\":0.7}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"safe_observation_node\":\"start_area\",\"candidate_path\":[\"start_area\",\"start_area\",\"charging_station\"],\"nodes\":[{\"node_id\":\"start_area\",\"pose\":{\"x\":-1.6,\"y\":1.4,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -291,13 +291,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续去充电区，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"charging_station\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续去充电区，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"charging_station\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -305,13 +305,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 进入充电区，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":-1.2999999999999998,\"y\":1.2,\"yaw\":3.14},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"charging_station\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"charging_station\"],\"blocked_edges\":[\"start_area->charging_station\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 进入充电区，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":-1.2999999999999998,\"y\":1.2,\"yaw\":3.14},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"charging_station\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"charging_station\"],\"blocked_edges\":[\"start_area->charging_station\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -319,13 +319,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 地面可能湿滑，慢速去充电区。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"charging_station\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 地面可能湿滑，慢速去充电区。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"charging_station\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -333,13 +333,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续低优先级巡检充电区，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":18},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"charging_station\",\"target_node\":\"charging_station\",\"candidate_path\":[\"charging_station\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续低优先级巡检充电区，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":18},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"charging_station\",\"target_node\":\"charging_station\",\"candidate_path\":[\"charging_station\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -347,13 +347,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 定位好像不稳定，但我还想去充电区。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"charging_station\",\"candidate_path\":[\"uncertain\",\"charging_station\"],\"target_distance_m\":26}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 定位好像不稳定，但我还想去充电区。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"charging_station\",\"candidate_path\":[\"uncertain\",\"charging_station\"],\"target_distance_m\":26}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -361,13 +361,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 快速穿过人群去充电区，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"charging_station\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 快速穿过人群去充电区，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"charging_station\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"charging_station\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -375,13 +375,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去设备柜巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1080,\"latency_ms\":48,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"nodes\":[{\"node_id\":\"rack_observation\",\"pose\":{\"x\":5.8999999999999995,\"y\":3.0,\"yaw\":0.0}},{\"node_id\":\"equipment_rack\",\"pose\":{\"x\":7.1,\"y\":2.4,\"yaw\":0.0},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去设备柜巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1080,\"latency_ms\":48,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"nodes\":[{\"node_id\":\"rack_observation\",\"pose\":{\"x\":5.8999999999999995,\"y\":3.0,\"yaw\":0.0}},{\"node_id\":\"equipment_rack\",\"pose\":{\"x\":7.1,\"y\":2.4,\"yaw\":0.0},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -389,13 +389,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 弱网情况下继续去设备柜巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":105,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"nodes\":[{\"node_id\":\"equipment_rack\",\"pose\":{\"x\":7.1,\"y\":2.4,\"yaw\":0.0},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 弱网情况下继续去设备柜巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":105,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"nodes\":[{\"node_id\":\"equipment_rack\",\"pose\":{\"x\":7.1,\"y\":2.4,\"yaw\":0.0},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -403,13 +403,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去设备柜看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":900,\"latency_ms\":70,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"equipment_rack\",\"distance_m\":0.75}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"safe_observation_node\":\"rack_observation\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"nodes\":[{\"node_id\":\"rack_observation\",\"pose\":{\"x\":6.1,\"y\":2.8,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"equipment_rack\",\"pose\":{\"x\":7.1,\"y\":2.4,\"yaw\":0.0},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去设备柜看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":900,\"latency_ms\":70,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"equipment_rack\",\"distance_m\":0.75}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"safe_observation_node\":\"rack_observation\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"nodes\":[{\"node_id\":\"rack_observation\",\"pose\":{\"x\":6.1,\"y\":2.8,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"equipment_rack\",\"pose\":{\"x\":7.1,\"y\":2.4,\"yaw\":0.0},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -417,13 +417,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续去设备柜，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"rack_observation\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"blocked_nodes\":[\"rack_observation\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续去设备柜，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"rack_observation\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"rack_observation\",\"equipment_rack\"],\"blocked_nodes\":[\"rack_observation\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -431,13 +431,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 进入设备柜，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":6.3999999999999995,\"y\":2.6,\"yaw\":0.0},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"equipment_rack\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"rack_observation\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"rack_observation\",\"equipment_rack\"],\"blocked_edges\":[\"rack_observation->equipment_rack\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 进入设备柜，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":6.3999999999999995,\"y\":2.6,\"yaw\":0.0},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"equipment_rack\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"rack_observation\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"rack_observation\",\"equipment_rack\"],\"blocked_edges\":[\"rack_observation->equipment_rack\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -445,13 +445,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 地面可能湿滑，慢速去设备柜。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"equipment_rack\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 地面可能湿滑，慢速去设备柜。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"equipment_rack\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -459,13 +459,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续低优先级巡检设备柜，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":19},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"equipment_rack\",\"target_node\":\"charging_station\",\"candidate_path\":[\"equipment_rack\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续低优先级巡检设备柜，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":19},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"equipment_rack\",\"target_node\":\"charging_station\",\"candidate_path\":[\"equipment_rack\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -473,13 +473,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 定位好像不稳定，但我还想去设备柜。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"uncertain\",\"equipment_rack\"],\"target_distance_m\":30}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 定位好像不稳定，但我还想去设备柜。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"uncertain\",\"equipment_rack\"],\"target_distance_m\":30}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -487,13 +487,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 快速穿过人群去设备柜，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"equipment_rack\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 快速穿过人群去设备柜，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"equipment_rack\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"equipment_rack\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -501,13 +501,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去出口门巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1040,\"latency_ms\":49,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"exit_observation\",\"exit_gate\"],\"nodes\":[{\"node_id\":\"exit_observation\",\"pose\":{\"x\":8.3,\"y\":-1.4,\"yaw\":0.0}},{\"node_id\":\"exit_gate\",\"pose\":{\"x\":9.5,\"y\":-2.0,\"yaw\":-1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去出口门巡检，到达后拍一张关键帧。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":82},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1040,\"latency_ms\":49,\"packet_loss_ratio\":0.01},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"exit_observation\",\"exit_gate\"],\"nodes\":[{\"node_id\":\"exit_observation\",\"pose\":{\"x\":8.3,\"y\":-1.4,\"yaw\":0.0}},{\"node_id\":\"exit_gate\",\"pose\":{\"x\":9.5,\"y\":-2.0,\"yaw\":-1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -515,13 +515,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 弱网情况下继续去出口门巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":110,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"exit_observation\",\"exit_gate\"],\"nodes\":[{\"node_id\":\"exit_gate\",\"pose\":{\"x\":9.5,\"y\":-2.0,\"yaw\":-1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 弱网情况下继续去出口门巡检，不要持续传视频。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":76},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":110,\"latency_ms\":780,\"packet_loss_ratio\":0.18},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"exit_observation\",\"exit_gate\"],\"nodes\":[{\"node_id\":\"exit_gate\",\"pose\":{\"x\":9.5,\"y\":-2.0,\"yaw\":-1.57},\"semantic_state\":\"clear\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -529,13 +529,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 去出口门看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":140,\"latency_ms\":650,\"packet_loss_ratio\":0.12},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"exit_gate\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"safe_observation_node\":\"exit_observation\",\"candidate_path\":[\"start_area\",\"exit_observation\",\"exit_gate\"],\"nodes\":[{\"node_id\":\"exit_observation\",\"pose\":{\"x\":8.5,\"y\":-1.6,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"exit_gate\",\"pose\":{\"x\":9.5,\"y\":-2.0,\"yaw\":-1.57},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 去出口门看看，如果那里有人就等待，不要靠太近。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.4,\"y\":1.2,\"yaw\":0.0},\"localized\":true,\"battery_percent\":78},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":140,\"latency_ms\":650,\"packet_loss_ratio\":0.12},\"risk_events\":[{\"event_type\":\"human_near_target\",\"severity\":\"high\",\"node_id\":\"exit_gate\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"safe_observation_node\":\"exit_observation\",\"candidate_path\":[\"start_area\",\"exit_observation\",\"exit_gate\"],\"nodes\":[{\"node_id\":\"exit_observation\",\"pose\":{\"x\":8.5,\"y\":-1.6,\"yaw\":0.0},\"semantic_state\":\"clear\"},{\"node_id\":\"exit_gate\",\"pose\":{\"x\":9.5,\"y\":-2.0,\"yaw\":-1.57},\"semantic_state\":\"occupied\"}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -543,13 +543,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续去出口门，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"exit_gate\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续去出口门，但路径上有人穿行。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":0.8,\"y\":1.0,\"yaw\":0.1},\"localized\":true,\"battery_percent\":69},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":700,\"latency_ms\":80,\"packet_loss_ratio\":0.02},\"risk_events\":[{\"event_type\":\"human_crossing_path\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.9}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"exit_gate\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -557,13 +557,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 进入出口门，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":8.8,\"y\":-1.8,\"yaw\":-1.57},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"exit_gate\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"exit_observation\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"exit_observation\",\"exit_gate\"],\"blocked_edges\":[\"exit_observation->exit_gate\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 进入出口门，如果门关着也不要撞门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":8.8,\"y\":-1.8,\"yaw\":-1.57},\"localized\":true,\"battery_percent\":74},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":600,\"latency_ms\":65,\"packet_loss_ratio\":0.01},\"risk_events\":[{\"event_type\":\"door_closed_blocking_goal\",\"severity\":\"medium\",\"node_id\":\"exit_gate\",\"distance_m\":1.1}]}\n\nSemantic topology: {\"current_node\":\"exit_observation\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"exit_observation\",\"exit_gate\"],\"blocked_edges\":[\"exit_observation->exit_gate\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -571,13 +571,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 地面可能湿滑，慢速去出口门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"exit_gate\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 地面可能湿滑，慢速去出口门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":2.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":80},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":55,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"slippery_floor\",\"severity\":\"medium\",\"node_id\":\"corridor_a\",\"distance_m\":2.0}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"exit_gate\"],\"risk_edges\":[\"start_area->corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -585,13 +585,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 继续低优先级巡检出口门，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":20},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"exit_gate\",\"target_node\":\"charging_station\",\"candidate_path\":[\"exit_gate\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 继续低优先级巡检出口门，但现在弱网且低电量。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":7.0,\"y\":8.0,\"yaw\":2.8},\"localized\":true,\"battery_percent\":20},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":70,\"latency_ms\":900,\"packet_loss_ratio\":0.22},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"exit_gate\",\"target_node\":\"charging_station\",\"candidate_path\":[\"exit_gate\",\"corridor_a\",\"charging_station\"],\"nodes\":[{\"node_id\":\"charging_station\",\"pose\":{\"x\":-0.6,\"y\":1.0,\"yaw\":3.14}}]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -599,13 +599,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 定位好像不稳定，但我还想去出口门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"uncertain\",\"exit_gate\"],\"target_distance_m\":34}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 定位好像不稳定，但我还想去出口门。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":2.5,\"y\":1.5,\"yaw\":0.3},\"localized\":false,\"battery_percent\":73},\"slam_status\":\"degraded\",\"link_quality\":{\"bandwidth_kbps\":500,\"latency_ms\":160,\"packet_loss_ratio\":0.04},\"risk_events\":[]}\n\nSemantic topology: {\"current_node\":\"uncertain\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"uncertain\",\"exit_gate\"],\"target_distance_m\":34}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"max_angular_speed_rps\":0.4,\"min_person_distance_m\":1.5,\"max_mapless_distance_m\":30}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -613,13 +613,13 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   },
   {
     "conversations": [
       {
         "from": "user",
-        "value": "User command: 快速穿过人群去出口门，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"exit_gate\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
+        "value": "User command: 快速穿过人群去出口门，速度越快越好。\n\nWorld state: {\"robot\":{\"pose\":{\"x\":1.0,\"y\":1.0,\"yaw\":0.0},\"localized\":true,\"battery_percent\":90},\"slam_status\":\"healthy\",\"link_quality\":{\"bandwidth_kbps\":1000,\"latency_ms\":50,\"packet_loss_ratio\":0.0},\"risk_events\":[{\"event_type\":\"crowded_corridor\",\"severity\":\"critical\",\"node_id\":\"corridor_a\",\"distance_m\":0.8}]}\n\nSemantic topology: {\"current_node\":\"start_area\",\"target_node\":\"exit_gate\",\"candidate_path\":[\"start_area\",\"corridor_a\",\"exit_gate\"],\"blocked_nodes\":[\"corridor_a\"]}\n\nRegistered tools: [\"set_communication_policy\",\"create_navigation_subgoal\",\"wait_until\",\"capture_keyframe\",\"relative_motion_preview\",\"start_mapless_scout\",\"request_human_confirm\",\"hold_position\"]\n\nSafety limits: {\"max_linear_speed_mps\":0.4,\"min_person_distance_m\":1.5}\n\nOutput one JSON object matching local_llm_plan.schema.json. Choose conservative behavior when information is missing or risk is high."
       },
       {
         "from": "assistant",
@@ -627,6 +627,6 @@
       }
     ],
     "system": "You are the local strategy planner running on a quadruped robot edge computer. Output exactly one JSON object matching local_llm_plan.schema.json. Never output motor commands, velocity commands, raw slam_operate calls, shell commands, or configuration edits. All motion tools are checked by SafetySupervisor before execution.",
-    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, start_mapless_scout, request_human_confirm, hold_position."
+    "tools": "Allowed tools: set_communication_policy, create_navigation_subgoal, wait_until, capture_keyframe, relative_motion_preview, start_mapless_scout, request_human_confirm, hold_position."
   }
 ]

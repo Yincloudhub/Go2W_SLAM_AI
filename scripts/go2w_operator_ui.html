@@ -282,8 +282,11 @@
           </div>
           <div class="screen-grid">
             <div class="screen-cell"><label>当前位置</label><strong id="screen-target">尚未定位</strong></div>
+            <div class="screen-cell"><label>规划来源</label><strong id="screen-planner">等待任务</strong></div>
+            <div class="screen-cell"><label>当前步骤</label><strong id="screen-step">暂无任务</strong></div>
             <div class="screen-cell"><label>视觉理解</label><strong id="screen-vision">等待视觉摘要</strong></div>
             <div class="screen-cell"><label>安全策略</label><strong id="screen-action">等待安全状态</strong></div>
+            <div class="screen-cell"><label>任务队列</label><strong id="screen-queue">暂无队列</strong></div>
           </div>
         </div>
       </section>
@@ -314,15 +317,24 @@
         <div class="metrics">
           <div class="metric"><label>任务阶段</label><strong id="m-phase">未知</strong></div>
           <div class="metric"><label>当前目标</label><strong id="m-target">暂无</strong></div>
+          <div class="metric"><label>唯一建图原点</label><strong id="m-mapping-origin">未读取</strong></div>
+          <div class="metric"><label>最近重定位锚点</label><strong id="m-relocation-anchor">暂无记录</strong></div>
+          <div class="metric"><label>当前导航拓扑点</label><strong id="m-current-node">initial_point</strong></div>
           <div class="metric"><label>定位状态</label><strong id="m-loc">未知</strong></div>
           <div class="metric"><label>地图状态</label><strong id="m-map">未知</strong></div>
-          <div class="metric"><label>底盘运动</label><strong id="m-motion">关闭</strong></div>
+          <div class="metric"><label>真实执行开关</label><strong id="m-execution-enabled">关闭</strong></div>
+          <div class="metric"><label>安全导航许可</label><strong id="m-safety-allow">禁止</strong></div>
+          <div class="metric"><label>底盘运动状态</label><strong id="m-chassis-motion">静止</strong></div>
           <div class="metric"><label>障碍物</label><strong id="m-obstacle">未知</strong></div>
           <div class="metric"><label>网络模式</label><strong id="m-net">标准链路</strong></div>
           <div class="metric"><label>安全状态</label><strong id="m-safety">等待</strong></div>
           <div class="metric"><label>双目距离</label><strong id="m-stereo-front">暂无数据</strong></div>
           <div class="metric"><label>双目质量</label><strong id="m-stereo-health">暂无数据</strong></div>
           <div class="metric"><label>运动安全门</label><strong id="m-motion-guard">等待深度摘要</strong></div>
+          <div class="metric"><label>XT16 标定</label><strong id="m-lidar-calibration">等待摘要</strong></div>
+          <div class="metric"><label>XT16 有效年龄</label><strong id="m-lidar-age">等待摘要</strong></div>
+          <div class="metric"><label>XT16 四向净空</label><strong id="m-lidar-clearance">等待摘要</strong></div>
+          <div class="metric"><label>XT16 安全判定</label><strong id="m-lidar-safety">等待摘要</strong></div>
           <div class="metric"><label>视觉场景</label><strong id="m-semantic-scene">暂无数据</strong></div>
           <div class="metric"><label>视觉建议</label><strong id="m-semantic-action">暂无数据</strong></div>
           <div class="metric"><label>外部边缘节点</label><strong id="m-edge-node">未接入</strong></div>
@@ -393,8 +405,9 @@
       }
       return {};
     }
-    function setScreen(summary, semantic) {
+    function setScreen(summary, semantic, taskState) {
       const s = summary || {};
+      const task = taskState || {};
       const semanticData = semantic && semantic.data ? semantic.data : {};
       const semanticStatus = String(semanticData.source_status || "");
       const semanticOffline = !semantic || !semantic.available || semantic.stale_by_age || semanticData.stale ||
@@ -406,9 +419,22 @@
       const dominant = semanticOffline ? "视觉离线" : z(semanticData.dominant_class || "none");
       const action = semanticOffline ? "仅使用雷达与 SLAM" : z(semanticData.effective_action || "ignored");
       $("screen-target").textContent = target;
+      $("screen-planner").textContent = task.planner_source || "等待任务";
+      const currentStep = task.current_step || {};
+      $("screen-step").textContent = currentStep.action
+        ? `${currentStep.action}${currentStep.target_node ? ` / ${currentStep.target_node}` : ""}${currentStep.status ? ` / ${currentStep.status}` : ""}`
+        : "暂无任务";
+      $("screen-queue").textContent = task.queue_id
+        ? `${task.queue_id} / ${(task.targets || []).join(" → ") || "无导航目标"}`
+        : "暂无队列";
       $("screen-vision").textContent = semanticOffline ? "语义视觉未启动或离线，不参与运动决策" : `${dominant} / ${semanticData.object_count ?? 0} 个目标`;
       $("screen-action").textContent = action;
-      if (!locOk) {
+      if (task.blocked_reason) {
+        $("screen-reply").textContent = "任务已被安全逻辑阻断";
+        $("screen-detail").textContent = task.blocked_reason;
+        $("screen-health").textContent = "任务阻断";
+        $("screen-health").className = "pill danger";
+      } else if (!locOk) {
         $("screen-reply").textContent = "定位尚未就绪，请先检查 SLAM";
         $("screen-detail").textContent = "当前不会执行导航任务。";
         $("screen-health").textContent = "定位异常";
@@ -419,17 +445,17 @@
         $("screen-health").textContent = "安全限制";
         $("screen-health").className = "pill warn";
       } else if (phase === "arrived") {
-        $("screen-reply").textContent = `已经到达 ${target}`;
+        $("screen-reply").textContent = task.llm_feedback || `已经到达 ${target}`;
         $("screen-detail").textContent = `视觉反馈：${dominant}，当前策略：${action}。`;
         $("screen-health").textContent = "已到达";
         $("screen-health").className = "pill ok";
       } else if (phase === "navigating") {
-        $("screen-reply").textContent = `正在前往 ${target}`;
+        $("screen-reply").textContent = task.llm_feedback || `正在前往 ${target}`;
         $("screen-detail").textContent = `环境理解：${dominant}，当前策略：${action}。`;
         $("screen-health").textContent = "任务进行中";
         $("screen-health").className = "pill ok";
       } else {
-        $("screen-reply").textContent = "系统在线，等待新的巡检任务";
+        $("screen-reply").textContent = task.llm_feedback || task.operator_feedback || "系统在线，等待新的巡检任务";
         $("screen-detail").textContent = semanticOffline
           ? `当前位于 ${target}。语义视觉侧车未启动或离线，近场运动许可仍由实时深度摘要与 SLAM 安全门决定。`
           : `当前位于 ${target}。视觉理解：${dominant}，策略：${action}。`;
@@ -448,7 +474,9 @@
       $("m-target").textContent = s.target || "暂无";
       $("m-loc").textContent = yes(s.loc) ? "定位正常" : "未定位";
       $("m-map").textContent = yes(s.map) ? "地图可用" : "地图未就绪";
-      $("m-motion").textContent = yes(s.motion) ? "运动中" : "静止";
+      $("m-execution-enabled").textContent = yes(s.exec) ? "已开启" : "关闭";
+      $("m-safety-allow").textContent = yes(s.nav_allow) ? "允许" : "禁止";
+      $("m-chassis-motion").textContent = yes(s.chassis) ? "运动中" : "静止";
       $("m-obstacle").textContent = z(s.obstacle || "unknown");
       $("m-net").textContent = s.net === "normal" ? "标准链路" : z(s.net);
       $("m-safety").textContent = z(s.safety || "unknown");
@@ -464,12 +492,45 @@
       $("exec-toggle").className = state.execute_enabled ? "" : "danger";
       $("weak-toggle").textContent = state.weak_link_mode ? "恢复完整反馈" : "启用弱网摘要";
       $("current-node").value = state.current_node || "";
+      $("m-current-node").textContent = state.current_node || "未设置";
+      $("m-relocation-anchor").textContent = state.last_relocation_anchor || "暂无成功记录";
       const items = (state.history || []).slice().reverse().map((item) => {
         const code = item.exit_code === 0 ? "成功" : "异常";
         const reason = item.reason ? `<br><small>${escapeHtml(item.reason)}</small>` : "";
         return `<div><b>${escapeHtml(code)}</b> ${escapeHtml(item.line)}${reason}<br><small>${escapeHtml(JSON.stringify(item.summary || {}))}</small></div>`;
       });
       $("history").innerHTML = items.join("") || "<div>暂无任务历史</div>";
+    }
+    function updateLidar(lidar) {
+      if (!lidar || !lidar.available || !lidar.data) {
+        $("m-lidar-calibration").textContent = "XT16 摘要未启动或离线";
+        $("m-lidar-age").textContent = "无有效数据";
+        $("m-lidar-clearance").textContent = "无四向净空";
+        $("m-lidar-safety").textContent = "锁定：缺少 XT16 摘要";
+        return;
+      }
+      const data = lidar.data;
+      const aggregate = {
+        front: data.front_clearance_m,
+        left: data.left_clearance_m,
+        right: data.right_clearance_m,
+        rear: data.rear_clearance_m
+      };
+      const body = data.body_clearance_m || {};
+      const fmt = (value) => value == null ? "?" : `${Number(value).toFixed(2)}m`;
+      $("m-lidar-calibration").textContent = lidar.calibrated
+        ? `verified / ${lidar.calibration_id}`
+        : `未标定 / ${(lidar.stale_reasons || []).join(", ") || "缺少 calibration_id"}`;
+      const effective = lidar.effective_age_ms == null ? "?" : `${Math.round(lidar.effective_age_ms)}ms`;
+      const latency = lidar.sensor_latency_ms == null ? "?" : `${Math.round(lidar.sensor_latency_ms)}ms`;
+      $("m-lidar-age").textContent = `有效 ${effective} / 传感器 ${latency}`;
+      $("m-lidar-clearance").textContent =
+        `总 F${fmt(aggregate.front)} L${fmt(aggregate.left)} R${fmt(aggregate.right)} B${fmt(aggregate.rear)} / ` +
+        `机身 F${fmt(body.front)} L${fmt(body.left)} R${fmt(body.right)} B${fmt(body.rear)}`;
+      const blocked = Array.isArray(data.blocked_directions) ? data.blocked_directions.join(",") : "";
+      $("m-lidar-safety").textContent = lidar.status === "fresh"
+        ? `${data.recommended_action || "normal"}${blocked ? ` / 阻断 ${blocked}` : " / 四向可用"}`
+        : `锁定：${(lidar.stale_reasons || []).join(", ") || lidar.status}`;
     }
     function poseLabel(pose) {
       if (!pose || pose.x === null || pose.x === undefined || pose.y === null || pose.y === undefined) return "pose ?";
@@ -485,13 +546,15 @@
       topologyState = topology || { nodes: [] };
       const anchors = topologyState.active_relocalization_anchors || [];
       const originAnchor = topologyState.mapping_origin_anchor_id || "";
+      $("m-mapping-origin").textContent = originAnchor || "未登记";
       const anchorSelect = $("relocate-anchor");
       if (anchorSelect) {
         const current = anchorSelect.value;
         const options = anchors.map((anchor) => {
           const id = anchor.anchor_id || "";
           const origin = id === originAnchor ? " · 建图原点" : "";
-          const label = `${anchor.name || id}${origin}`;
+          const status = anchor.status ? ` · ${anchor.status}` : "";
+          const label = `${anchor.name || id}${origin}${status}`;
           return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
         }).join("");
         anchorSelect.innerHTML = `<option value="">请选择与实际位置匹配的重定位锚点</option>${options}`;
@@ -674,11 +737,12 @@
         updateMetrics(summary);
         updateState(result.state);
         updateCapabilities(result.capabilities);
+        updateLidar(result.lidar_summary);
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);
         updateCollection(result.collection_status);
-        setScreen(summary, result.semantic_summary);
+        setScreen(summary, result.semantic_summary, result.state && result.state.task_state);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
         $("conn").textContent = "UI 服务异常";
@@ -703,11 +767,12 @@
         updateMetrics(summary);
         updateState(result.state);
         updateCapabilities(result.capabilities);
+        updateLidar(result.lidar_summary);
         updateStereo(result.stereo_summary, result.stereo_motion_guard);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);
         updateCollection(result.collection_status);
-        setScreen(summary, result.semantic_summary);
+        setScreen(summary, result.semantic_summary, result.state && result.state.task_state);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
       } catch (err) {
         $("output").textContent = String(err);

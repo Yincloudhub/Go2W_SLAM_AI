@@ -54,5 +54,19 @@ int main()
     require(capture_route.task_queue["steps"][1]["action"] == "capture_keyframe", "second step should capture at first target");
     require(capture_route.task_queue["steps"][1]["target_node"] == "enabled_node", "capture should stay attached to first target");
     require(capture_route.task_queue["steps"][2]["action"] == "navigate", "third step should navigate to return target");
+
+    auto ambiguous_registry = registry;
+    ambiguous_registry["maps"][0]["topology_nodes"][0]["aliases"].push_back("shared lab");
+    ambiguous_registry["maps"][0]["topology_nodes"][1]["aliases"].push_back("shared lab");
+    go2w::SemanticRouter ambiguous_router(ambiguous_registry, "go2w_real_site");
+    const auto ambiguous = ambiguous_router.planText("go shared lab", 0.3, 0);
+    require(!ambiguous.matched, "shared alias without sequence must not resolve");
+    require(ambiguous.ambiguous, "shared alias without sequence must be marked ambiguous");
+    const auto explicit_sequence = ambiguous_router.planText(
+        "go enabled target then return target",
+        0.3,
+        0);
+    require(explicit_sequence.matched, "explicit sequence should resolve");
+    require(explicit_sequence.multi_target, "explicit sequence should remain multi-target");
     return 0;
 }

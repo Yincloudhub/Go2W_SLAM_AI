@@ -8,16 +8,61 @@ from .map_registry import MapProfile, MapRegistry, TopologyNode
 
 
 NAVIGABLE_LOCALIZATION_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
+BLOCKING_NAVIGATION_TAGS = {
+    "disabled",
+    "ui_disabled",
+    "deleted",
+    "needs_calibration",
+    "needs_standing_verification",
+    "requires_standing_verification",
+}
 RELATIVE_MOTION_TERMS = (
     "\u524d\u8fdb",
     "\u5411\u524d",
     "\u5f80\u524d",
     "\u76f4\u8d70",
+    "\u540e\u9000",
+    "\u5411\u540e",
+    "\u5f80\u540e",
+    "\u5de6\u79fb",
+    "\u5411\u5de6\u79fb\u52a8",
+    "\u53f3\u79fb",
+    "\u5411\u53f3\u79fb\u52a8",
+    "\u8f6c\u5411",
+    "\u8f6c\u5f2f",
+    "\u65cb\u8f6c",
+    "\u6389\u5934",
     "forward",
     "ahead",
     "straight",
+    "backward",
+    "backwards",
+    "reverse",
+    "move left",
+    "move right",
+    "strafe",
+    "turn",
+    "rotate",
 )
-DISTANCE_TERMS = ("\u7c73", "meter", "meters", "metre", "metres")
+MOTION_AMOUNT_TERMS = (
+    "\u7c73",
+    "\u5398\u7c73",
+    "\u5ea6",
+    "\u4e00\u70b9",
+    "\u4e00\u4e0b",
+    "meter",
+    "meters",
+    "metre",
+    "metres",
+    "cm",
+    "centimeter",
+    "centimeters",
+    "centimetre",
+    "centimetres",
+    "degree",
+    "degrees",
+    "a little",
+)
 CHINESE_DIGITS = {
     "\u96f6": 0,
     "\u4e00": 1,
@@ -78,7 +123,9 @@ def nearest_topology_node(profile: MapProfile, pose: dict[str, float] | None) ->
 
 def command_requests_relative_motion(user_command: str) -> bool:
     command = user_command.lower()
-    return any(term in command for term in RELATIVE_MOTION_TERMS) and any(term in command for term in DISTANCE_TERMS)
+    return any(term in command for term in RELATIVE_MOTION_TERMS) and any(
+        term in command for term in MOTION_AMOUNT_TERMS
+    )
 
 
 def _parse_chinese_number(text: str) -> float | None:
@@ -98,6 +145,15 @@ def _parse_chinese_number(text: str) -> float | None:
 
 def relative_motion_distance_m(user_command: str) -> float | None:
     command = user_command.lower()
+    match = re.search(
+        r"(\d+(?:\.\d+)?)\s*(?:cm|centimeter|centimeters|centimetre|centimetres)",
+        command,
+    )
+    if match:
+        return float(match.group(1)) / 100.0
+    match = re.search(r"(\d+(?:\.\d+)?)\s*\u5398\u7c73", user_command)
+    if match:
+        return float(match.group(1)) / 100.0
     match = re.search(r"(\d+(?:\.\d+)?)\s*(?:m|meter|meters|metre|metres)", command)
     if match:
         return float(match.group(1))
@@ -110,6 +166,20 @@ def relative_motion_distance_m(user_command: str) -> float | None:
     return None
 
 
+def relative_motion_direction(user_command: str) -> str:
+    command = user_command.lower()
+    direction_terms = (
+        ("backward", ("\u540e\u9000", "\u5411\u540e", "\u5f80\u540e", "backward", "backwards", "reverse")),
+        ("left", ("\u5de6\u79fb", "\u5411\u5de6\u79fb\u52a8", "move left", "strafe left")),
+        ("right", ("\u53f3\u79fb", "\u5411\u53f3\u79fb\u52a8", "move right", "strafe right")),
+        ("rotate", ("\u8f6c\u5411", "\u8f6c\u5f2f", "\u65cb\u8f6c", "\u6389\u5934", "turn", "rotate")),
+    )
+    for direction, terms in direction_terms:
+        if any(term in command for term in terms):
+            return direction
+    return "forward"
+
+
 def relative_motion_preview_from_command(user_command: str) -> dict[str, Any] | None:
     if not command_requests_relative_motion(user_command):
         return None
@@ -120,7 +190,7 @@ def relative_motion_preview_from_command(user_command: str) -> dict[str, Any] | 
         "tool": "relative_motion_preview",
         "status": "dry_run_only",
         "real_execution": False,
-        "requested_direction": "forward",
+        "requested_direction": relative_motion_direction(user_command),
         "requested_distance_m": relative_motion_distance_m(user_command),
         "capture_requested": capture_requested,
         "safety_requirements": [
@@ -206,13 +276,18 @@ def build_planner_context(
     available_nodes = []
     for node in profile.topology_nodes:
         node_pose = node.pose.to_unitree_json(name=node.node_id)
+        tags = list(node.tags)
         available_nodes.append(
             {
                 "node_id": node.node_id,
                 "name": node.name,
                 "aliases": list(node.aliases),
                 "node_type": node.node_type,
-                "tags": list(node.tags),
+                "tags": tags,
+                "navigation_eligible": (
+                    not bool(set(tags) & BLOCKING_NAVIGATION_TAGS)
+                    and "live_verified" in tags
+                ),
                 "pose": {
                     "x": node_pose["x"],
                     "y": node_pose["y"],

@@ -131,6 +131,95 @@ def parse_panel_summary(text: str) -> Dict[str, str]:
     return summary
 
 
+def parse_json_after_marker(text: str, marker: str) -> Optional[Dict[str, Any]]:
+    index = text.find(marker)
+    if index < 0:
+        return None
+    candidate = text[index + len(marker):].lstrip()
+    try:
+        value, _ = json.JSONDecoder().raw_decode(candidate)
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def derive_task_state(line: str, result: Dict[str, Any]) -> Dict[str, Any]:
+    stdout = str(result.get("stdout") or "")
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    queue = parse_json_after_marker(stdout, "任务队列JSON：") or {}
+    execution = parse_json_after_marker(stdout, "队列执行JSON：") or {}
+
+    if "C++语义路由：" in stdout:
+        planner_source = "deterministic_cpp"
+    elif "C++ LLM HTTP reply:" in stdout:
+        planner_source = "llm_http"
+    elif line.startswith("/"):
+        planner_source = "operator"
+    else:
+        planner_source = "unknown_or_rejected"
+
+    queue_steps = queue.get("steps", []) if isinstance(queue.get("steps"), list) else []
+    events = execution.get("events", []) if isinstance(execution.get("events"), list) else []
+    current_step: Dict[str, Any] | None = None
+    if events:
+        latest = events[-1]
+        if isinstance(latest, dict):
+            current_step = {
+                "task_id": latest.get("task_id"),
+                "action": latest.get("action"),
+                "target_node": latest.get("target_node"),
+                "status": latest.get("status"),
+            }
+    elif queue_steps:
+        first = queue_steps[0]
+        if isinstance(first, dict):
+            current_step = {
+                "task_id": first.get("task_id") or first.get("step_id"),
+                "action": first.get("action"),
+                "target_node": first.get("target_node"),
+                "status": first.get("status", "planned"),
+            }
+
+    llm_feedback = str(summary.get("llm") or "")
+    operator_feedback = str(summary.get("operator") or "")
+    for event in reversed(events):
+        if not isinstance(event, dict):
+            continue
+        if not llm_feedback:
+            values = event.get("llm_feedback_results", [])
+            if isinstance(values, list) and values and isinstance(values[-1], dict):
+                llm_feedback = str(values[-1].get("text") or "")
+        if not operator_feedback:
+            values = event.get("operator_feedback", [])
+            if isinstance(values, list) and values and isinstance(values[-1], dict):
+                operator_feedback = str(values[-1].get("text") or "")
+        if llm_feedback and operator_feedback:
+            break
+
+    blocked_reason = str(execution.get("blocked_reason") or summary.get("blocked") or "")
+    return {
+        "command": line,
+        "planner_source": planner_source,
+        "queue_id": queue.get("queue_id") or execution.get("queue_id"),
+        "targets": queue.get("targets", []) if isinstance(queue.get("targets"), list) else [],
+        "steps": [
+            {
+                "task_id": step.get("task_id") or step.get("step_id"),
+                "action": step.get("action"),
+                "target_node": step.get("target_node"),
+                "status": step.get("status"),
+            }
+            for step in queue_steps
+            if isinstance(step, dict)
+        ],
+        "current_step": current_step,
+        "completed": execution.get("completed"),
+        "blocked_reason": blocked_reason,
+        "llm_feedback": llm_feedback,
+        "operator_feedback": operator_feedback,
+    }
+
+
 def strip_ansi(text: str) -> str:
     out: List[str] = []
     i = 0
@@ -191,6 +280,8 @@ class WebConfig:
     panel_timeout_s: int = 90
     llm_http_url: str = ""
     llm_http_model: str = "local"
+    lidar_summary_path: Path = Path("artifacts/lidar_geometry_summary.json")
+    lidar_stale_ms: int = 1000
     stereo_summary_path: Path = Path("artifacts/stereo_depth_summary.json")
     stereo_stale_ms: int = 5000
     stereo_motion_guard_required: bool = False
@@ -249,6 +340,8 @@ class WebState:
     weak_link_mode: bool = False
     current_node: str = "initial_point"
     history: List[Dict[str, Any]] = field(default_factory=list)
+    task_state: Dict[str, Any] = field(default_factory=dict)
+    last_relocation_anchor: str = ""
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -256,6 +349,8 @@ class WebState:
             "weak_link_mode": self.weak_link_mode,
             "current_node": self.current_node,
             "history": list(self.history[-30:]),
+            "task_state": dict(self.task_state),
+            "last_relocation_anchor": self.last_relocation_anchor,
         }
 
     def apply_local_setting(self, line: str, confirmed: bool = False) -> Optional[Dict[str, Any]]:
@@ -305,6 +400,18 @@ class WebState:
         }
 
     def remember(self, line: str, result: Dict[str, Any]) -> None:
+        task_state = derive_task_state(line, result)
+        if (
+            not line.startswith("/")
+            or task_state.get("queue_id")
+            or task_state.get("blocked_reason")
+            or task_state.get("llm_feedback")
+        ):
+            self.task_state = task_state
+        if line.startswith("/relocate ") and result.get("accepted", result.get("exit_code") == 0):
+            tokens = line.split()
+            if len(tokens) >= 2:
+                self.last_relocation_anchor = tokens[1]
         self.history.append({
             "ts": int(time.time() * 1000),
             "line": line,
@@ -405,6 +512,7 @@ class OperatorWebApp:
 
     def _fresh_status(self) -> Dict[str, Any]:
         result = self.run_panel_session(["/quit"])
+        result["lidar_summary"] = self.lidar_summary()
         result["stereo_summary"] = self.stereo_summary()
         result["stereo_motion_guard"] = self.stereo_motion_guard()
         result["semantic_summary"] = self.semantic_summary()
@@ -436,6 +544,7 @@ class OperatorWebApp:
                     "stdout": "",
                     "stderr": "execute on blocked: localization must be ready.\n",
                     "summary": summary,
+                    "lidar_summary": self.lidar_summary(),
                     "stereo_summary": self.stereo_summary(),
                     "semantic_summary": self.semantic_summary(),
                     "edge_summary": self.edge_summary(),
@@ -450,6 +559,7 @@ class OperatorWebApp:
                     "stdout": "",
                     "stderr": f"execute on blocked: stereo motion guard rejected execution: {stereo_guard['reason']}.\n",
                     "summary": summary,
+                    "lidar_summary": self.lidar_summary(),
                     "stereo_summary": self.stereo_summary(),
                     "stereo_motion_guard": stereo_guard,
                     "semantic_summary": self.semantic_summary(),
@@ -468,6 +578,7 @@ class OperatorWebApp:
                     "stdout": "",
                     "stderr": "relocate blocked: localization is already healthy; restart SLAM before a recovery relocation.\n",
                     "summary": summary,
+                    "lidar_summary": self.lidar_summary(),
                     "stereo_summary": self.stereo_summary(),
                     "semantic_summary": self.semantic_summary(),
                     "edge_summary": self.edge_summary(),
@@ -540,25 +651,27 @@ class OperatorWebApp:
             local = self.state.apply_local_setting(line, confirmed=confirmed)
             if local is not None:
                 local["summary"] = {}
+                local["lidar_summary"] = self.lidar_summary()
                 local["stereo_summary"] = self.stereo_summary()
                 local["stereo_motion_guard"] = self.stereo_motion_guard()
                 local["semantic_summary"] = self.semantic_summary()
                 local["edge_summary"] = self.edge_summary()
-                local["state"] = self.state.snapshot()
                 self.state.remember(line, local)
+                local["state"] = self.state.snapshot()
         if local is not None:
             self.invalidate_status_cache()
             return local
 
         result = self.run_panel_session([line, "/quit"])
+        result["lidar_summary"] = self.lidar_summary()
         result["stereo_summary"] = self.stereo_summary()
         result["stereo_motion_guard"] = self.stereo_motion_guard()
         result["semantic_summary"] = self.semantic_summary()
         result["edge_summary"] = self.edge_summary()
         result["capabilities"] = self.capabilities()
         with self.lock:
-            result["state"] = self.state.snapshot()
             self.state.remember(line, result)
+            result["state"] = self.state.snapshot()
         self.invalidate_status_cache()
         return result
 
@@ -838,6 +951,88 @@ class OperatorWebApp:
                 "real_execution": False,
             },
         }
+
+    def lidar_summary(self) -> Dict[str, Any]:
+        path = self.config.lidar_summary_path
+        if not path.is_absolute():
+            path = self.config.repo_root / path
+        if not path.exists():
+            return {
+                "available": False,
+                "status": "offline_or_not_started",
+                "path": str(path),
+                "stale_ms": self.config.lidar_stale_ms,
+            }
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            timestamp_ms = int(data.get("timestamp_ms") or 0)
+            receipt_age_ms = (
+                max(0, int(time.time() * 1000) - timestamp_ms)
+                if timestamp_ms > 0
+                else None
+            )
+            latency = data.get("latency_ms")
+            sensor_latency_ms = (
+                max(0.0, float(latency))
+                if isinstance(latency, (int, float))
+                and not isinstance(latency, bool)
+                and math.isfinite(float(latency))
+                else 0.0
+            )
+            effective_age_ms = (
+                float(receipt_age_ms) + sensor_latency_ms
+                if isinstance(receipt_age_ms, int)
+                else None
+            )
+            parameters = data.get("parameters") if isinstance(data.get("parameters"), dict) else {}
+            producer_summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+            calibration_id = str(
+                parameters.get("calibration_id")
+                or producer_summary.get("calibration_id")
+                or ""
+            ).strip()
+            calibrated = bool(
+                (
+                    parameters.get("calibrated") is True
+                    or producer_summary.get("calibrated") is True
+                )
+                and calibration_id
+            )
+            stale_reasons = [
+                str(value)
+                for value in data.get("stale_reasons", [])
+                if value
+            ] if isinstance(data.get("stale_reasons"), list) else []
+            stale_by_age = bool(
+                effective_age_ms is None
+                or effective_age_ms > self.config.lidar_stale_ms
+            )
+            producer_stale = bool(data.get("stale", True))
+            fresh = calibrated and not producer_stale and not stale_by_age
+            status = "fresh" if fresh else ("uncalibrated" if not calibrated else "stale_or_offline")
+            return {
+                "available": True,
+                "status": status,
+                "path": str(path),
+                "receipt_age_ms": receipt_age_ms,
+                "sensor_latency_ms": sensor_latency_ms,
+                "effective_age_ms": effective_age_ms,
+                "stale_ms": self.config.lidar_stale_ms,
+                "stale_by_age": stale_by_age,
+                "producer_stale": producer_stale,
+                "stale_reasons": stale_reasons,
+                "calibrated": calibrated,
+                "calibration_id": calibration_id or None,
+                "data": data,
+            }
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "available": False,
+                "status": "invalid",
+                "path": str(path),
+                "error": str(exc),
+                "stale_ms": self.config.lidar_stale_ms,
+            }
 
     def stereo_summary(self) -> Dict[str, Any]:
         path = self.config.stereo_summary_path
@@ -1519,6 +1714,9 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
         if parsed_path.path == "/api/state":
             self.send_json({"state": self.app.state_snapshot()})
             return
+        if parsed_path.path == "/api/lidar-summary":
+            self.send_json({"lidar_summary": self.app.lidar_summary()})
+            return
         if parsed_path.path == "/api/stereo-summary":
             self.send_json({"stereo_summary": self.app.stereo_summary()})
             return
@@ -1633,6 +1831,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--panel-timeout-s", type=int, default=int(env.get("GO2W_PANEL_TIMEOUT_S", "90")))
     parser.add_argument("--llm-http-url", default=env.get("GO2W_LLM_HTTP_URL", ""))
     parser.add_argument("--llm-http-model", default=env.get("GO2W_LLM_HTTP_MODEL", "local"))
+    parser.add_argument("--lidar-summary-path", default=env.get("GO2W_LIDAR_GEOMETRY_SUMMARY_PATH", "artifacts/lidar_geometry_summary.json"))
+    parser.add_argument("--lidar-stale-ms", type=int, default=int(env.get("GO2W_LIDAR_STALE_MS", "1000")))
     parser.add_argument("--stereo-summary-path", default=env.get("GO2W_STEREO_SUMMARY_PATH", "artifacts/stereo_depth_summary.json"))
     parser.add_argument("--stereo-stale-ms", type=int, default=int(env.get("GO2W_STEREO_STALE_MS", "5000")))
     parser.add_argument("--stereo-motion-guard-required", action="store_true", default=truthy(env.get("GO2W_STEREO_MOTION_GUARD_REQUIRED", "0")))
@@ -1674,6 +1874,8 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         panel_timeout_s=args.panel_timeout_s,
         llm_http_url=args.llm_http_url,
         llm_http_model=args.llm_http_model,
+        lidar_summary_path=Path(args.lidar_summary_path).expanduser(),
+        lidar_stale_ms=max(1, args.lidar_stale_ms),
         stereo_summary_path=Path(args.stereo_summary_path).expanduser(),
         stereo_stale_ms=max(1, args.stereo_stale_ms),
         stereo_motion_guard_required=args.stereo_motion_guard_required,

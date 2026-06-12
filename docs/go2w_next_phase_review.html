@@ -380,11 +380,11 @@
         </div>
         <div class="card">
           <h3><span class="status warn">安全仍有缺口</span></h3>
-          <p>LiDAR summary 已能进入 gateway safety，但 raw XT16 PointCloud2 到 summary 的实时几何检测仍需补齐；IMU/odom health 仍是 phase-1 默认值。Python 执行路径的运行中 pause/watchdog 弱于 C++，应避免作为主要真实执行入口。</p>
+          <p>raw XT16 PointCloud2 到四向几何 summary 的实时链路已经接通，并由 gateway 作为主安全源消费；未标定、陈旧、缺少方向或 pending hazard 均失败关闭。当前未完成的是五场人工卷尺标定和真实运动验收。IMU/odom health 仍需继续接入真实健康状态。</p>
         </div>
         <div class="card">
           <h3><span class="status info">下一阶段重点</span></h3>
-          <p>不要先替换 SLAM 主闭环。继续补 raw XT16 点云几何检测、结构化任务链路展示、真实 health topic，再把 odom/IMU 相对运动保持在 dry-run/stub 分支内推进。</p>
+          <p>不要替换现有 SLAM 主闭环。下一步先完成 XT16 五场人工标定、结构化任务运行态的持续写入和真实 health topic；odom/IMU 相对运动、mapless scout 继续保持 dry-run/not-wired，完成独立安全执行链后再申请放行。</p>
         </div>
       </div>
       <div class="note good">
@@ -464,7 +464,7 @@
           <tr>
             <td>LiDAR/IMU/Odom 高低频状态进入 WorldState</td>
             <td><span class="status warn">部分完成</span></td>
-            <td>SLAM pose 已进入；LiDAR/stereo summary 已能作为 <code>LocalObstacleSummary</code> 被 gateway safety 消费；raw XT16 几何检测和 IMU/Odom health 仍未真实接线。</td>
+            <td>SLAM pose 与 XT16 四向几何 summary 已进入 gateway safety；D435 只作为前视保守补充。XT16 人工标定和 IMU/Odom health 仍未完成。</td>
             <td>下一步补 raw PointCloud2 ROI/聚类生产器；P1 接真实 health topics。</td>
           </tr>
           <tr>
@@ -499,7 +499,7 @@
             <td><span class="rank p0">P0</span></td>
             <td>XT16 点云近场 producer 已有，但默认未标定 stale</td>
             <td><code>scripts/xt16_lidar_geometry_summary.py</code> 可订阅 PointCloud2 并写 <code>source="lidar_pointcloud"</code>；未传 <code>--calibrated</code> 时固定 <code>stale=true</code>。</td>
-            <td>现场先按标定笔记确认轴向、footprint 和高度带，再设置 <code>GO2W_XT16_GEOMETRY_CALIBRATED=1</code> 作为 fresh 安全输入。</td>
+            <td>按空场、前、左、右、后五场记录卷尺实测和 25 帧统计，经汇总工具校验 artifact 哈希、传感器、参数和 Git 状态后生成非空 <code>calibration_id</code>；单独设置环境变量不能解锁。</td>
           </tr>
           <tr>
             <td><span class="rank p0">P0</span></td>

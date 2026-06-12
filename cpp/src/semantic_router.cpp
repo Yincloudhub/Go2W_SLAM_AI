@@ -159,6 +159,21 @@ bool SemanticRouter::commandRequestsCapture(const std::string& text) const
     });
 }
 
+bool SemanticRouter::commandRequestsSequence(const std::string& text) const
+{
+    return containsAny(text, {
+        "然后",
+        "再去",
+        "依次",
+        "接着",
+        "之后去",
+        "随后",
+        " then ",
+        " and then ",
+        " after that ",
+    });
+}
+
 nlohmann::json SemanticRouter::poseToUnitreeJson(const nlohmann::json& node, double speed_mps, int mode) const
 {
     const auto& pose = node.at("pose");
@@ -201,6 +216,12 @@ SemanticRoute SemanticRouter::planText(const std::string& text, double speed_mps
     route.targets = resolveTargets(text);
     route.matched = !route.targets.empty();
     route.multi_target = route.targets.size() > 1;
+    if (route.multi_target && !commandRequestsSequence(text)) {
+        route.matched = false;
+        route.ambiguous = true;
+        route.reason = "multiple topology nodes matched without explicit sequence";
+        return route;
+    }
     if (!route.matched) {
         route.reason = "no topology alias matched; fallback to LLM";
         return route;

@@ -159,20 +159,41 @@ double extractMetricDistanceM(const std::string& text)
         while (j < lower.size() && (isAsciiDigit(lower[j]) || lower[j] == '.')) ++j;
         const std::string number = lower.substr(i, j - i);
         while (j < lower.size() && (lower[j] == ' ' || lower[j] == '\t')) ++j;
+        const bool centimeters =
+            lower.compare(j, 2, "cm") == 0 ||
+            lower.compare(j, 10, "centimeter") == 0 ||
+            lower.compare(j, 10, "centimetre") == 0 ||
+            text.compare(j, std::string("厘米").size(), "厘米") == 0;
         const bool has_unit =
+            centimeters ||
             (j < lower.size() && lower[j] == 'm') ||
             lower.compare(j, 5, "meter") == 0 ||
             lower.compare(j, 5, "metre") == 0 ||
             text.compare(j, meter.size(), meter) == 0;
         if (!has_unit) continue;
         try {
-            return std::stod(number);
+            const double value = std::stod(number);
+            return centimeters ? value / 100.0 : value;
         } catch (...) {
             return -1.0;
         }
     }
     if (containsAny(text, {"十米", "十 米"})) return 10.0;
     return -1.0;
+}
+
+std::string relativeMotionDirection(const std::string& text)
+{
+    const std::string lower = lowerAscii(text);
+    if (containsAny(lower, {"backward", "backwards", "reverse"}) ||
+        containsAny(text, {"后退", "向后", "往后"})) return "backward";
+    if (containsAny(lower, {"move left", "strafe left"}) ||
+        containsAny(text, {"左移", "向左移动"})) return "left";
+    if (containsAny(lower, {"move right", "strafe right"}) ||
+        containsAny(text, {"右移", "向右移动"})) return "right";
+    if (containsAny(lower, {"turn", "rotate"}) ||
+        containsAny(text, {"转向", "转弯", "旋转", "掉头"})) return "rotate";
+    return "forward";
 }
 
 bool captureRequestedByText(const std::string& text)
@@ -193,12 +214,21 @@ std::string requestedNotWiredCapability(const std::string& text)
         return "mapless_scout";
     }
     const bool motion_word =
-        containsAny(lower, {"forward", "ahead", "straight"}) ||
-        containsAny(text, {"前进", "向前", "往前", "直走"});
+        containsAny(lower, {
+            "forward", "ahead", "straight", "backward", "backwards", "reverse",
+            "move left", "move right", "strafe", "turn", "rotate",
+        }) ||
+        containsAny(text, {
+            "前进", "向前", "往前", "直走", "后退", "向后", "往后",
+            "左移", "向左移动", "右移", "向右移动", "转向", "转弯", "旋转", "掉头",
+        });
     const bool distance_word =
-        containsAny(lower, {" meter", " meters", " metre", " metres", "m "}) ||
+        containsAny(lower, {
+            " meter", " meters", " metre", " metres", "m ", " cm", "centimeter",
+            "centimetre", " degree", " degrees", "a little",
+        }) ||
         containsMetricDistanceAscii(lower) ||
-        containsAny(text, {"米"});
+        containsAny(text, {"米", "厘米", "度", "一点", "一下"});
     if (motion_word && distance_word) return "relative_motion";
     return "";
 }
@@ -211,7 +241,7 @@ nlohmann::json relativeMotionPreviewPlan(const std::string& text)
         {"tool", "relative_motion_preview"},
         {"status", "dry_run_only"},
         {"real_execution", false},
-        {"requested_direction", "forward"},
+        {"requested_direction", relativeMotionDirection(text)},
         {"requested_distance_m", distance_m >= 0.0 ? nlohmann::json(distance_m) : nlohmann::json(nullptr)},
         {"capture_requested", captureRequestedByText(text)},
         {"safety_requirements", nlohmann::json::array({
@@ -563,7 +593,7 @@ nlohmann::json OperatorPanel::buildPanelWorldState(const nlohmann::json& result)
         result,
         {
             {"current_node", nearestNodeText(result)},
-            {"motion_allowed", config_.execute_enabled},
+            {"execution_enabled", config_.execute_enabled},
             {"network_level", config_.weak_link_mode ? "weak" : "normal"},
             {"task_phase", "idle"},
             {"capture_configured", !config_.capture_command.empty()},
@@ -665,6 +695,14 @@ CommandResult OperatorPanel::submitUserCommand(const std::string& text) const
 
     const SemanticRouter router(loadRegistry(), config_.map_id);
     const SemanticRoute route = router.planText(text, config_.nav_speed_mps, config_.nav_mode);
+    if (route.ambiguous) {
+        CommandResult result;
+        result.exit_code = 4;
+        result.stdout_text =
+            "ambiguous topology target: multiple registered nodes matched without an explicit sequence; "
+            "no command sent, ask the operator to choose one target.\n";
+        return result;
+    }
     if (route.matched) {
         if (config_.execute_enabled) {
             return fallbackPythonCommand(text);
@@ -816,23 +854,10 @@ CommandResult OperatorPanel::fallbackLlmHttpCommand(const std::string& text) con
         return result;
     }
 
-    std::string route_text = joinStrings(targets, " ");
-    if (plan.value("capture_keyframe", false)) route_text += " capture";
-    const SemanticRouter router(loadRegistry(), config_.map_id);
-    const SemanticRoute route = router.planText(route_text, config_.nav_speed_mps, config_.nav_mode);
-    if (!route.matched) {
-        result.exit_code = 4;
-        out << "C++ LLM HTTP targets did not match registry after validation; no command sent.\n";
-        result.stdout_text = out.str();
-        return result;
-    }
-
-    CommandResult execution = config_.execute_enabled
-        ? fallbackPythonCommand(route_text)
-        : executeSemanticRoute(route);
-    result.exit_code = execution.exit_code;
-    result.stdout_text = out.str() + execution.stdout_text;
-    result.stderr_text = execution.stderr_text;
+    result.exit_code = 4;
+    out << "C++ LLM HTTP target selection is advisory only. The original command did not uniquely match "
+           "a registered topology alias, so no command was sent; ask one clarification question instead.\n";
+    result.stdout_text = out.str();
     return result;
 }
 

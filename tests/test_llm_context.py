@@ -154,6 +154,24 @@ class LlmContextTests(unittest.TestCase):
         self.assertEqual(plan["steps"][1]["arguments"]["missing_capability"], "relative_motion")
         self.assertIsNone(plan_to_slam_command(plan, registry))
 
+    def test_relative_motion_recognizes_sideways_reverse_rotation_and_centimeters(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        cases = [
+            ("move right 50 cm", "right", 0.5),
+            ("backward 1 meter", "backward", 1.0),
+            ("turn 90 degrees", "rotate", None),
+            ("向左移动20厘米", "left", 0.2),
+        ]
+
+        for command, direction, distance_m in cases:
+            with self.subTest(command=command):
+                context = build_planner_context(make_snapshot(), registry, user_command=command)
+                request = context["relative_motion_request"]
+                self.assertIsNotNone(request)
+                self.assertEqual(request["requested_direction"], direction)
+                self.assertEqual(request["requested_distance_m"], distance_m)
+                self.assertFalse(request["real_execution"])
+
 
 if __name__ == "__main__":
     unittest.main()

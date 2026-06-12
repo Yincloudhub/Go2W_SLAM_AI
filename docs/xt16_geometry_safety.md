@@ -14,24 +14,25 @@ These values are now the producer defaults.
 
 ## Footprint
 
-The current pending footprint is an engineering estimate from the published
-`70 x 43 cm` robot envelope and the rear-biased XT16 mounting:
+The current pending footprint is a provisional symmetric estimate based on the
+centrally mounted XT16:
 
-- front: `0.25 m`
-- rear: `0.50 m`
+- front: `0.30 m`
+- rear: `0.30 m`
 - half-width: `0.30 m`
 - filter-only margin: `0.02 m`
 
-It intentionally stays close to the physical body envelope. Expanding the mask
-to suppress an unexplained return can hide a real obstacle and is prohibited.
-The photograph confirms the XT16 is approximately centered laterally, so the
-left and right footprint use the same value.
+The same nominal offset is used in all four directions. It is not evidence that
+the complete moving envelope fits inside a `0.60 x 0.60 m` square. Expanding the
+mask to suppress an unexplained return can hide a real obstacle and is
+prohibited; shrinking the footprint can overstate reported clearance.
 
 The margin applies only when rejecting self-returns at the body boundary.
 Reported obstacle clearance remains measured from the nominal footprint, not
 from the expanded filter boundary.
-The values remain `pending_field_measurement` until five stationary measured
-scenes pass the calibration workflow.
+The values remain `pending_field_measurement`, and navigation remains blocked,
+until five stationary measured scenes confirm the physical body-edge
+relationship and the safety thresholds.
 
 ## Schema version 2
 

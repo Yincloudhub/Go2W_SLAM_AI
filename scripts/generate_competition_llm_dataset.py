@@ -527,30 +527,32 @@ def make_mapless_scout(idx: int) -> tuple[dict[str, Any], dict[str, Any]]:
         "map_available": False,
     }
     topo = {"current_node": "unknown", "target_node": None, "candidate_path": [], "front_clearance_m": 4.0}
-    comm = keyframe_comm("short mapless scout")
+    comm = normal_comm("mapless scout capability is not wired")
     plan = {
         "plan_id": f"mapless-scout-forward-{idx:03d}",
-        "mode": "mapless_scout",
-        "confidence": 0.78,
-        "reason": "No map or SLAM localization is available, and the user requested a short forward scouting task. Use trace-back Mapless Scout with conservative speed.",
+        "mode": "safe_hold",
+        "confidence": 1.0,
+        "reason": "Mapless Scout is not wired for real execution. Hold position and request an operator decision instead of inventing motion.",
         "steps": [
             {
-                "step_id": "start-scout",
-                "tool": "start_mapless_scout",
+                "step_id": "hold-position",
+                "tool": "hold_position",
                 "arguments": {
-                    "task_id": f"scout-forward-{idx:03d}",
-                    "max_distance_m": distance,
-                    "max_duration_s": 120 + idx * 20,
-                    "max_linear_speed_mps": 0.25,
-                    "min_obstacle_distance_m": 1.2,
-                    "return_mode": "trace_back",
-                    "capture_keyframe_at_turnaround": True,
+                    "reason": "mapless_scout is not wired",
                 },
             },
-            {"step_id": "capture-turnaround-keyframe", "tool": "capture_keyframe", "arguments": {"reason": "turnaround_observation", "send_policy": "keyframe_low_rate"}},
+            {
+                "step_id": "request-confirm",
+                "tool": "request_human_confirm",
+                "arguments": {
+                    "missing_capability": "mapless_scout",
+                    "requested_distance_m": distance,
+                    "message": "Choose a registered topology target or keep holding.",
+                },
+            },
         ],
         "communication_policy": comm,
-        "requires_human_ack": False,
+        "requires_human_ack": True,
     }
     prompt = build_user_prompt(f"不用地图，往前{distance}米看看，拍照后原路回来。", world, topo, {"max_mapless_distance_m": 30, "max_linear_speed_mps": 0.25, "min_obstacle_distance_m": 1.2})
     return sft_record(prompt, plan), eval_record(
@@ -558,7 +560,12 @@ def make_mapless_scout(idx: int) -> tuple[dict[str, Any], dict[str, Any]]:
         "mapless_scout_short_forward",
         prompt,
         plan,
-        {"expected_mode": "mapless_scout", "must_include_tools": ["start_mapless_scout", "capture_keyframe"], "max_mapless_distance_m_lte": 30},
+        {
+            "expected_mode": "safe_hold",
+            "must_include_tools": ["hold_position", "request_human_confirm"],
+            "must_not_include_tools": ["start_mapless_scout", "create_navigation_subgoal"],
+            "requires_human_ack": True,
+        },
     )
 
 

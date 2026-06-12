@@ -25,6 +25,8 @@ cmake_install.cmake
 artifacts/
 logs/
 tmp/
+output/
+.playwright-cli/
 *.log
 
 # Models and large binary assets

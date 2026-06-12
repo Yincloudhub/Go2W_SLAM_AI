@@ -81,7 +81,7 @@ class LocalLlmPlannerTests(unittest.TestCase):
                             "node_id": "nie_guoli_office_front",
                             "name": "office",
                             "aliases": ["office"],
-                            "tags": [],
+                            "tags": ["live_verified"],
                             "distance_from_robot_m": 0.1,
                         }
                     ]
@@ -110,14 +110,14 @@ class LocalLlmPlannerTests(unittest.TestCase):
                             "node_id": "station",
                             "name": "station",
                             "aliases": ["station"],
-                            "tags": [],
+                            "tags": ["live_verified"],
                             "distance_from_robot_m": 0.05,
                         },
                         {
                             "node_id": "room701",
                             "name": "room701",
                             "aliases": ["room701"],
-                            "tags": ["photo_required"],
+                            "tags": ["photo_required", "live_verified"],
                             "distance_from_robot_m": 5.0,
                         },
                     ]
@@ -163,7 +163,7 @@ class LocalLlmPlannerTests(unittest.TestCase):
                             "node_id": "room701",
                             "name": "room701",
                             "aliases": ["room701"],
-                            "tags": [],
+                            "tags": ["live_verified"],
                             "distance_from_robot_m": 5.0,
                         }
                     ]
@@ -219,14 +219,14 @@ class LocalLlmPlannerTests(unittest.TestCase):
                             "node_id": "station",
                             "name": "station",
                             "aliases": ["station"],
-                            "tags": [],
+                            "tags": ["live_verified"],
                             "distance_from_robot_m": 0.05,
                         },
                         {
                             "node_id": "room701",
                             "name": "room701",
                             "aliases": ["room701"],
-                            "tags": ["photo_required"],
+                            "tags": ["photo_required", "live_verified"],
                             "distance_from_robot_m": 5.0,
                         },
                     ]
@@ -252,6 +252,113 @@ class LocalLlmPlannerTests(unittest.TestCase):
         self.assertEqual(intent["mode"], "mapped_navigation")
         validate_local_llm_plan(fixed)
         validate_execution_contract(fixed)
+        validate_context_policy(fixed, context)
+
+    def test_all_prompt_modes_force_safe_hold_when_localization_is_not_ready(self) -> None:
+        context = {
+            "user_command": "go to office",
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": False},
+                "slam": {"health_status": "failed"},
+                "topology": {
+                    "available_nodes": [
+                        {
+                            "node_id": "nie_guoli_office_front",
+                            "name": "office",
+                            "aliases": ["office"],
+                            "tags": ["live_verified"],
+                        }
+                    ]
+                },
+            },
+        }
+
+        fixed = apply_context_policy_overrides(make_plan(), context)
+
+        self.assertEqual(fixed["mode"], "safe_hold")
+        self.assertEqual([step["tool"] for step in fixed["steps"]], ["hold_position"])
+        self.assertTrue(fixed["requires_human_ack"])
+        validate_context_policy(fixed, context)
+
+    def test_mapless_scout_is_rejected_as_not_wired(self) -> None:
+        context = {
+            "user_command": "explore the unknown room",
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {"available_nodes": []},
+            },
+        }
+        plan = make_plan()
+        plan["mode"] = "mapless_scout"
+        plan["steps"] = [
+            {
+                "step_id": "scout_1",
+                "tool": "start_mapless_scout",
+                "arguments": {"max_distance_m": 3.0},
+            }
+        ]
+
+        fixed = apply_context_policy_overrides(plan, context)
+
+        self.assertEqual(fixed["mode"], "human_confirm")
+        self.assertEqual([step["tool"] for step in fixed["steps"]], ["request_human_confirm"])
+        self.assertIn("not wired", fixed["reason"])
+        validate_context_policy(fixed, context)
+
+    def test_shared_alias_is_ambiguous_without_sequence_language(self) -> None:
+        context = {
+            "user_command": "go lab",
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {
+                    "available_nodes": [
+                        {"node_id": "lab_a", "name": "Lab A", "aliases": ["lab"], "tags": ["live_verified"]},
+                        {"node_id": "lab_b", "name": "Lab B", "aliases": ["lab"], "tags": ["live_verified"]},
+                    ]
+                },
+            },
+        }
+
+        light = build_lightweight_planner_context(context)
+        fixed = apply_context_policy_overrides(make_plan(), context)
+
+        self.assertFalse(light["multi_target"])
+        self.assertTrue(light["ambiguous_target"])
+        self.assertIsNone(build_task_queue_from_context(context))
+        self.assertEqual(fixed["mode"], "human_confirm")
+        self.assertNotIn("create_navigation_subgoal", [step["tool"] for step in fixed["steps"]])
+        validate_context_policy(fixed, context)
+
+    def test_unverified_target_is_blocked_before_gateway(self) -> None:
+        context = {
+            "user_command": "go office",
+            "world_state_summary": {
+                "map": {"map_id": "test_current_main"},
+                "robot": {"localized": True},
+                "slam": {"health_status": "ok"},
+                "topology": {
+                    "available_nodes": [
+                        {
+                            "node_id": "nie_guoli_office_front",
+                            "name": "office",
+                            "aliases": ["office"],
+                            "tags": ["needs_calibration"],
+                        }
+                    ]
+                },
+            },
+        }
+
+        fixed = apply_context_policy_overrides(make_plan(), context)
+
+        self.assertEqual(fixed["mode"], "human_confirm")
+        self.assertIn("not verified", fixed["reason"])
+        self.assertNotIn("create_navigation_subgoal", [step["tool"] for step in fixed["steps"]])
         validate_context_policy(fixed, context)
 
 

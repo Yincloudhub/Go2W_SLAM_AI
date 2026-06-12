@@ -190,10 +190,13 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
         boolAt(runtime_or_gateway, {"capture_command_configured"}, false) ||
         boolAt(runtime_or_gateway, {"camera_capture_configured"}, false);
 
-    bool safety_allow = boolAt(world, {"safety", "allow_navigation"}, localized);
-    if (options.contains("motion_allowed") && options.at("motion_allowed").is_boolean()) {
-        safety_allow = options.at("motion_allowed").get<bool>();
-    }
+    const bool safety_allow = boolAt(world, {"safety", "allow_navigation"}, localized);
+    const bool execution_enabled = options.value(
+        "execution_enabled",
+        options.value("motion_allowed", false));
+    const std::string navigation_state = stringAt(world, {"navigation", "state"}, "idle");
+    const bool chassis_motion_active = navigation_state == "running";
+    const bool motion_allowed = localized && safety_allow && execution_enabled;
 
     nlohmann::json front_clearance = nullptr;
     double clearance = 0.0;
@@ -240,8 +243,13 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
         {"network_level", options.value("network_level", std::string("normal"))},
         {"task_phase", task_phase},
         {"last_execution_result", options.value("last_execution_result", std::string(""))},
-        {"motion_allowed", localized && safety_allow},
-        {"available_tools", availableTools(localized, safety_allow, map_loaded, capture_configured)},
+        {"execution_enabled", execution_enabled},
+        {"safety_allow_navigation", localized && safety_allow},
+        {"chassis_motion_active", chassis_motion_active},
+        {"navigation_state", navigation_state},
+        {"motion_allowed", motion_allowed},
+        {"local_obstacle", objectAt(world, {"local_obstacle"}) ? *objectAt(world, {"local_obstacle"}) : nlohmann::json(nullptr)},
+        {"available_tools", availableTools(localized, motion_allowed, map_loaded, capture_configured)},
         {"capture_keyframe", {
             {"configured", capture_configured},
             {"mode", capture_configured ? std::string("image_capture") : std::string("semantic_event_only")},
@@ -289,6 +297,9 @@ nlohmann::json buildOperatorDisplayState(
             {"localized", world_state.value("localized", false)},
             {"map_loaded", world_state.value("map_loaded", false)},
             {"motion_allowed", world_state.value("motion_allowed", false)},
+            {"execution_enabled", world_state.value("execution_enabled", false)},
+            {"safety_allow_navigation", world_state.value("safety_allow_navigation", false)},
+            {"chassis_motion_active", world_state.value("chassis_motion_active", false)},
             {"obstacle_status", world_state.value("obstacle_status", std::string("unknown"))},
             {"front_clearance_m", world_state.contains("front_clearance_m") ? world_state.at("front_clearance_m") : nlohmann::json(nullptr)},
             {"network_level", world_state.value("network_level", std::string("normal"))},
@@ -341,6 +352,9 @@ std::string formatOperatorDisplayLine(const nlohmann::json& operator_display, bo
        << " | loc=" << screenString(screen, "localized", "false")
        << " | map=" << screenString(screen, "map_loaded", "false")
        << " | motion=" << screenString(screen, "motion_allowed", "false")
+       << " | exec=" << screenString(screen, "execution_enabled", "false")
+       << " | nav_allow=" << screenString(screen, "safety_allow_navigation", "false")
+       << " | chassis=" << screenString(screen, "chassis_motion_active", "false")
        << " | obstacle=" << screenString(screen, "obstacle_status", "unknown")
        << " | net=" << screenString(screen, "network_level", "normal");
     if (!weak_link_mode) {

@@ -41,6 +41,13 @@ def clear_roi_points() -> list[tuple[float, float, float]]:
 
 
 class Xt16GeometryTests(unittest.TestCase):
+    def test_default_footprint_is_symmetric_thirty_centimeters(self) -> None:
+        config = Xt16GeometryConfig()
+
+        self.assertEqual(config.footprint_front_m, 0.30)
+        self.assertEqual(config.footprint_rear_m, 0.30)
+        self.assertEqual(config.footprint_half_width_m, 0.30)
+
     def test_front_obstacle_blocks_when_calibrated(self) -> None:
         points = clear_roi_points()
         points.extend(repeated_point(0.0, -0.9))
@@ -186,7 +193,12 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="test-calibration",
+                min_points_per_roi=5,
+                footprint_rear_m=0.50,
+            ),
             timestamp_ms=1,
         )
 
@@ -204,7 +216,12 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="test-calibration",
+                min_points_per_roi=5,
+                footprint_rear_m=0.50,
+            ),
             timestamp_ms=1,
         )
 
@@ -222,7 +239,12 @@ class Xt16GeometryTests(unittest.TestCase):
 
         summary = build_xt16_geometry_summary(
             points,
-            config=Xt16GeometryConfig(calibrated=True, calibration_id="test-calibration", min_points_per_roi=5),
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="test-calibration",
+                min_points_per_roi=5,
+                footprint_rear_m=0.50,
+            ),
             timestamp_ms=1,
         )
 

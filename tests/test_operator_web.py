@@ -64,6 +64,13 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("语义视觉未启动或离线，不参与运动决策", web.INDEX_HTML)
         self.assertIn("近场运动许可仍由实时深度摘要与 SLAM 安全门决定", web.INDEX_HTML)
         self.assertIn("运动安全门", web.INDEX_HTML)
+        self.assertIn("XT16 四向净空", web.INDEX_HTML)
+        self.assertIn("真实执行开关", web.INDEX_HTML)
+        self.assertIn("安全导航许可", web.INDEX_HTML)
+        self.assertIn("底盘运动状态", web.INDEX_HTML)
+        self.assertIn("规划来源", web.INDEX_HTML)
+        self.assertIn("当前步骤", web.INDEX_HTML)
+        self.assertIn("任务已被安全逻辑阻断", web.INDEX_HTML)
         self.assertIn("外部边缘节点", web.INDEX_HTML)
         self.assertIn('id="m-capture"', web.INDEX_HTML)
         self.assertIn('id="m-notwired"', web.INDEX_HTML)
@@ -114,6 +121,35 @@ class OperatorWebTests(unittest.TestCase):
         item = state.snapshot()["history"][0]
         self.assertIn("verification_guard", item["reason"])
         self.assertIn("/slam_info", item["reason"])
+
+    def test_task_state_extracts_queue_block_and_feedback(self):
+        state = web.WebState()
+        state.remember(
+            "去办公室",
+            {
+                "exit_code": 3,
+                "accepted": False,
+                "stdout": (
+                    'C++语义路由：matched target\n'
+                    '任务队列JSON：{"queue_id":"q1","targets":["office"],'
+                    '"steps":[{"task_id":"t1","action":"navigate","target_node":"office","status":"pending"}]}\n'
+                    '队列执行JSON：{"queue_id":"q1","completed":false,'
+                    '"blocked_reason":"XT16 geometry is not calibrated",'
+                    '"events":[{"task_id":"t1","action":"navigate","target_node":"office",'
+                    '"status":"blocked","operator_feedback":[{"text":"安全检查未通过"}]}]}\n'
+                ),
+                "stderr": "",
+                "summary": {},
+            },
+        )
+
+        task = state.snapshot()["task_state"]
+        self.assertEqual(task["planner_source"], "deterministic_cpp")
+        self.assertEqual(task["queue_id"], "q1")
+        self.assertEqual(task["targets"], ["office"])
+        self.assertEqual(task["current_step"]["status"], "blocked")
+        self.assertEqual(task["blocked_reason"], "XT16 geometry is not calibrated")
+        self.assertEqual(task["operator_feedback"], "安全检查未通过")
 
     def test_topology_soft_delete_and_restore_updates_registry(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -548,6 +584,81 @@ class OperatorWebTests(unittest.TestCase):
             self.assertEqual(loaded["data"]["source"], "stereo_depth")
             self.assertEqual(loaded["stale_ms"], 12345)
             self.assertTrue(loaded["stale_by_age"])
+
+    def test_lidar_summary_reports_calibration_effective_age_and_four_way_clearance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "artifacts" / "lidar_geometry_summary.json"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "timestamp_ms": int(time.time() * 1000) - 100,
+                        "source": "lidar_pointcloud",
+                        "parameters": {"calibrated": True, "calibration_id": "xt16-test"},
+                        "front_clearance_m": 2.0,
+                        "left_clearance_m": 1.0,
+                        "right_clearance_m": 1.1,
+                        "rear_clearance_m": 0.9,
+                        "body_clearance_m": {"front": 2.1, "left": 1.1, "right": 1.2, "rear": 1.0},
+                        "latency_ms": 50,
+                        "stale": False,
+                        "stale_reasons": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = web.WebConfig(
+                repo_root=root,
+                panel_bin=root / "missing",
+                gateway_client="missing",
+                start_slam_script="missing",
+                start_rviz2_script="missing",
+                lidar_summary_path=Path("artifacts/lidar_geometry_summary.json"),
+                lidar_stale_ms=1000,
+            )
+
+            loaded = web.OperatorWebApp(config).lidar_summary()
+
+            self.assertTrue(loaded["available"])
+            self.assertEqual(loaded["status"], "fresh")
+            self.assertTrue(loaded["calibrated"])
+            self.assertEqual(loaded["calibration_id"], "xt16-test")
+            self.assertGreaterEqual(loaded["effective_age_ms"], 150)
+            self.assertEqual(loaded["data"]["rear_clearance_m"], 0.9)
+
+    def test_lidar_summary_fails_closed_without_verified_calibration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary_path = root / "lidar.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "timestamp_ms": int(time.time() * 1000),
+                        "source": "lidar_pointcloud",
+                        "parameters": {"calibrated": False, "calibration_id": None},
+                        "stale": True,
+                        "stale_reasons": ["uncalibrated_xt16_geometry"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            app = web.OperatorWebApp(
+                web.WebConfig(
+                    repo_root=root,
+                    panel_bin=root / "missing",
+                    gateway_client="missing",
+                    start_slam_script="missing",
+                    start_rviz2_script="missing",
+                    lidar_summary_path=summary_path,
+                )
+            )
+
+            loaded = app.lidar_summary()
+
+            self.assertEqual(loaded["status"], "uncalibrated")
+            self.assertFalse(loaded["calibrated"])
+            self.assertIn("uncalibrated_xt16_geometry", loaded["stale_reasons"])
 
     def test_stereo_summary_stale_threshold_is_configurable(self):
         with tempfile.TemporaryDirectory() as tmp:

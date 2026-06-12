@@ -256,6 +256,22 @@ class MapProfile:
                 f"map '{map_id}' mapping origin anchor "
                 f"'{profile.mapping_origin_anchor_id}' is not active"
             )
+        topology_ids = [node.node_id for node in profile.topology_nodes]
+        if len(topology_ids) != len(set(topology_ids)):
+            raise MapRegistryError(f"map '{map_id}' has duplicate topology node ids")
+        semantic_terms: dict[str, str] = {}
+        for node in profile.topology_nodes:
+            for value in (node.node_id, node.name, *node.aliases):
+                term = value.strip().casefold()
+                if not term:
+                    continue
+                previous = semantic_terms.get(term)
+                if previous is not None and previous != node.node_id:
+                    raise MapRegistryError(
+                        f"map '{map_id}' has ambiguous topology term '{value}' "
+                        f"for nodes '{previous}' and '{node.node_id}'"
+                    )
+                semantic_terms[term] = node.node_id
         return profile
 
     def get_anchor(self, anchor_id: str) -> RelocalizationAnchor:

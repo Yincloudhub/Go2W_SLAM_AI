@@ -265,6 +265,10 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
                     "distance_m": node.get("distance_from_robot_m"),
                     "photo_required": "photo_required" in tags,
                     "door_may_close": "door_may_close" in tags,
+                    "navigation_eligible": (
+                        not bool(set(tags) & BLOCKING_NAVIGATION_TAGS)
+                        and "live_verified" in tags
+                    ),
                 }
             )
             match_terms = [node_id, name, *aliases]
@@ -289,6 +293,7 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
                 )
     target_matches.sort(key=lambda item: (item["first_index"] if item.get("first_index") is not None else 10**9, -max(len(term) for term in item.get("matched_terms", [""]))))
     requested_node = target_matches[0]["node_id"] if target_matches else None
+    sequence_requested = len(target_matches) > 1 and command_requests_sequence(user_command)
 
     link_quality = _dig_value(planner_context, "link_quality") or {}
     bandwidth = _dig_value(planner_context, "bandwidth_kbps")
@@ -311,7 +316,8 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
         "nearest_node": (robot.get("nearest_node") or {}).get("node_id") if isinstance(robot.get("nearest_node"), dict) else None,
         "requested_target_guess": requested_node,
         "matched_targets": target_matches,
-        "multi_target": len(target_matches) > 1,
+        "multi_target": sequence_requested,
+        "ambiguous_target": len(target_matches) > 1 and not sequence_requested,
         "distance_to_requested_target_m": distance_to_target,
         "arrival_distance_m": arrival_distance if arrival_distance is not None else 0.3,
         "battery_percent": battery,
@@ -342,10 +348,40 @@ CAPTURE_TERMS = (
     "keyframe",
 )
 
+SEQUENCE_TERMS = (
+    "\u7136\u540e",
+    "\u518d\u53bb",
+    "\u4f9d\u6b21",
+    "\u63a5\u7740",
+    "\u4e4b\u540e\u53bb",
+    "\u968f\u540e",
+    " then ",
+    " and then ",
+    " after that ",
+)
+
+BLOCKING_NAVIGATION_TAGS = {
+    "disabled",
+    "ui_disabled",
+    "deleted",
+    "needs_calibration",
+    "needs_standing_verification",
+    "requires_standing_verification",
+}
+
+UNWIRED_TOOL_CAPABILITIES = {
+    "start_mapless_scout": "mapless_scout",
+}
+
 
 def command_requests_capture(user_command: str) -> bool:
     command = user_command.lower()
     return any(term.lower() in command for term in CAPTURE_TERMS)
+
+
+def command_requests_sequence(user_command: str) -> bool:
+    command = f" {user_command.lower()} "
+    return any(term in command for term in SEQUENCE_TERMS)
 
 
 def _context_requests_relative_motion(planner_context: dict[str, Any]) -> bool:
@@ -413,12 +449,24 @@ def build_task_queue_from_context(planner_context: dict[str, Any]) -> dict[str, 
     matched_targets = light_context.get("matched_targets", [])
     if not isinstance(matched_targets, list) or len(matched_targets) < 2:
         return None
+    if not light_context.get("multi_target"):
+        return None
     if not light_context.get("slam_ok") or not light_context.get("localized"):
         return None
 
     known_nodes = {str(candidate.get("node_id")) for candidate in light_context.get("candidates", []) if isinstance(candidate, dict)}
     ordered_targets = [item for item in matched_targets if isinstance(item, dict) and str(item.get("node_id") or "") in known_nodes]
     if len(ordered_targets) < 2:
+        return None
+    candidates_by_id = {
+        str(candidate.get("node_id")): candidate
+        for candidate in light_context.get("candidates", [])
+        if isinstance(candidate, dict)
+    }
+    if any(
+        not candidates_by_id.get(str(target.get("node_id")), {}).get("navigation_eligible")
+        for target in ordered_targets
+    ):
         return None
 
     weak_link = bool(light_context.get("weak_bandwidth"))
@@ -644,7 +692,10 @@ def deterministic_intent_from_context(planner_context: dict[str, Any]) -> dict[s
             "requires_human_ack": True,
             "capability": "relative_motion",
         }
-    if not light_context.get("slam_ok") or not light_context.get("localized"):
+    if (
+        not _context_requests_relative_motion(planner_context)
+        and (not light_context.get("slam_ok") or not light_context.get("localized"))
+    ):
         return {
             "mode": "safe_hold",
             "target_node": "",
@@ -654,7 +705,15 @@ def deterministic_intent_from_context(planner_context: dict[str, Any]) -> dict[s
         }
 
     matched_targets = light_context.get("matched_targets", [])
-    if isinstance(matched_targets, list) and len(matched_targets) > 1:
+    if light_context.get("ambiguous_target"):
+        return {
+            "mode": "human_confirm",
+            "target_node": "",
+            "confidence": 1.0,
+            "reason": "multiple topology nodes match the same ambiguous request",
+            "requires_human_ack": True,
+        }
+    if light_context.get("multi_target") and isinstance(matched_targets, list) and len(matched_targets) > 1:
         return {
             "mode": "mapped_navigation",
             "target_node": str(matched_targets[0].get("node_id", "")) if isinstance(matched_targets[0], dict) else "",
@@ -667,6 +726,22 @@ def deterministic_intent_from_context(planner_context: dict[str, Any]) -> dict[s
     known_nodes = {str(candidate.get("node_id")) for candidate in light_context.get("candidates", []) if isinstance(candidate, dict)}
     if not target_node or target_node not in known_nodes:
         return None
+    candidate = next(
+        (
+            item
+            for item in light_context.get("candidates", [])
+            if isinstance(item, dict) and item.get("node_id") == target_node
+        ),
+        None,
+    )
+    if not isinstance(candidate, dict) or not candidate.get("navigation_eligible"):
+        return {
+            "mode": "human_confirm",
+            "target_node": target_node,
+            "confidence": 1.0,
+            "reason": "target is not verified for live navigation",
+            "requires_human_ack": True,
+        }
 
     arrival_distance = light_context.get("arrival_distance_m")
     distance_to_target = light_context.get("distance_to_requested_target_m")
@@ -886,6 +961,20 @@ def _node_requires_photo(planner_context: dict[str, Any], node_id: str) -> bool:
     return isinstance(tags, list) and "photo_required" in tags
 
 
+def _node_navigation_eligible(planner_context: dict[str, Any], node_id: str) -> bool:
+    node = _semantic_node_by_id(planner_context, node_id)
+    if not node:
+        return False
+    if isinstance(node.get("navigation_eligible"), bool):
+        return bool(node["navigation_eligible"])
+    tags = (
+        set(str(value) for value in node.get("tags", []) if value)
+        if isinstance(node.get("tags"), list)
+        else set()
+    )
+    return not bool(tags & BLOCKING_NAVIGATION_TAGS) and "live_verified" in tags
+
+
 def _weak_communication_policy() -> dict[str, Any]:
     return {
         "mode": "semantic_only",
@@ -956,9 +1045,76 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
             steps[0]["arguments"] = weak_comm
 
     matched_targets = light_context.get("matched_targets", [])
-    is_multi_target = isinstance(matched_targets, list) and len(matched_targets) > 1
+    is_multi_target = bool(light_context.get("multi_target"))
     known_nodes = _semantic_nodes(planner_context)
     nav_targets = _nav_target_nodes(fixed)
+
+    if not light_context.get("slam_ok") or not light_context.get("localized"):
+        reason = "slam or localization not ready"
+        fixed.update(
+            {
+                "mode": "safe_hold",
+                "reason": reason,
+                "steps": _with_communication_prefix(
+                    [{"step_id": "hold_1", "tool": "hold_position", "arguments": {"reason": reason}}],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": True,
+            }
+        )
+        return fixed
+
+    unwired_tools = [tool for tool in _collect_tools(fixed) if tool in UNWIRED_TOOL_CAPABILITIES]
+    if unwired_tools:
+        capability = UNWIRED_TOOL_CAPABILITIES[unwired_tools[0]]
+        reason = f"{capability} is not wired for real execution"
+        fixed.update(
+            {
+                "mode": "human_confirm",
+                "reason": reason,
+                "steps": _with_communication_prefix(
+                    [
+                        {
+                            "step_id": "ask_1",
+                            "tool": "request_human_confirm",
+                            "arguments": {"reason": reason, "missing_capability": capability},
+                        }
+                    ],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": True,
+            }
+        )
+        return fixed
+
+    if light_context.get("ambiguous_target"):
+        candidates = [
+            str(item.get("node_id"))
+            for item in matched_targets
+            if isinstance(item, dict) and item.get("node_id")
+        ]
+        reason = "ambiguous topology target requires human confirmation"
+        fixed.update(
+            {
+                "mode": "human_confirm",
+                "reason": reason,
+                "steps": _with_communication_prefix(
+                    [
+                        {
+                            "step_id": "ask_1",
+                            "tool": "request_human_confirm",
+                            "arguments": {"reason": reason, "candidate_nodes": candidates},
+                        }
+                    ],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": True,
+            }
+        )
+        return fixed
 
     if fixed.get("mode") == "mapped_navigation" and known_nodes and any(target not in known_nodes for target in nav_targets):
         target = nav_targets[0] if nav_targets else str(light_context.get("requested_target_guess") or "")
@@ -969,6 +1125,33 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
                 "reason": reason,
                 "steps": _with_communication_prefix(
                     [{"step_id": "ask_1", "tool": "request_human_confirm", "arguments": {"reason": reason, "target_node": target}}],
+                    fixed["communication_policy"],
+                    weak_link=weak_link,
+                ),
+                "requires_human_ack": True,
+            }
+        )
+        return fixed
+
+    ineligible_targets = [
+        target
+        for target in nav_targets
+        if not _node_navigation_eligible(planner_context, target)
+    ]
+    if fixed.get("mode") == "mapped_navigation" and ineligible_targets:
+        reason = f"target is not verified for live navigation: {ineligible_targets[0]}"
+        fixed.update(
+            {
+                "mode": "human_confirm",
+                "reason": reason,
+                "steps": _with_communication_prefix(
+                    [
+                        {
+                            "step_id": "ask_1",
+                            "tool": "request_human_confirm",
+                            "arguments": {"reason": reason, "target_node": ineligible_targets[0]},
+                        }
+                    ],
                     fixed["communication_policy"],
                     weak_link=weak_link,
                 ),
@@ -1075,18 +1258,37 @@ def validate_context_policy(plan: dict[str, Any], planner_context: dict[str, Any
         require("request_human_confirm" in tools, "relative_motion must request human confirmation")
         require("create_navigation_subgoal" not in tools, "relative_motion must not create navigation subgoal")
 
+    if (
+        not _context_requests_relative_motion(planner_context)
+        and (not light_context.get("slam_ok") or not light_context.get("localized"))
+    ):
+        require(plan.get("mode") == "safe_hold", "unlocalized or unhealthy SLAM must use safe_hold")
+        require("hold_position" in tools, "unlocalized or unhealthy SLAM must hold_position")
+        require("create_navigation_subgoal" not in tools, "unlocalized or unhealthy SLAM must not navigate")
+        require("start_mapless_scout" not in tools, "unlocalized or unhealthy SLAM must not start mapless scout")
+
+    for tool, capability in UNWIRED_TOOL_CAPABILITIES.items():
+        require(tool not in tools, f"{capability} is not wired for real execution")
+
     if known_nodes:
         for target in nav_targets:
             require(target in known_nodes, f"target_node {target!r} is not in semantic topology")
 
     matched_targets = light_context.get("matched_targets", [])
-    if isinstance(matched_targets, list) and len(matched_targets) > 1:
+    if light_context.get("ambiguous_target"):
+        require(plan.get("mode") == "human_confirm", "ambiguous target must use human_confirm")
+        require("request_human_confirm" in tools, "ambiguous target must request human confirmation")
+        require("create_navigation_subgoal" not in tools, "ambiguous target must not navigate")
+    elif light_context.get("multi_target") and isinstance(matched_targets, list) and len(matched_targets) > 1:
         matched_ids = [str(item.get("node_id")) for item in matched_targets if isinstance(item, dict) and item.get("node_id")]
         if plan.get("mode") == "human_confirm":
             require("request_human_confirm" in tools, "multi-target confirmation must request human confirmation")
         else:
             require(plan.get("mode") == "mapped_navigation", "multi-target command must use mapped_navigation task queue or human_confirm")
             require(nav_targets[: len(matched_ids)] == matched_ids, "multi-target navigation must follow matched target order")
+
+    for target in nav_targets:
+        require(_node_navigation_eligible(planner_context, target), f"target_node {target!r} is not verified for live navigation")
 
     arrival_distance = _dig_value(planner_context, "arrival_distance_m")
     distance_to_target = _dig_value(planner_context, "distance_to_requested_target_m")
