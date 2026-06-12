@@ -170,7 +170,7 @@ class Xt16GeometryTests(unittest.TestCase):
         )
 
         self.assertAlmostEqual(summary["low_hazard_clearance_m"]["rear"], 0.08, delta=0.08)
-        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.67, delta=0.08)
+        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.56, delta=0.08)
         self.assertLess(summary["rear_clearance_m"], 0.2)
         self.assertIn("rear", summary["low_hazard_directions"])
         self.assertIn("rear", summary["blocked_directions"])
@@ -178,7 +178,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
     def test_sparse_low_returns_do_not_override_supported_body_cluster(self) -> None:
         points = clear_roi_points()
-        points.extend(repeated_point(0.0, 0.52, z=-0.2, count=3))
+        points.extend(repeated_point(0.0, 0.58, z=-0.2, count=3))
         points.extend(repeated_point(0.0, 1.12, z=0.2, count=30))
 
         summary = build_xt16_geometry_summary(
@@ -188,8 +188,8 @@ class Xt16GeometryTests(unittest.TestCase):
         )
 
         self.assertIsNone(summary["low_hazard_clearance_m"]["rear"])
-        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.67, delta=0.08)
-        self.assertAlmostEqual(summary["rear_clearance_m"], 0.67, delta=0.08)
+        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.56, delta=0.08)
+        self.assertAlmostEqual(summary["rear_clearance_m"], 0.56, delta=0.08)
         self.assertIn("rear", summary["pending_low_hazard_directions"])
         self.assertTrue(summary["stale"])
 
@@ -206,7 +206,7 @@ class Xt16GeometryTests(unittest.TestCase):
         )
 
         self.assertAlmostEqual(summary["low_hazard_clearance_m"]["rear"], 0.08, delta=0.08)
-        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.67, delta=0.08)
+        self.assertAlmostEqual(summary["body_clearance_m"]["rear"], 0.56, delta=0.08)
         self.assertLess(summary["rear_clearance_m"], 0.2)
 
     def test_duplicate_points_do_not_create_supported_cluster(self) -> None:

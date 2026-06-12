@@ -207,8 +207,11 @@ sidecar's effective runtime parameter. Free-form extra geometry arguments are
 not allowed in calibrated mode.
 
 The checked-in record remains `pending_field_measurement`. Promote it only
-after at least three stationary scenes have physical body-edge-to-obstacle
-measurements recorded and compared with XT16 output.
+after all five stationary scenes have physical body-edge-to-obstacle
+measurements recorded and compared with XT16 output. Each scene must contain
+25 unique point-cloud timestamps, remain within the configured stability and
+effective-age limits, and have no stale reason other than the expected
+`uncalibrated_xt16_geometry` marker.
 
 ## Live no-motion acceptance - 2026-06-11
 

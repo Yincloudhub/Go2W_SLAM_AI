@@ -14,14 +14,17 @@ These values are now the producer defaults.
 
 ## Footprint
 
-The prone GO2W wheel and leg envelope requires a larger exclusion footprint
-than the original prototype:
+The current pending footprint is an engineering estimate from the published
+`70 x 43 cm` robot envelope and the rear-biased XT16 mounting:
 
-- front: `0.35 m`
-- rear: `0.45 m`
-- half-width: `0.40 m`
+- front: `0.25 m`
+- rear: `0.50 m`
+- half-width: `0.25 m`
 
-This removes supported self-return clusters at the rear legs and right wheel.
+It intentionally stays close to the physical body envelope. Expanding the mask
+to suppress an unexplained return can hide a real obstacle and is prohibited.
+The values remain `pending_field_measurement` until five stationary measured
+scenes pass the calibration workflow.
 
 ## Schema version 2
 

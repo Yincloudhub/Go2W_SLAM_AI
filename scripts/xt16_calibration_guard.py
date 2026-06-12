@@ -85,6 +85,16 @@ def validate_record(record: Mapping[str, Any], environment: Mapping[str, str]) -
         or any(not str(path).strip() for path in artifact_paths)
     ):
         return False, "verified calibration evidence artifacts are incomplete", ""
+    artifact_sha256 = evidence.get("artifact_sha256")
+    if (
+        not isinstance(artifact_sha256, Mapping)
+        or len(artifact_sha256) < required_scenes
+        or any(
+            not str(path).strip() or len(str(digest).strip()) != 64
+            for path, digest in artifact_sha256.items()
+        )
+    ):
+        return False, "verified calibration evidence hashes are incomplete", ""
     if (
         not math.isfinite(max_abs_error_m)
         or not math.isfinite(acceptance_max_abs_error_m)

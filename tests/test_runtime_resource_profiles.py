@@ -44,12 +44,15 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("verify ANCHOR", text)
         self.assertIn("check TARGET", text)
         self.assertIn("snapshot TEST_ID [ANCHOR]", text)
+        self.assertIn("xt16-baseline OPERATOR FRONT_M LEFT_M RIGHT_M REAR_M", text)
+        self.assertIn("xt16-scene SCENE OPERATOR MEASURED_M", text)
         self.assertIn('confirmation="${3:-}"', text)
         self.assertIn('[[ -z "${anchor}" || "${confirmation}" != "confirm" ]]', text)
         self.assertNotIn('${2:-mapping_origin}', text)
         self.assertNotIn("--execute", text)
         self.assertNotIn("navigate_to", text)
         self.assertIn("capture_go2w_field_acceptance.py", text)
+        self.assertIn("capture_xt16_calibration_scene.py", text)
 
     def test_xt16_calibrated_mode_requires_repository_record_guard(self):
         text = (REPO_ROOT / "scripts" / "go2w_xt16_geometry_sidecar.sh").read_text(encoding="utf-8")
@@ -62,6 +65,9 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         producer = (REPO_ROOT / "scripts" / "xt16_lidar_geometry_summary.py").read_text(encoding="utf-8")
         self.assertIn("ReliabilityPolicy.BEST_EFFORT", producer)
         self.assertIn("depth=1", producer)
+        self.assertIn("--footprint-front-m\", type=float, default=0.25", producer)
+        self.assertIn("--footprint-rear-m\", type=float, default=0.50", producer)
+        self.assertIn("--footprint-half-width-m\", type=float, default=0.25", producer)
 
     def test_slam_startup_self_heals_silent_xt16_once(self):
         text = (REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh").read_text(encoding="utf-8")

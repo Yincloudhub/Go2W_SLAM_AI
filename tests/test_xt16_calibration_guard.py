@@ -31,6 +31,10 @@ class Xt16CalibrationGuardTests(unittest.TestCase):
             f"artifacts/field_acceptance/xt16_scene_{index}.json"
             for index in range(1, 6)
         ]
+        record["evidence"]["artifact_sha256"] = {
+            path: "a" * 64
+            for path in record["evidence"]["artifact_paths"]
+        }
         record["evidence"]["max_abs_error_m"] = 0.08
         return record
 

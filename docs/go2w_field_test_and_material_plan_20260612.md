@@ -63,6 +63,9 @@ bash scripts/go2w_accept.sh snapshot relocation_origin_01 mapping_origin
 按空场、前、左、右、后五个静态场景进行。每个障碍优先放在
 `0.6-1.5 m` 范围，避开玻璃和镜面；保留现场照片。
 
+当前 footprint 采用外廓尺寸估算：前 `0.25 m`、后 `0.50 m`、
+左右半宽 `0.25 m`。它仍是待测初值，不能作为现场标定已经完成的证据。
+
 每个场景记录：
 
 - 机器人外缘到障碍的卷尺距离；
@@ -71,9 +74,27 @@ bash scripts/go2w_accept.sh snapshot relocation_origin_01 mapping_origin
 - D435 前视中心距离，仅作前方交叉验证；
 - 绝对误差和是否触发安全阻断。
 
-至少三组有效实测场景、方向正确且阻断无漏检后，才允许生成非空
+五个场景全部有效、方向正确且阻断无漏检后，才允许生成非空
 `calibration_id` 并把标定记录改为 `verified`。标定状态变更后必须重新
 构建、重启侧车并做短距离监督测试。
+
+方向场景使用统一只读命令，单位为米：
+
+```bash
+bash scripts/go2w_accept.sh xt16-baseline OPERATOR FRONT_M LEFT_M RIGHT_M REAR_M
+bash scripts/go2w_accept.sh xt16-scene front OPERATOR 0.80
+bash scripts/go2w_accept.sh xt16-scene left OPERATOR 0.80
+bash scripts/go2w_accept.sh xt16-scene right OPERATOR 0.80
+bash scripts/go2w_accept.sh xt16-scene rear OPERATOR 0.80
+```
+
+每次自动采集 25 个不同时间戳并计算中位数、P5/P95、绝对误差、
+点云源延迟和处理耗时。`baseline` 必须通过
+`capture_xt16_calibration_scene.py` 同时提供四向卷尺实测值。
+
+五个场景全部通过后，用 `finalize_xt16_calibration.py` 汇总。工具会核验
+场景集合、artifact 哈希、传感器序列号、参数、Git 提交和工作树状态；
+默认只生成候选记录，只有显式传入 `--apply` 才改写运行标定记录。
 
 ## 5. 重定位人工校准
 
