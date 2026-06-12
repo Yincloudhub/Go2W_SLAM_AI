@@ -57,6 +57,11 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("calibration_rejected", text)
         self.assertIn("extra_args_not_allowed", text)
         self.assertIn("--calibration-id", text)
+        self.assertIn('SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-1000}"', text)
+
+        producer = (REPO_ROOT / "scripts" / "xt16_lidar_geometry_summary.py").read_text(encoding="utf-8")
+        self.assertIn("ReliabilityPolicy.BEST_EFFORT", producer)
+        self.assertIn("depth=1", producer)
 
     def test_slam_startup_self_heals_silent_xt16_once(self):
         text = (REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh").read_text(encoding="utf-8")

@@ -259,6 +259,9 @@ def build_xt16_geometry_summary(
     low_hazard_values: dict[str, list[DirectionalSample]] = {
         direction: [] for direction in ("front", "left", "right", "rear")
     }
+    body_far_support_values: dict[str, list[DirectionalSample]] = {
+        direction: [] for direction in ("front", "left", "right", "rear")
+    }
     total_points = 0
     finite_points = 0
     height_filtered_points = 0
@@ -290,17 +293,37 @@ def build_xt16_geometry_summary(
             footprint_filtered_points += 1
             continue
 
-        if cfg.footprint_front_m < forward <= cfg.range_m and abs(lateral) <= cfg.front_half_width_m:
-            height_values["front"].append((forward - cfg.footprint_front_m, lateral, vertical))
-        if cfg.footprint_half_width_m < lateral <= cfg.range_m and abs(forward) <= cfg.side_forward_m:
-            height_values["left"].append((lateral - cfg.footprint_half_width_m, forward, vertical))
-        if -cfg.range_m <= lateral < -cfg.footprint_half_width_m and abs(forward) <= cfg.side_forward_m:
-            height_values["right"].append((-lateral - cfg.footprint_half_width_m, forward, vertical))
-        if -cfg.range_m <= forward < -cfg.footprint_rear_m and abs(lateral) <= cfg.rear_half_width_m:
-            height_values["rear"].append((-forward - cfg.footprint_rear_m, lateral, vertical))
+        front_clearance = forward - cfg.footprint_front_m
+        if front_clearance > 0 and abs(lateral) <= cfg.front_half_width_m:
+            if front_clearance <= cfg.range_m:
+                height_values["front"].append((front_clearance, lateral, vertical))
+            elif height_values is body_values:
+                body_far_support_values["front"].append((front_clearance, lateral, vertical))
+
+        left_clearance = lateral - cfg.footprint_half_width_m
+        if left_clearance > 0 and abs(forward) <= cfg.side_forward_m:
+            if left_clearance <= cfg.range_m:
+                height_values["left"].append((left_clearance, forward, vertical))
+            elif height_values is body_values:
+                body_far_support_values["left"].append((left_clearance, forward, vertical))
+
+        right_clearance = -lateral - cfg.footprint_half_width_m
+        if right_clearance > 0 and abs(forward) <= cfg.side_forward_m:
+            if right_clearance <= cfg.range_m:
+                height_values["right"].append((right_clearance, forward, vertical))
+            elif height_values is body_values:
+                body_far_support_values["right"].append((right_clearance, forward, vertical))
+
+        rear_clearance = -forward - cfg.footprint_rear_m
+        if rear_clearance > 0 and abs(lateral) <= cfg.rear_half_width_m:
+            if rear_clearance <= cfg.range_m:
+                height_values["rear"].append((rear_clearance, lateral, vertical))
+            elif height_values is body_values:
+                body_far_support_values["rear"].append((rear_clearance, lateral, vertical))
 
     body_results = _directional_results(body_values, cfg)
     low_hazard_results = _directional_results(low_hazard_values, cfg)
+    body_far_support_results = _directional_results(body_far_support_values, cfg)
     body_clearance = {direction: result.clearance_m for direction, result in body_results.items()}
     low_hazard_clearance = {direction: result.clearance_m for direction, result in low_hazard_results.items()}
     body_roi_confidence = {direction: result.confidence for direction, result in body_results.items()}
@@ -317,7 +340,12 @@ def build_xt16_geometry_summary(
     body_no_return_directions: list[str] = []
     if cloud_supports_no_return:
         for direction in ("front", "left", "right", "rear"):
-            if body_clearance[direction] is None and direction not in pending_body_directions:
+            far_support = body_far_support_results[direction]
+            if (
+                body_clearance[direction] is None
+                and direction not in pending_body_directions
+                and far_support.clearance_m is not None
+            ):
                 body_clearance[direction] = round(float(cfg.range_m), 3)
                 body_roi_confidence[direction] = round(
                     max(0.0, min(1.0, float(cfg.no_return_confidence))),
@@ -336,8 +364,25 @@ def build_xt16_geometry_summary(
     left = clearance["left"]
     right = clearance["right"]
     rear = clearance["rear"]
-    confidence = round(min(roi_confidence["front"], roi_confidence["left"], roi_confidence["right"]), 3)
-    missing_required = [name for name, value in {"front": front, "left": left, "right": right}.items() if value is None]
+    confidence = round(
+        min(
+            roi_confidence["front"],
+            roi_confidence["left"],
+            roi_confidence["right"],
+            roi_confidence["rear"],
+        ),
+        3,
+    )
+    missing_required = [
+        name
+        for name, value in {
+            "front": front,
+            "left": left,
+            "right": right,
+            "rear": rear,
+        }.items()
+        if value is None
+    ]
     stale_reasons: list[str] = []
     if not calibration_verified:
         stale_reasons.append("uncalibrated_xt16_geometry")
@@ -359,6 +404,10 @@ def build_xt16_geometry_summary(
         "timestamp_ms": int(timestamp_ms if timestamp_ms is not None else now_ms()),
         "frame_id": frame_id,
         "range_m": cfg.range_m,
+        "parameters": {
+            "calibrated": calibration_verified,
+            "calibration_id": calibration_id or None,
+        },
         "front_clearance_m": front,
         "left_clearance_m": left,
         "right_clearance_m": right,
@@ -389,6 +438,18 @@ def build_xt16_geometry_summary(
             "points_excluded_footprint": footprint_filtered_points,
             "cloud_supports_no_return": cloud_supports_no_return,
             "body_no_return_directions": body_no_return_directions,
+            "body_far_support_counts": {
+                direction: len(values)
+                for direction, values in body_far_support_values.items()
+            },
+            "body_far_support": {
+                direction: {
+                    "clusters": result.cluster_count,
+                    "selected_points": result.selected_points,
+                    "selected_spatial_bins": result.selected_spatial_bins,
+                }
+                for direction, result in body_far_support_results.items()
+            },
             "roi_counts": {
                 direction: len(body_values[direction]) + len(low_hazard_values[direction])
                 for direction in ("front", "left", "right", "rear")

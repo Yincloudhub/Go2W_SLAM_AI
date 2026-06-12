@@ -137,6 +137,37 @@ class StartupSupervisorTests(unittest.TestCase):
         self.assertFalse(summary["readiness"]["perception_ready"])
         self.assertEqual(summary["readiness"]["perception_reason"], "XT16 geometry is not calibrated")
 
+    def test_lidar_sensor_latency_counts_toward_effective_age(self) -> None:
+        now_ms = int(time.time() * 1000)
+        summary = startup_summary(
+            [
+                {
+                    "name": "slam_stack",
+                    "required": True,
+                    "ok": True,
+                    "dry_run": False,
+                    "starts_motion": False,
+                },
+            ],
+            lidar_summary={
+                "source": "lidar_pointcloud",
+                "timestamp_ms": now_ms,
+                "latency_ms": 1600.0,
+                "stale": False,
+                "summary": {
+                    "calibrated": True,
+                    "calibration_id": "test-calibration",
+                },
+            },
+        )
+
+        self.assertFalse(summary["readiness"]["perception_ready"])
+        self.assertEqual(
+            summary["readiness"]["perception_reason"],
+            "local obstacle summary age is invalid or stale",
+        )
+        self.assertGreaterEqual(summary["readiness"]["perception"]["age_ms"], 1600.0)
+
 
 if __name__ == "__main__":
     unittest.main()

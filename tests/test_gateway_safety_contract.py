@@ -23,6 +23,8 @@ def world_state(
             "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
             "local_obstacle": {
                 "source": source,
+                "calibration_verified": source in {"lidar_pointcloud", "lidar_pointcloud+stereo_depth"},
+                "calibration_id": "test-calibration" if source in {"lidar_pointcloud", "lidar_pointcloud+stereo_depth"} else None,
                 "stale": stale,
                 "age_ms": age_ms,
                 "confidence": 0.8,
@@ -71,11 +73,20 @@ class GatewaySafetyContractTests(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertIn("stale", reason)
 
-    def test_adapter_fresh_summary_blocks_even_when_older_than_default_period(self):
+    def test_adapter_fresh_summary_blocks_when_older_than_default_period(self):
         allowed, reason = gateway_allows_navigation(world_state(age_ms=2500, right=0.6))
 
         self.assertFalse(allowed)
-        self.assertIn("right clearance", reason)
+        self.assertIn("too old", reason)
+
+    def test_missing_calibration_identity_fails_closed(self):
+        state = world_state()
+        state["world_state"]["local_obstacle"]["calibration_id"] = None
+
+        allowed, reason = gateway_allows_navigation(state)
+
+        self.assertFalse(allowed)
+        self.assertIn("calibration ID", reason)
 
     def test_side_obstacle_is_blocked(self):
         allowed, reason = gateway_allows_navigation(world_state(right=0.6))

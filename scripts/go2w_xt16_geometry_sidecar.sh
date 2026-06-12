@@ -14,7 +14,7 @@ PYTHON_BIN="${GO2W_PYTHON:-python3}"
 NICE_LEVEL="${GO2W_XT16_GEOMETRY_NICE_LEVEL:-5}"
 TOPIC="${GO2W_XT16_POINTCLOUD_TOPIC:-/unitree/slam_lidar/points}"
 RATE_LIMIT_HZ="${GO2W_XT16_GEOMETRY_RATE_LIMIT_HZ:-5}"
-SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-500}"
+SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-1000}"
 CALIBRATION_REQUESTED="${GO2W_XT16_GEOMETRY_CALIBRATED:-0}"
 CALIBRATION_RECORD="${GO2W_XT16_CALIBRATION_RECORD:-${REPO_ROOT}/configs/perception/xt16_geometry_calibration.json}"
 export GO2W_XT16_GEOMETRY_RANGE_M="${GO2W_XT16_GEOMETRY_RANGE_M:-6.0}"
@@ -64,6 +64,7 @@ is_running() {
 summary_health() {
   SUMMARY_PATH="${SUMMARY_PATH}" SAFETY_STALE_MS="${SAFETY_STALE_MS}" "${PYTHON_BIN}" - <<'PY'
 import json
+import math
 import os
 import time
 from pathlib import Path
@@ -75,7 +76,20 @@ if not path.exists():
     raise SystemExit(1)
 data = json.loads(path.read_text(encoding="utf-8"))
 timestamp_ms = int(data.get("timestamp_ms") or 0)
-age_ms = max(0, int(time.time() * 1000) - timestamp_ms) if timestamp_ms else -1
+receipt_age_ms = max(0, int(time.time() * 1000) - timestamp_ms) if timestamp_ms else -1
+sensor_latency = data.get("latency_ms")
+sensor_latency_ms = (
+    max(0.0, float(sensor_latency))
+    if isinstance(sensor_latency, (int, float))
+    and not isinstance(sensor_latency, bool)
+    and math.isfinite(float(sensor_latency))
+    else 0.0
+)
+age_ms = (
+    int(math.ceil(receipt_age_ms + sensor_latency_ms))
+    if receipt_age_ms >= 0
+    else -1
+)
 roi = data.get("roi_confidence") if isinstance(data.get("roi_confidence"), dict) else {}
 low_hazards = data.get("low_hazard_directions") if isinstance(data.get("low_hazard_directions"), list) else []
 fresh = timestamp_ms > 0 and age_ms <= max_age_ms and not bool(data.get("stale", False))
@@ -83,6 +97,7 @@ print(
     "summary_health="
     + ("ok" if fresh else "stale")
     + f" age_ms={age_ms} stale_ms={max_age_ms}"
+    + f" receipt_age_ms={receipt_age_ms} sensor_latency_ms={sensor_latency_ms:.1f}"
     + f" stale_reasons={data.get('stale_reasons')}"
     + f" front_m={data.get('front_clearance_m')} left_m={data.get('left_clearance_m')} right_m={data.get('right_clearance_m')}"
     + f" low_hazards={low_hazards}"

@@ -110,6 +110,8 @@ def localized_world(*, timestamp_ms: int = 1000, navigation_allowed: bool = True
             },
             "local_obstacle": {
                 "source": "lidar_pointcloud",
+                "calibration_verified": True,
+                "calibration_id": "test-calibration",
                 "stale": False,
                 "age_ms": 100,
                 "recommended_action": "normal",

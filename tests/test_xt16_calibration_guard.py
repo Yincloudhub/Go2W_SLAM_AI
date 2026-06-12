@@ -24,6 +24,14 @@ class Xt16CalibrationGuardTests(unittest.TestCase):
         record = copy.deepcopy(self.record)
         record["status"] = "verified"
         record["calibration_id"] = "xt16-field-20260609"
+        record["verified_at"] = "2026-06-12T15:00:00+08:00"
+        record["verified_by"] = "field-operator"
+        record["evidence"]["completed_stationary_measured_scenes"] = 5
+        record["evidence"]["artifact_paths"] = [
+            f"artifacts/field_acceptance/xt16_scene_{index}.json"
+            for index in range(1, 6)
+        ]
+        record["evidence"]["max_abs_error_m"] = 0.08
         return record
 
     def test_pending_record_cannot_enable_calibrated_mode(self) -> None:
@@ -47,6 +55,15 @@ class Xt16CalibrationGuardTests(unittest.TestCase):
 
         self.assertTrue(ok, reason)
         self.assertEqual(calibration_id, "xt16-field-20260609")
+
+    def test_verified_record_requires_complete_field_evidence(self) -> None:
+        record = self.verified_record()
+        record["evidence"]["completed_stationary_measured_scenes"] = 4
+
+        ok, reason, _ = validate_record(record, self.environment)
+
+        self.assertFalse(ok)
+        self.assertIn("incomplete measured scenes", reason)
 
 
 if __name__ == "__main__":

@@ -142,7 +142,10 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
         summary.timestamp_ms = j.value("timestamp_ms", int64_t{0});
         summary.frame_id = j.value("frame_id", "camera_depth_optical_frame");
         summary.source = j.value("source", "unverified");
-        const auto parameters = j.value("parameters", nlohmann::json::object());
+        const auto producer_summary = j.value("summary", nlohmann::json::object());
+        const auto parameters = j.contains("parameters") && j.at("parameters").is_object()
+            ? j.at("parameters")
+            : producer_summary;
         summary.calibration_verified = parameters.value("calibrated", false);
         summary.calibration_id = stringOr(parameters, "calibration_id", "");
         summary.range_m = numberOr(j, "range_m", 6.0);
@@ -173,11 +176,22 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
         summary.low_hazard_left_confidence = numberOr(low_roi, "left", 0.0);
         summary.low_hazard_right_confidence = numberOr(low_roi, "right", 0.0);
         summary.low_hazard_rear_confidence = numberOr(low_roi, "rear", 0.0);
-        summary.age_ms = summary.timestamp_ms > 0 ? wallClockNowMs() - summary.timestamp_ms : -1;
+        summary.latency_ms = numberOr(j, "latency_ms", -1.0);
+        const int64_t receipt_age_ms =
+            summary.timestamp_ms > 0 ? wallClockNowMs() - summary.timestamp_ms : -1;
+        if (receipt_age_ms >= 0) {
+            const double sensor_latency_ms =
+                knownClearance(summary.latency_ms) ? summary.latency_ms : 0.0;
+            summary.age_ms = static_cast<int64_t>(
+                std::ceil(static_cast<double>(receipt_age_ms) + sensor_latency_ms));
+        } else {
+            summary.age_ms = receipt_age_ms;
+        }
         const bool has_required_clearance =
             knownClearance(summary.front_clearance_m) &&
             knownClearance(summary.left_clearance_m) &&
-            knownClearance(summary.right_clearance_m);
+            knownClearance(summary.right_clearance_m) &&
+            knownClearance(summary.rear_clearance_m);
         const bool lidar_calibration_valid =
             summary.source != "lidar_pointcloud" ||
             (summary.calibration_verified && !summary.calibration_id.empty());

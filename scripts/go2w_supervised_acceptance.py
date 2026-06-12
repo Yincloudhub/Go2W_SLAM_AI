@@ -725,7 +725,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--interval-s", type=float, default=1.0)
     parser.add_argument("--relocation-settle-s", type=float, default=3.0)
     parser.add_argument("--max-pose-age-ms", type=float, default=500.0)
-    parser.add_argument("--max-obstacle-age-ms", type=float, default=1500.0)
+    parser.add_argument("--max-obstacle-age-ms", type=float, default=1000.0)
     parser.add_argument("--nav-speed-mps", type=float, default=0.1)
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY))
     parser.add_argument("--map-id", default="go2w_real_site")

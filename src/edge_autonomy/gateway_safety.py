@@ -27,7 +27,7 @@ def gateway_allows_navigation(
     world_state_result: dict[str, Any],
     *,
     max_localization_pose_age_ms: float = 500.0,
-    max_obstacle_age_ms: float | None = None,
+    max_obstacle_age_ms: float | None = 1000.0,
     min_roi_confidence: float = 0.15,
     min_clearance_m: float = 0.8,
 ) -> tuple[bool, str]:
@@ -87,6 +87,10 @@ def gateway_allows_navigation(
     source = str(obstacle.get("source") or "")
     if source not in TRUSTED_OBSTACLE_SOURCES:
         return False, f"local_obstacle source is not trusted: {source or 'missing'}"
+    if obstacle.get("calibration_verified") is not True:
+        return False, "trusted local_obstacle calibration is not verified"
+    if not str(obstacle.get("calibration_id") or "").strip():
+        return False, "trusted local_obstacle calibration ID is missing"
     if obstacle.get("stale") is not False:
         return False, "trusted local_obstacle is stale"
     obstacle_age_ms = _finite_number(obstacle.get("age_ms"))

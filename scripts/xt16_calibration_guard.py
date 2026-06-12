@@ -58,6 +58,41 @@ def validate_record(record: Mapping[str, Any], environment: Mapping[str, str]) -
     calibration_id = str(record.get("calibration_id") or "").strip()
     if not calibration_id:
         return False, "verified calibration record has no calibration_id", ""
+    if str(record.get("sensor") or "").strip() != "XT16":
+        return False, "verified calibration record is not for XT16", ""
+    if not str(record.get("sensor_serial") or "").strip():
+        return False, "verified calibration record has no sensor_serial", ""
+    if not str(record.get("verified_at") or "").strip():
+        return False, "verified calibration record has no verified_at", ""
+    if not str(record.get("verified_by") or "").strip():
+        return False, "verified calibration record has no verified_by", ""
+    evidence = record.get("evidence")
+    if not isinstance(evidence, Mapping):
+        return False, "verified calibration evidence is missing", ""
+    try:
+        required_scenes = int(evidence.get("required_stationary_measured_scenes") or 0)
+        completed_scenes = int(evidence.get("completed_stationary_measured_scenes") or 0)
+        max_abs_error_m = float(evidence.get("max_abs_error_m"))
+        acceptance_max_abs_error_m = float(evidence.get("acceptance_max_abs_error_m"))
+    except (TypeError, ValueError):
+        return False, "verified calibration evidence metrics are invalid", ""
+    if required_scenes < 3 or completed_scenes < required_scenes:
+        return False, "verified calibration evidence has incomplete measured scenes", ""
+    artifact_paths = evidence.get("artifact_paths")
+    if (
+        not isinstance(artifact_paths, list)
+        or len(artifact_paths) < required_scenes
+        or any(not str(path).strip() for path in artifact_paths)
+    ):
+        return False, "verified calibration evidence artifacts are incomplete", ""
+    if (
+        not math.isfinite(max_abs_error_m)
+        or not math.isfinite(acceptance_max_abs_error_m)
+        or acceptance_max_abs_error_m <= 0
+        or max_abs_error_m < 0
+        or max_abs_error_m > acceptance_max_abs_error_m
+    ):
+        return False, "verified calibration evidence exceeds accepted error", ""
     parameters = record.get("parameters")
     if not isinstance(parameters, Mapping):
         return False, "calibration parameters are missing", ""

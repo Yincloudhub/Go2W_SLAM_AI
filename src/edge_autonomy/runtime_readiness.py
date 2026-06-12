@@ -97,7 +97,25 @@ def _perception_readiness(
     source = str(obstacle.get("source") or "")
     stale = bool(obstacle.get("stale", True))
     timestamp_ms = int(obstacle.get("timestamp_ms") or 0)
-    age_ms = max(0, int(time.time() * 1000) - timestamp_ms) if timestamp_ms > 0 else obstacle.get("age_ms")
+    receipt_age_ms = (
+        max(0, int(time.time() * 1000) - timestamp_ms)
+        if timestamp_ms > 0
+        else obstacle.get("age_ms")
+    )
+    sensor_latency = obstacle.get("latency_ms")
+    sensor_latency_ms = (
+        max(0.0, float(sensor_latency))
+        if isinstance(sensor_latency, (int, float))
+        and not isinstance(sensor_latency, bool)
+        and math.isfinite(float(sensor_latency))
+        else 0.0
+    )
+    age_ms = (
+        float(receipt_age_ms) + sensor_latency_ms
+        if isinstance(receipt_age_ms, (int, float))
+        and not isinstance(receipt_age_ms, bool)
+        else receipt_age_ms
+    )
     producer_summary = obstacle.get("summary") if isinstance(obstacle.get("summary"), dict) else {}
     calibration_id = str(producer_summary.get("calibration_id") or "").strip()
     calibrated = producer_summary.get("calibrated") is True and bool(calibration_id)
@@ -105,6 +123,8 @@ def _perception_readiness(
         "source": source,
         "stale": stale,
         "age_ms": age_ms,
+        "receipt_age_ms": receipt_age_ms,
+        "sensor_latency_ms": sensor_latency_ms,
         "calibrated": calibrated,
         "calibration_id": calibration_id or None,
         "recommended_action": obstacle.get("recommended_action"),
@@ -134,7 +154,7 @@ def assess_runtime_readiness(
     lidar_summary: dict[str, Any] | None = None,
     llm_configured: bool = False,
     max_localization_pose_age_ms: float = 500.0,
-    max_perception_age_ms: int = 1500,
+    max_perception_age_ms: int = 1000,
 ) -> dict[str, Any]:
     response = world_state_result if isinstance(world_state_result, dict) else {}
     world = response.get("world_state")
@@ -154,6 +174,7 @@ def assess_runtime_readiness(
         navigation_ready, navigation_reason = gateway_allows_navigation(
             response,
             max_localization_pose_age_ms=max_localization_pose_age_ms,
+            max_obstacle_age_ms=max_perception_age_ms,
         )
     else:
         navigation_ready, navigation_reason = False, "gateway world state is unavailable"

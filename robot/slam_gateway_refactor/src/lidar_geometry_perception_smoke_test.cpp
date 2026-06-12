@@ -38,7 +38,8 @@ void writeSummary(
     double left_confidence,
     double right_confidence,
     bool calibrated = true,
-    const char* calibration_id = "xt16-smoke-verified")
+    const char* calibration_id = "xt16-smoke-verified",
+    double latency_ms = -1.0)
 {
     nlohmann::json summary;
     summary["timestamp_ms"] = slam_gateway::wallClockNowMs();
@@ -50,6 +51,7 @@ void writeSummary(
         };
     }
     summary["stale"] = stale;
+    if (latency_ms >= 0.0) summary["latency_ms"] = latency_ms;
     summary["confidence"] = 0.9;
     summary["front_clearance_m"] = front;
     summary["left_clearance_m"] = left;
@@ -97,6 +99,55 @@ int main()
     require(
         missing_calibration_id.stale,
         "XT16 summary without a verified calibration ID must fail closed");
+
+    writeSummary(
+        lidar_path,
+        "lidar_pointcloud",
+        false,
+        2.0,
+        2.0,
+        2.0,
+        0.8,
+        0.7,
+        0.6,
+        true,
+        "xt16-smoke-verified",
+        1500.0);
+    const auto delayed_lidar = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(delayed_lidar.stale, "sensor latency must count toward XT16 age");
+    require(delayed_lidar.age_ms >= 1500, "effective XT16 age must include sensor latency");
+
+    nlohmann::json python_contract;
+    python_contract["timestamp_ms"] = slam_gateway::wallClockNowMs();
+    python_contract["source"] = "lidar_pointcloud";
+    python_contract["summary"] = {
+        {"calibrated", true},
+        {"calibration_id", "python-producer-contract"}
+    };
+    python_contract["stale"] = false;
+    python_contract["front_clearance_m"] = 2.0;
+    python_contract["left_clearance_m"] = 2.0;
+    python_contract["right_clearance_m"] = 2.0;
+    python_contract["rear_clearance_m"] = 4.0;
+    python_contract["roi_confidence"] = {
+        {"front", 0.8},
+        {"left", 0.7},
+        {"right", 0.6}
+    };
+    std::ofstream(lidar_path) << python_contract.dump();
+    const auto nested_calibration = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(!nested_calibration.stale, "Python producer calibration contract must be accepted");
+    require(
+        nested_calibration.calibration_id == "python-producer-contract",
+        "nested Python calibration ID must be preserved");
 
     writeSummary(lidar_path, "lidar_pointcloud", false, 2.0, 2.0, 2.0, 0.8, 0.7, 0.6);
     writeSummary(stereo_path, "stereo_depth", false, 0.6, 3.0, 1.0, 0.95, 0.9, 0.85);

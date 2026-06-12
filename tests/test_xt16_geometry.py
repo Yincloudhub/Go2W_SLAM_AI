@@ -54,6 +54,8 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertFalse(summary["stale"])
         self.assertEqual(summary["source"], "lidar_pointcloud")
         self.assertEqual(summary["schema_version"], 2)
+        self.assertTrue(summary["parameters"]["calibrated"])
+        self.assertEqual(summary["parameters"]["calibration_id"], "test-calibration")
         self.assertLess(summary["front_clearance_m"], 0.8)
         self.assertIn("front", summary["blocked_directions"])
         self.assertEqual(summary["recommended_action"], "pause")
@@ -103,9 +105,10 @@ class Xt16GeometryTests(unittest.TestCase):
         )
 
         self.assertTrue(summary["stale"])
-        self.assertIn("missing_required_roi:left,right", summary["stale_reasons"])
+        self.assertIn("missing_required_roi:left,right,rear", summary["stale_reasons"])
         self.assertIsNone(summary["left_clearance_m"])
         self.assertIsNone(summary["right_clearance_m"])
+        self.assertIsNone(summary["rear_clearance_m"])
 
     def test_offline_script_writes_summary_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -226,6 +229,7 @@ class Xt16GeometryTests(unittest.TestCase):
         points.extend(repeated_point(0.0, -4.0))
         points.extend(repeated_point(2.0, 0.0))
         points.extend(repeated_point(0.0, 2.0))
+        points.extend(repeated_point(-7.0, 0.0))
         points.extend(repeated_point(8.0, 8.0, z=2.0, count=1000))
 
         summary = build_xt16_geometry_summary(
@@ -236,6 +240,27 @@ class Xt16GeometryTests(unittest.TestCase):
 
         self.assertEqual(summary["right_clearance_m"], 6.0)
         self.assertIn("right", summary["summary"]["body_no_return_directions"])
+
+    def test_unrelated_dense_cloud_cannot_clear_missing_direction(self) -> None:
+        points: list[tuple[float, float, float]] = []
+        points.extend(repeated_point(0.0, -4.0))
+        points.extend(repeated_point(2.0, 0.0))
+        points.extend(repeated_point(0.0, 2.0))
+        points.extend(repeated_point(8.0, 8.0, z=2.0, count=1000))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="test-calibration",
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertIsNone(summary["right_clearance_m"])
+        self.assertTrue(summary["stale"])
+        self.assertIn("missing_required_roi:right", summary["stale_reasons"])
 
 
 if __name__ == "__main__":

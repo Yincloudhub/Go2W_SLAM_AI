@@ -34,8 +34,11 @@
   },
   "evidence": {
     "field_record": "docs/go2w_field_acceptance_20260609.md",
-    "required_stationary_measured_scenes": 3,
+    "required_stationary_measured_scenes": 5,
     "completed_stationary_measured_scenes": 0,
-    "notes": "Do not promote to verified until physical body-edge clearances are measured and compared in at least three stationary scenes."
+    "artifact_paths": [],
+    "acceptance_max_abs_error_m": 0.15,
+    "max_abs_error_m": null,
+    "notes": "Do not promote to verified until physical body-edge clearances are measured and compared in five stationary scenes."
   }
 }

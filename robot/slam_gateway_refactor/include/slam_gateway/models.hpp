@@ -236,6 +236,7 @@ struct LocalObstacleSummary {
     double low_hazard_left_confidence{0.0};
     double low_hazard_right_confidence{0.0};
     double low_hazard_rear_confidence{0.0};
+    double latency_ms{-1.0};
     int64_t age_ms{-1};
     bool stale{true};
     std::vector<std::string> blocked_directions;
@@ -289,6 +290,7 @@ struct LocalObstacleSummary {
                 {"right", low_hazard_right_confidence},
                 {"rear", low_hazard_rear_confidence}
             }},
+            {"latency_ms", std::isfinite(latency_ms) && latency_ms >= 0.0 ? nlohmann::json(latency_ms) : nlohmann::json(nullptr)},
             {"age_ms", age_ms},
             {"stale", stale},
             {"blocked_directions", blocked_directions},

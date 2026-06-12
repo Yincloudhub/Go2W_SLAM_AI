@@ -132,6 +132,7 @@ def header_latency_ms(msg: Any, received_ms: int) -> float | None:
 def run_ros(args: argparse.Namespace) -> int:
     try:
         import rclpy
+        from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
         from sensor_msgs.msg import PointCloud2
         from sensor_msgs_py import point_cloud2
     except Exception as exc:  # pragma: no cover - depends on robot ROS2 env.
@@ -168,7 +169,13 @@ def run_ros(args: argparse.Namespace) -> int:
         if args.once:
             raise KeyboardInterrupt
 
-    node.create_subscription(PointCloud2, args.topic, on_cloud, 10)
+    pointcloud_qos = QoSProfile(
+        history=HistoryPolicy.KEEP_LAST,
+        depth=1,
+        reliability=ReliabilityPolicy.BEST_EFFORT,
+        durability=DurabilityPolicy.VOLATILE,
+    )
+    node.create_subscription(PointCloud2, args.topic, on_cloud, pointcloud_qos)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
