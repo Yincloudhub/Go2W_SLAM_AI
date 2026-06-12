@@ -63,7 +63,7 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("commandInFlight", web.INDEX_HTML)
         self.assertIn("语义视觉未启动或离线，不参与运动决策", web.INDEX_HTML)
         self.assertIn("近场运动许可仍由实时深度摘要与 SLAM 安全门决定", web.INDEX_HTML)
-        self.assertIn("运动安全门", web.INDEX_HTML)
+        self.assertIn("前视深度诊断", web.INDEX_HTML)
         self.assertIn("XT16 四向净空", web.INDEX_HTML)
         self.assertIn("真实执行开关", web.INDEX_HTML)
         self.assertIn("安全导航许可", web.INDEX_HTML)
@@ -342,7 +342,7 @@ class OperatorWebTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 0)
         self.assertTrue(state.execute_enabled)
 
-    def test_execute_on_is_blocked_when_live_localization_is_not_ready(self):
+    def test_execute_on_only_arms_when_live_localization_is_not_ready(self):
         class FakeApp(web.OperatorWebApp):
             def status(self, *, force=False):
                 return {"summary": {"loc": "false", "safety": "slam_health_failed"}}
@@ -359,15 +359,10 @@ class OperatorWebTests(unittest.TestCase):
                 )
             )
             result = app.command("/execute on", confirmed=True)
-            self.assertFalse(result["accepted"])
-            self.assertFalse(app.state.execute_enabled)
-            self.assertIn("localization", result["stderr"])
+            self.assertTrue(result["accepted"])
+            self.assertTrue(app.state.execute_enabled)
 
-    def test_execute_on_requires_fresh_stereo_motion_guard(self):
-        class FakeApp(web.OperatorWebApp):
-            def status(self, *, force=False):
-                return {"summary": {"loc": "true", "safety": "ok"}}
-
+    def test_execute_on_does_not_depend_on_stereo_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             summary_path = root / "artifacts" / "stereo_depth_summary.json"
@@ -378,13 +373,14 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
-                stereo_motion_guard_required=True,
             )
-            app = FakeApp(config)
+            app = web.OperatorWebApp(config)
 
             missing = app.command("/execute on", confirmed=True)
-            self.assertFalse(missing["accepted"])
-            self.assertIn("offline_or_not_started", missing["stderr"])
+            self.assertTrue(missing["accepted"])
+            self.assertFalse(missing["stereo_diagnostic"]["healthy"])
+            self.assertEqual(missing["stereo_diagnostic"]["reason"], "stereo_depth_offline_or_not_started")
+            app.command("/execute off")
 
             summary_path.write_text(
                 json.dumps(
@@ -408,9 +404,13 @@ class OperatorWebTests(unittest.TestCase):
             data["timestamp_ms"] = int(time.time() * 1000)
             data["right_clearance_m"] = 0.6
             summary_path.write_text(json.dumps(data), encoding="utf-8")
-            blocked = app.command("/execute on", confirmed=True)
-            self.assertFalse(blocked["accepted"])
-            self.assertIn("right_obstacle_too_close", blocked["stderr"])
+            armed = app.command("/execute on", confirmed=True)
+            self.assertTrue(armed["accepted"])
+            self.assertFalse(armed["stereo_diagnostic"]["healthy"])
+            self.assertEqual(
+                armed["stereo_diagnostic"]["reason"],
+                "stereo_depth_right_obstacle_too_close",
+            )
 
     def test_execute_on_does_not_require_all_around_clearance(self):
         class FakeApp(web.OperatorWebApp):
@@ -433,7 +433,6 @@ class OperatorWebTests(unittest.TestCase):
 
             self.assertTrue(result["accepted"])
             self.assertTrue(app.state.execute_enabled)
-            self.assertFalse(app.config.stereo_motion_guard_required)
 
     def test_relocate_is_blocked_when_localization_is_already_healthy(self):
         class FakeApp(web.OperatorWebApp):

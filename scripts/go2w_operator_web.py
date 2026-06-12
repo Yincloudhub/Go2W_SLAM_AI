@@ -284,10 +284,9 @@ class WebConfig:
     lidar_stale_ms: int = 1000
     stereo_summary_path: Path = Path("artifacts/stereo_depth_summary.json")
     stereo_stale_ms: int = 5000
-    stereo_motion_guard_required: bool = False
-    stereo_motion_guard_stale_ms: int = 1000
-    stereo_motion_guard_min_roi_confidence: float = 0.15
-    stereo_motion_guard_min_clearance_m: float = 0.8
+    stereo_diagnostic_stale_ms: int = 1000
+    stereo_diagnostic_min_roi_confidence: float = 0.15
+    stereo_diagnostic_min_clearance_m: float = 0.8
     semantic_summary_path: Path = Path("artifacts/vision_semantic_summary.json")
     semantic_stale_ms: int = 3000
     edge_summary_path: Path = Path("artifacts/edge_perception_summary.json")
@@ -514,7 +513,7 @@ class OperatorWebApp:
         result = self.run_panel_session(["/quit"])
         result["lidar_summary"] = self.lidar_summary()
         result["stereo_summary"] = self.stereo_summary()
-        result["stereo_motion_guard"] = self.stereo_motion_guard()
+        result["stereo_diagnostic"] = self.stereo_diagnostic()
         result["semantic_summary"] = self.semantic_summary()
         result["edge_summary"] = self.edge_summary()
         result["collection_status"] = self.collection_status()
@@ -532,40 +531,6 @@ class OperatorWebApp:
         line = trim_line(line)
         if not line:
             return self.status()
-
-        if line == "/execute on":
-            status = self.status(force=True)
-            summary = status.get("summary", {}) if isinstance(status.get("summary"), dict) else {}
-            if summary.get("loc") != "true":
-                return {
-                    "handled": True,
-                    "accepted": False,
-                    "exit_code": 3,
-                    "stdout": "",
-                    "stderr": "execute on blocked: localization must be ready.\n",
-                    "summary": summary,
-                    "lidar_summary": self.lidar_summary(),
-                    "stereo_summary": self.stereo_summary(),
-                    "semantic_summary": self.semantic_summary(),
-                    "edge_summary": self.edge_summary(),
-                    "state": self.state.snapshot(),
-                }
-            stereo_guard = self.stereo_motion_guard()
-            if self.config.stereo_motion_guard_required and not stereo_guard["allowed"]:
-                return {
-                    "handled": True,
-                    "accepted": False,
-                    "exit_code": 3,
-                    "stdout": "",
-                    "stderr": f"execute on blocked: stereo motion guard rejected execution: {stereo_guard['reason']}.\n",
-                    "summary": summary,
-                    "lidar_summary": self.lidar_summary(),
-                    "stereo_summary": self.stereo_summary(),
-                    "stereo_motion_guard": stereo_guard,
-                    "semantic_summary": self.semantic_summary(),
-                    "edge_summary": self.edge_summary(),
-                    "state": self.state.snapshot(),
-                }
 
         if line.startswith("/relocate "):
             now = time.monotonic()
@@ -653,7 +618,7 @@ class OperatorWebApp:
                 local["summary"] = {}
                 local["lidar_summary"] = self.lidar_summary()
                 local["stereo_summary"] = self.stereo_summary()
-                local["stereo_motion_guard"] = self.stereo_motion_guard()
+                local["stereo_diagnostic"] = self.stereo_diagnostic()
                 local["semantic_summary"] = self.semantic_summary()
                 local["edge_summary"] = self.edge_summary()
                 self.state.remember(line, local)
@@ -665,7 +630,7 @@ class OperatorWebApp:
         result = self.run_panel_session([line, "/quit"])
         result["lidar_summary"] = self.lidar_summary()
         result["stereo_summary"] = self.stereo_summary()
-        result["stereo_motion_guard"] = self.stereo_motion_guard()
+        result["stereo_diagnostic"] = self.stereo_diagnostic()
         result["semantic_summary"] = self.semantic_summary()
         result["edge_summary"] = self.edge_summary()
         result["capabilities"] = self.capabilities()
@@ -1056,18 +1021,16 @@ class OperatorWebApp:
         except Exception as exc:  # noqa: BLE001
             return {"available": False, "status": "invalid", "path": str(path), "error": str(exc)}
 
-    def stereo_motion_guard(self) -> Dict[str, Any]:
-        if not self.config.stereo_motion_guard_required:
-            return {"allowed": True, "reason": "disabled_for_controlled_diagnostic"}
+    def stereo_diagnostic(self) -> Dict[str, Any]:
         summary = self.stereo_summary()
         if not summary.get("available") or not isinstance(summary.get("data"), dict):
-            return {"allowed": False, "reason": "stereo_depth_offline_or_not_started"}
+            return {"healthy": False, "reason": "stereo_depth_offline_or_not_started"}
         data = summary["data"]
         if data.get("source") != "stereo_depth":
-            return {"allowed": False, "reason": "stereo_depth_source_is_not_trusted"}
+            return {"healthy": False, "reason": "stereo_depth_source_is_not_trusted"}
         age_ms = summary.get("age_ms")
-        if bool(data.get("stale", False)) or not isinstance(age_ms, int) or age_ms > self.config.stereo_motion_guard_stale_ms:
-            return {"allowed": False, "reason": "stereo_depth_not_fresh", "age_ms": age_ms}
+        if bool(data.get("stale", False)) or not isinstance(age_ms, int) or age_ms > self.config.stereo_diagnostic_stale_ms:
+            return {"healthy": False, "reason": "stereo_depth_not_fresh", "age_ms": age_ms}
         roi = data.get("roi_confidence") if isinstance(data.get("roi_confidence"), dict) else {}
         clearances: Dict[str, float] = {}
         roi_confidence: Dict[str, float] = {}
@@ -1075,25 +1038,25 @@ class OperatorWebApp:
             clearance = data.get(f"{direction}_clearance_m")
             confidence = roi.get(direction)
             if not isinstance(clearance, (int, float)) or isinstance(clearance, bool):
-                return {"allowed": False, "reason": f"stereo_depth_missing_{direction}_clearance"}
+                return {"healthy": False, "reason": f"stereo_depth_missing_{direction}_clearance"}
             if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
-                return {"allowed": False, "reason": f"stereo_depth_missing_{direction}_roi_confidence"}
+                return {"healthy": False, "reason": f"stereo_depth_missing_{direction}_roi_confidence"}
             clearances[direction] = float(clearance)
             roi_confidence[direction] = float(confidence)
-            if roi_confidence[direction] < self.config.stereo_motion_guard_min_roi_confidence:
+            if roi_confidence[direction] < self.config.stereo_diagnostic_min_roi_confidence:
                 return {
-                    "allowed": False,
+                    "healthy": False,
                     "reason": f"stereo_depth_{direction}_roi_confidence_too_low",
                     "roi_confidence": roi_confidence,
                 }
-            if clearances[direction] < self.config.stereo_motion_guard_min_clearance_m:
+            if clearances[direction] < self.config.stereo_diagnostic_min_clearance_m:
                 return {
-                    "allowed": False,
+                    "healthy": False,
                     "reason": f"stereo_depth_{direction}_obstacle_too_close",
                     "clearance_m": clearances,
                 }
         return {
-            "allowed": True,
+            "healthy": True,
             "reason": "fresh_stereo_depth_roi_clearance",
             "age_ms": age_ms,
             "clearance_m": clearances,
@@ -1835,10 +1798,21 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--lidar-stale-ms", type=int, default=int(env.get("GO2W_LIDAR_STALE_MS", "1000")))
     parser.add_argument("--stereo-summary-path", default=env.get("GO2W_STEREO_SUMMARY_PATH", "artifacts/stereo_depth_summary.json"))
     parser.add_argument("--stereo-stale-ms", type=int, default=int(env.get("GO2W_STEREO_STALE_MS", "5000")))
-    parser.add_argument("--stereo-motion-guard-required", action="store_true", default=truthy(env.get("GO2W_STEREO_MOTION_GUARD_REQUIRED", "0")))
-    parser.add_argument("--stereo-motion-guard-stale-ms", type=int, default=int(env.get("GO2W_STEREO_SAFETY_STALE_MS", "1000")))
-    parser.add_argument("--stereo-motion-guard-min-roi-confidence", type=float, default=float(env.get("GO2W_STEREO_MOTION_GUARD_MIN_ROI_CONFIDENCE", "0.15")))
-    parser.add_argument("--stereo-motion-guard-min-clearance-m", type=float, default=float(env.get("GO2W_STEREO_MOTION_GUARD_MIN_CLEARANCE_M", "0.8")))
+    parser.add_argument(
+        "--stereo-diagnostic-stale-ms",
+        type=int,
+        default=int(env.get("GO2W_STEREO_DIAGNOSTIC_STALE_MS", env.get("GO2W_STEREO_SAFETY_STALE_MS", "1000"))),
+    )
+    parser.add_argument(
+        "--stereo-diagnostic-min-roi-confidence",
+        type=float,
+        default=float(env.get("GO2W_STEREO_DIAGNOSTIC_MIN_ROI_CONFIDENCE", env.get("GO2W_STEREO_MOTION_GUARD_MIN_ROI_CONFIDENCE", "0.15"))),
+    )
+    parser.add_argument(
+        "--stereo-diagnostic-min-clearance-m",
+        type=float,
+        default=float(env.get("GO2W_STEREO_DIAGNOSTIC_MIN_CLEARANCE_M", env.get("GO2W_STEREO_MOTION_GUARD_MIN_CLEARANCE_M", "0.8"))),
+    )
     parser.add_argument("--semantic-summary-path", default=env.get("GO2W_SEMANTIC_SUMMARY_PATH", "artifacts/vision_semantic_summary.json"))
     parser.add_argument("--semantic-stale-ms", type=int, default=int(env.get("GO2W_SEMANTIC_STALE_MS", "3000")))
     parser.add_argument("--edge-summary-path", default=env.get("GO2W_EDGE_SUMMARY_PATH", "artifacts/edge_perception_summary.json"))
@@ -1878,10 +1852,9 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         lidar_stale_ms=max(1, args.lidar_stale_ms),
         stereo_summary_path=Path(args.stereo_summary_path).expanduser(),
         stereo_stale_ms=max(1, args.stereo_stale_ms),
-        stereo_motion_guard_required=args.stereo_motion_guard_required,
-        stereo_motion_guard_stale_ms=max(1, args.stereo_motion_guard_stale_ms),
-        stereo_motion_guard_min_roi_confidence=max(0.0, args.stereo_motion_guard_min_roi_confidence),
-        stereo_motion_guard_min_clearance_m=max(0.0, args.stereo_motion_guard_min_clearance_m),
+        stereo_diagnostic_stale_ms=max(1, args.stereo_diagnostic_stale_ms),
+        stereo_diagnostic_min_roi_confidence=max(0.0, args.stereo_diagnostic_min_roi_confidence),
+        stereo_diagnostic_min_clearance_m=max(0.0, args.stereo_diagnostic_min_clearance_m),
         semantic_summary_path=Path(args.semantic_summary_path).expanduser(),
         semantic_stale_ms=max(1, args.semantic_stale_ms),
         edge_summary_path=Path(args.edge_summary_path).expanduser(),

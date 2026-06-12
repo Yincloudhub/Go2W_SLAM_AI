@@ -96,6 +96,7 @@
       border-radius: 7px;
       background: #fff;
     }
+    .fact { color: var(--ink); }
     .fact strong { display: block; margin-bottom: 5px; color: #34495a; }
     .modules { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .module { min-height: 178px; }
@@ -106,7 +107,7 @@
     .map { background: var(--violet-soft); border-color: #cfc2e5; }
     .flow {
       display: grid;
-      grid-template-columns: repeat(7, minmax(120px, 1fr));
+      grid-template-columns: repeat(8, minmax(120px, 1fr));
       gap: 22px;
       align-items: stretch;
       overflow-x: auto;
@@ -160,7 +161,7 @@
     footer { padding: 24px 0 36px; color: var(--muted); }
     @media (max-width: 980px) {
       .facts, .modules, .readiness { grid-template-columns: 1fr 1fr; }
-      .flow { grid-template-columns: repeat(7, 160px); }
+      .flow { grid-template-columns: repeat(8, 160px); }
     }
     @media (max-width: 640px) {
       .facts, .modules, .readiness { grid-template-columns: 1fr; }
@@ -173,7 +174,7 @@
   <header>
     <div class="wrap">
       <h1>GO2W 当前代码架构与安全闭环</h1>
-      <p>当前状态基线：2026-06-08。本文描述真实运行路径，不把历史目录、演示地图或离线规划误写成机器人主链路。</p>
+      <p>当前状态基线：2026-06-12。本文描述真实运行路径，不把历史目录、演示地图或离线规划误写成机器人主链路。</p>
       <div class="facts">
         <div class="fact"><strong>唯一主仓库</strong><code>/home/unitree/Go2W_SLAM_AI</code></div>
         <div class="fact"><strong>唯一实机 registry</strong><code>configs/maps/go2w_real_site_map_registry.json</code></div>
@@ -202,12 +203,13 @@
           <div class="node cpp"><strong>SemanticRouter</strong>别名匹配、注册点解析</div>
           <div class="node cpp"><strong>LLM fallback</strong>仅处理模糊意图和受限计划</div>
           <div class="node cpp"><strong>TaskQueueValidator</strong>动作、目标和队列结构校验</div>
-          <div class="node cpp"><strong>SafetyGate</strong>定位、地图、感知和网关安全</div>
-          <div class="node gateway"><strong>QueueExecutor</strong>运行期 watchdog、到达和暂停</div>
-          <div class="node gateway"><strong>Unitree Gateway</strong>SLAM / SDK 服务调用</div>
+          <div class="node cpp"><strong>QueueExecutor</strong>队列、会话、超时和任务反馈</div>
+          <div class="node gateway"><strong>Gateway Target Authorizer</strong>地图、目标、位姿和速度授权</div>
+          <div class="node gateway"><strong>Gateway SafetySupervisor</strong>唯一运动安全裁决与运行期 watchdog</div>
+          <div class="node gateway"><strong>Unitree SLAM / Chassis</strong>执行 relocate / navigate / pause</div>
         </div>
         <div class="note">
-          主链路以 C++ 为实时控制核心。Python 保留地图工具、启动监督、离线检查和兼容闭环，但不能绕过同一组确定性安全规则。
+          UI 解锁只表示操作员允许尝试执行。Python 和 C++ 主机侧不再复制定位、点云和净空阈值；机器人端 Gateway 是唯一运动安全权威。
         </div>
       </div>
     </section>
@@ -222,8 +224,8 @@
             <ul>
               <li>用户入口和世界状态展示</li>
               <li>语义路由与任务队列</li>
-              <li>执行前和运行期安全门</li>
-              <li>到达后确认暂停</li>
+              <li>动作、目标和队列结构校验</li>
+              <li>状态展示和任务反馈</li>
             </ul>
           </article>
           <article class="module python">
@@ -233,7 +235,7 @@
               <li>启动和只读验收</li>
               <li>地图 registry 工具</li>
               <li>LLM 本地推理适配</li>
-              <li>安全逻辑镜像与测试</li>
+              <li>Gateway 决策适配与验收测试</li>
             </ul>
           </article>
           <article class="module gateway">
@@ -243,6 +245,7 @@
               <li>读取 SLAM pose 和任务反馈</li>
               <li>严格校验源时间戳与四元数</li>
               <li>融合 XT16 / D435 摘要</li>
+              <li>唯一决定 allow / hold / pause / stop</li>
               <li>调用 relocate / navigate / pause</li>
             </ul>
           </article>
@@ -266,7 +269,8 @@
         <div class="readiness">
           <div class="ready"><strong>services_ready</strong><p>驱动、SLAM 启动脚本和 gateway 查询路径可工作。</p></div>
           <div class="ready"><strong>relocalization_ready</strong><p>允许人工确认的重定位；不要求四周都安全，因为不驱动底盘。</p></div>
-          <div class="ready"><strong>execution_arming_ready</strong><p>定位姿态新鲜有效，可以开启执行模式，但尚不代表可以导航。</p></div>
+          <div class="ready"><strong>execution_enabled</strong><p>操作员已确认允许尝试执行；它与定位和安全状态解耦，不代表可以导航。</p></div>
+          <div class="ready"><strong>execution_arming_ready</strong><p>只读建议状态：定位已就绪。Web 不据此阻断人工解锁。</p></div>
           <div class="ready"><strong>perception_ready</strong><p>XT16 摘要新鲜、正式标定且结构完整。</p></div>
           <div class="ready"><strong>navigation_ready</strong><p>SLAM、定位、感知、网关和当前障碍判断全部允许移动。</p></div>
           <div class="ready"><strong>llm_ready</strong><p>本地或 HTTP LLM 可用。该状态只影响智能交互，不授予运动权限。</p></div>
@@ -278,27 +282,27 @@
       <div class="wrap">
         <h2>4. 安全闭环</h2>
         <div class="flow">
-          <div class="node map"><strong>已注册目标</strong>拒绝未知、禁用或未验证拓扑点</div>
-          <div class="node gateway"><strong>SLAM 定位</strong>pose 字段、四元数、源时间戳有效</div>
-          <div class="node gateway"><strong>XT16 主安全源</strong>未标定或陈旧即导航阻断</div>
-          <div class="node python"><strong>保守融合</strong>双传感器新鲜时按方向取更近障碍</div>
-          <div class="node cpp"><strong>执行凭据</strong>仅认可带 runtime watchdog 的入口</div>
-          <div class="node cpp"><strong>连续监控</strong>运行时重复读取定位与安全状态</div>
-          <div class="node gateway"><strong>暂停闭环</strong>到达、超时或异常都请求暂停</div>
+          <div class="node map"><strong>语义合法性</strong>上层拒绝未知目标、歧义目标和未接线能力</div>
+          <div class="node cpp"><strong>人工解锁</strong>仅表示允许向 Gateway 提交真实任务</div>
+          <div class="node gateway"><strong>目标授权</strong>校验地图、注册点、位姿、速度和会话</div>
+          <div class="node gateway"><strong>实时安全</strong>校验 SLAM、定位、XT16 新鲜度和方向净空</div>
+          <div class="node gateway"><strong>运行期 watchdog</strong>定位或传感器失效立即暂停</div>
+          <div class="node gateway"><strong>统一决策</strong>对外只返回一份 allow / reason / mode</div>
         </div>
         <table>
           <thead><tr><th>场景</th><th>规则</th><th>结果</th></tr></thead>
           <tbody>
             <tr><td>启动后尚未重定位</td><td>服务可用，但定位为 <code>not_started</code></td><td class="status-hold">禁止导航，允许确认重定位</td></tr>
             <tr><td>XT16 未标定或陈旧</td><td>D435 不得覆盖主安全源的失效状态</td><td class="status-hold">导航 fail-closed</td></tr>
-            <tr><td>XT16 与 D435 都新鲜</td><td>前、左、右方向取更近 clearance，并继承对应置信度</td><td>按最保守障碍判断</td></tr>
+            <tr><td>UI 开启真实执行</td><td>只记录人工授权，不在 Web 重算定位或双目阈值</td><td>允许提交任务，由 Gateway 最终裁决</td></tr>
+            <tr><td>D435 在线或离线</td><td>Web 仅显示诊断；Gateway 可在 XT16 基础上保守融合，不能单独授权</td><td>只会收紧，不会绕过 XT16</td></tr>
             <tr><td>LLM 直接给坐标或 API ID</td><td>只接受 registry 中的任务级目标</td><td class="status-hold">拒绝</td></tr>
             <tr><td>运行时定位丢失或 gateway 连续错误</td><td>watchdog 触发暂停并终止队列</td><td class="status-hold">停止后续动作</td></tr>
             <tr><td>到达目标但暂停未被接受</td><td>不能把“到达”单独视为队列成功</td><td class="status-hold">任务失败，等待人工检查</td></tr>
           </tbody>
         </table>
         <div class="note warn">
-          重定位与导航是两种不同权限。重定位只恢复 SLAM 坐标，不要求“周围全部安全”；真正导航仍必须经过完整感知和运行期安全闭环。
+          重定位与导航是两种不同权限。重定位只恢复 SLAM 坐标，不要求“周围全部安全”；真正导航只接受机器人端 Gateway 的最终裁决，主机侧不得再叠加第二套阈值。
         </div>
       </div>
     </section>
@@ -378,7 +382,7 @@
             <tr><td>C. 静止安全验证</td><td>放置和移除前后左右障碍</td><td>clearance、方向和 stale 状态符合实物</td></tr>
             <tr><td>D. 低速单点导航</td><td>0.1 m/s，短距离，人员持急停</td><td>运行期 watchdog 生效，到达后暂停被接受</td></tr>
             <tr><td>E. 故障注入</td><td>依次停止点云、geometry、SLAM 和 gateway</td><td>每项都在约定时间和距离内 fail-closed</td></tr>
-            <tr><td>F. 标定放行</td><td>完成全部监督测试后更新标定状态</td><td>才能设置 <code>GO2W_XT16_GEOMETRY_CALIBRATED=1</code></td></tr>
+            <tr><td>F. 标定放行</td><td>完成全部监督测试后更新标定记录</td><td><code>auto</code> 模式校验记录后自动启用，否则保持未标定</td></tr>
           </tbody>
         </table>
         <pre><code>cd /home/unitree/Go2W_SLAM_AI

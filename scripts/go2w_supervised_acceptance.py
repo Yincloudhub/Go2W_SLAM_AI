@@ -622,7 +622,7 @@ def prepare_navigation_stage(args: argparse.Namespace) -> tuple[int, dict[str, A
         max_localization_pose_age_ms=args.max_pose_age_ms,
         max_perception_age_ms=int(args.max_obstacle_age_ms),
     )
-    navigation_ready, reason = gateway_allows_navigation(response, max_obstacle_age_ms=args.max_obstacle_age_ms)
+    navigation_ready, reason = gateway_allows_navigation(response)
     map_identity = map_identity_check(response, profile)
     ready = (
         processes["ready"]

@@ -46,7 +46,7 @@ class ChassisControllerTests(unittest.TestCase):
         self.assertEqual(result["selected"]["node_id"], "room701")
         self.assertEqual([item["node_id"] for item in result["matches"]], ["room701", "station"])
 
-    def test_preflight_rejects_manual_obstacle_stub(self) -> None:
+    def test_preflight_uses_gateway_authority_without_recomputing_sensor_policy(self) -> None:
         allowed, reason = gateway_allows_navigation(
             {
                 "accepted": True,
@@ -71,8 +71,7 @@ class ChassisControllerTests(unittest.TestCase):
             }
         )
 
-        self.assertFalse(allowed)
-        self.assertIn("not trusted", reason)
+        self.assertTrue(allowed, reason)
 
     def test_gateway_timeout_kills_child_and_fails_deterministically(self) -> None:
         process = MagicMock()

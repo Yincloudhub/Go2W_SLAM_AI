@@ -58,6 +58,8 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         text = (REPO_ROOT / "scripts" / "go2w_xt16_geometry_sidecar.sh").read_text(encoding="utf-8")
         self.assertIn("xt16_calibration_guard.py", text)
         self.assertIn("calibration_rejected", text)
+        self.assertIn('CALIBRATION_REQUESTED="${GO2W_XT16_GEOMETRY_CALIBRATED:-auto}"', text)
+        self.assertIn('xt16_geometry=uncalibrated reason=${calibration_id}', text)
         self.assertIn("extra_args_not_allowed", text)
         self.assertIn("--calibration-id", text)
         self.assertIn('SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-1000}"', text)

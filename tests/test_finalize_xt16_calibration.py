@@ -31,6 +31,11 @@ def artifact(scene: str, *, accepted: bool = True, dirty: bool = False) -> dict:
             "sensor_serial": "SERIAL",
             "parameters": {"range_m": 6.0},
         },
+        "map_identity": {
+            "map_id": "go2w_real_site",
+            "registry_sha256": "b" * 64,
+            "pcd_sha256": "c" * 64,
+        },
         "assessment": {
             "accepted": accepted,
             "thresholds": {"required_samples": 2},
@@ -65,6 +70,19 @@ class FinalizeXt16CalibrationTests(unittest.TestCase):
         self.assertEqual(evidence["completed_stationary_measured_scenes"], 5)
         self.assertEqual(len(evidence["artifact_sha256"]), 5)
         self.assertEqual(evidence["max_abs_error_m"], 0.05)
+        self.assertEqual(evidence["map_id"], "go2w_real_site")
+        self.assertEqual(evidence["registry_sha256"], "b" * 64)
+        self.assertEqual(evidence["pcd_sha256"], "c" * 64)
+
+    def test_different_map_hashes_block_finalization(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            paths = self.write_artifacts(Path(temp))
+            changed = json.loads(paths[0].read_text(encoding="utf-8"))
+            changed["map_identity"]["pcd_sha256"] = "d" * 64
+            paths[0].write_text(json.dumps(changed), encoding="utf-8")
+            reasons, _ = validate_artifacts(paths, record())
+
+        self.assertIn("scene_pcd_hashes_differ", reasons)
 
     def test_rejected_scene_blocks_finalization(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

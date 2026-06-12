@@ -63,6 +63,9 @@ def validate_artifacts(
     reference_parameters = canonical_json(record.get("parameters"))
     expected_serial = str(record.get("sensor_serial") or "").strip()
     git_heads: set[str] = set()
+    map_ids: set[str] = set()
+    registry_hashes: set[str] = set()
+    pcd_hashes: set[str] = set()
     for path, artifact in artifacts:
         if artifact.get("type") != "go2w_xt16_calibration_scene":
             reasons.append(f"wrong_artifact_type:{path}")
@@ -105,6 +108,27 @@ def validate_artifacts(
         if canonical_json(calibration.get("parameters")) != reference_parameters:
             reasons.append(f"calibration_parameters_mismatch:{scene}")
 
+        map_identity = (
+            artifact.get("map_identity")
+            if isinstance(artifact.get("map_identity"), dict)
+            else {}
+        )
+        map_id = str(map_identity.get("map_id") or "").strip()
+        registry_hash = str(map_identity.get("registry_sha256") or "").strip()
+        pcd_hash = str(map_identity.get("pcd_sha256") or "").strip()
+        if not map_id:
+            reasons.append(f"map_id_missing:{scene}")
+        else:
+            map_ids.add(map_id)
+        if len(registry_hash) != 64:
+            reasons.append(f"registry_sha256_missing:{scene}")
+        else:
+            registry_hashes.add(registry_hash)
+        if len(pcd_hash) != 64:
+            reasons.append(f"pcd_sha256_missing:{scene}")
+        else:
+            pcd_hashes.add(pcd_hash)
+
         comparisons = assessment.get("comparisons", {}) if isinstance(assessment, dict) else {}
         if isinstance(comparisons, dict):
             for comparison in comparisons.values():
@@ -119,6 +143,12 @@ def validate_artifacts(
         reasons.append("missing_scenes:" + ",".join(missing_scenes))
     if len(git_heads) > 1:
         reasons.append("scene_git_heads_differ")
+    if len(map_ids) > 1:
+        reasons.append("scene_map_ids_differ")
+    if len(registry_hashes) > 1:
+        reasons.append("scene_registry_hashes_differ")
+    if len(pcd_hashes) > 1:
+        reasons.append("scene_pcd_hashes_differ")
 
     ordered_paths = [
         str(scenes[scene][0])
@@ -137,6 +167,11 @@ def validate_artifacts(
         "artifact_sha256": hashes,
         "max_abs_error_m": round(max_abs_error_m, 6),
         "git_head": next(iter(git_heads)) if len(git_heads) == 1 else None,
+        "map_id": next(iter(map_ids)) if len(map_ids) == 1 else None,
+        "registry_sha256": (
+            next(iter(registry_hashes)) if len(registry_hashes) == 1 else None
+        ),
+        "pcd_sha256": next(iter(pcd_hashes)) if len(pcd_hashes) == 1 else None,
     }
     return sorted(set(reasons)), evidence
 

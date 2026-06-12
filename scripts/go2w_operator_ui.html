@@ -330,7 +330,7 @@
           <div class="metric"><label>安全状态</label><strong id="m-safety">等待</strong></div>
           <div class="metric"><label>双目距离</label><strong id="m-stereo-front">暂无数据</strong></div>
           <div class="metric"><label>双目质量</label><strong id="m-stereo-health">暂无数据</strong></div>
-          <div class="metric"><label>运动安全门</label><strong id="m-motion-guard">等待深度摘要</strong></div>
+          <div class="metric"><label>前视深度诊断</label><strong id="m-motion-guard">等待深度摘要</strong></div>
           <div class="metric"><label>XT16 标定</label><strong id="m-lidar-calibration">等待摘要</strong></div>
           <div class="metric"><label>XT16 有效年龄</label><strong id="m-lidar-age">等待摘要</strong></div>
           <div class="metric"><label>XT16 四向净空</label><strong id="m-lidar-clearance">等待摘要</strong></div>
@@ -627,11 +627,11 @@
         .map(([name]) => name);
       $("m-notwired").textContent = notWired.join(", ") || "none";
     }
-    function updateStereo(stereo, motionGuard) {
+    function updateStereo(stereo, diagnostic) {
       if (!stereo || !stereo.available || !stereo.data) {
         $("m-stereo-front").textContent = "深度侧车未启动或离线";
         $("m-stereo-health").textContent = "无实时 ROI 摘要";
-        $("m-motion-guard").textContent = "锁定：缺少实时深度";
+        $("m-motion-guard").textContent = "离线，不参与运动裁决";
         return;
       }
       const data = stereo.data;
@@ -644,9 +644,9 @@
       const frontConfidence = data.roi_confidence && data.roi_confidence.front !== undefined ? `前方 ${Number(data.roi_confidence.front).toFixed(3)}` : "前方 ?";
       const age = stereo.age_ms == null ? "未知" : `${Math.round(stereo.age_ms)}ms`;
       $("m-stereo-health").textContent = `${confidence}, ${frontConfidence} / ${age}${stereo.stale_by_age ? " 摘要停止更新" : ""}`;
-      $("m-motion-guard").textContent = motionGuard && motionGuard.allowed
-        ? "已就绪：实时近场深度"
-        : `锁定：${motionGuard && motionGuard.reason ? motionGuard.reason : "等待安全校验"}`;
+      $("m-motion-guard").textContent = diagnostic && diagnostic.healthy
+        ? "诊断正常：实时近场深度"
+        : `诊断告警：${diagnostic && diagnostic.reason ? diagnostic.reason : "等待深度摘要"}`;
     }
     function updateSemantic(semantic) {
       if (!semantic || !semantic.available || !semantic.data) {
@@ -738,7 +738,7 @@
         updateState(result.state);
         updateCapabilities(result.capabilities);
         updateLidar(result.lidar_summary);
-        updateStereo(result.stereo_summary, result.stereo_motion_guard);
+        updateStereo(result.stereo_summary, result.stereo_diagnostic);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);
         updateCollection(result.collection_status);
@@ -768,7 +768,7 @@
         updateState(result.state);
         updateCapabilities(result.capabilities);
         updateLidar(result.lidar_summary);
-        updateStereo(result.stereo_summary, result.stereo_motion_guard);
+        updateStereo(result.stereo_summary, result.stereo_diagnostic);
         updateSemantic(result.semantic_summary);
         updateEdge(result.edge_summary);
         updateCollection(result.collection_status);

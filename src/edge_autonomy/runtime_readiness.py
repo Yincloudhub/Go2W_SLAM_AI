@@ -171,11 +171,7 @@ def assess_runtime_readiness(
     )
 
     if gateway_ready:
-        navigation_ready, navigation_reason = gateway_allows_navigation(
-            response,
-            max_localization_pose_age_ms=max_localization_pose_age_ms,
-            max_obstacle_age_ms=max_perception_age_ms,
-        )
+        navigation_ready, navigation_reason = gateway_allows_navigation(response)
     else:
         navigation_ready, navigation_reason = False, "gateway world state is unavailable"
 

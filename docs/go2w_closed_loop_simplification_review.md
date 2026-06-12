@@ -1,10 +1,18 @@
 # GO2W 闭环规划精简与泛化评审
 
-日期：2026-05-27
+日期：2026-05-27，2026-06-12 更新
 
 ## 当前判断
 
-现有闭环规划方向是正确的：运行时逻辑正在从 Python 原型收敛到 C++ 主链路，LLM 被放在语义不确定时的服务化 fallback，安全规则由确定性代码兜底，operator panel 只做状态展示和输入入口。
+现有闭环方向正确，但此前把同一安全规则同时放进 Web、Python、C++ 兼容层和机器人 Gateway，形成了重复裁决和阈值漂移。比赛运行时现统一为：
+
+- LLM / SemanticRouter：理解意图、解析目标、生成任务队列。
+- Operator UI：人工确认和执行解锁，不判断当前是否安全。
+- Python supervised executor：队列、会话、超时和反馈。
+- 机器人端 SlamGateway：目标授权和实时运动安全的唯一权威。
+- 底盘 watchdog：运动过程中持续检查，异常立即暂停。
+
+标定、地图哈希、Git 版本和五场景证据属于赛前验收链，不进入每条比赛任务的热路径。
 
 当前已具备的主链路：
 
@@ -12,10 +20,10 @@
 operator input
   -> SemanticRouter
   -> task_queue / slam_commands
-  -> SafetyGate
-  -> QueueExecutor
-  -> GatewayClient
-  -> slam_llm_command_client
+  -> supervised QueueExecutor
+  -> SlamGateway target authorization
+  -> SlamGateway SafetySupervisor
+  -> Unitree SLAM / chassis
 ```
 
 这个结构比“LLM 直接出底层命令”更稳，也更容易扩展到其他地图、任务类型和 UI。
@@ -25,8 +33,8 @@ operator input
 1. `task_queue` 还不是唯一中间表示。
    当前 C++ `SemanticRouter` 会生成队列，Python planner 也会生成类似队列，但两边还没有共享 schema 和统一校验器。后续应把 `task_queue` 定为闭环唯一 IR：无论来自确定性匹配、LLM、脚本还是 UI，都先归一到同一队列，再进入 `QueueExecutor`。
 
-2. `SafetyGate` 还需要策略化。
-   现在安全门已覆盖 SLAM、定位、低电量、障碍、弱网、已到点等规则。下一步应把输出从 bool/reason 扩展为稳定 policy：`block`、`hold`、`slow`、`semantic_only`、`confirm`、`replan`，并让 executor 根据 policy 决定是否降速、暂停、要求人工确认或重规划。
+2. 安全权威需要继续收敛。
+   `gateway_safety.py` 现在只读取 Gateway 的 `allow_navigation/reason`，Web 解锁也不再重复检查定位和双目。C++ `SafetyGate` 当前不拥有真实导航执行权，保留为兼容/测试路径；后续若恢复 C++ 真实执行，必须直接消费 Gateway 决策，不能复制传感器阈值。
 
 3. 运行态仍偏短进程。
    多数状态来自短进程调用 `get_world_state`，导航进度和事件日志还没有统一持久化。现场调试会遇到“新进程看不到上一段任务上下文”的问题。更泛化的做法是引入长驻 operator core 或轻量 state journal。
@@ -48,14 +56,14 @@ input text / UI command / scripted task
       - schema validation
       - target registry binding
       - action expansion
-  -> SafetyGate policy
-      - preflight before each movement step
-      - runtime check during arrival wait
-      - policy output, not only allow/deny
   -> QueueExecutor
       - execute one step at a time
       - write event journal
       - stop on first blocking failure
+  -> SlamGateway
+      - authorize registered target and map identity
+      - decide allow / hold / pause / stop
+      - monitor localization and obstacle freshness during motion
   -> OperatorPanel / UI summary
       - show compact reason trace
       - expose dry-run by default
@@ -77,7 +85,7 @@ input text / UI command / scripted task
 意外情况的默认处理：
 
 - 连续网关读取失败达到 `gateway_error_limit`：停止等待、阻塞后续队列、请求人工确认。
-- 运行中 SafetyGate 变为不允许导航：停止等待并记录阻断原因。
+- 运行中 Gateway 变为不允许导航：watchdog 请求暂停，停止等待并记录统一阻断原因。
 - 到点超时：停止后续 step，反馈当前目标未确认到达。
 - dry-run：仍然生成完整 `operator_feedback` 和队列 JSON，但不访问运动下发路径。
 - 事件过多：保留最新窗口，摘要层暴露被丢弃数量，避免长任务把内存和 JSON 序列化时间拖大。
@@ -90,7 +98,7 @@ P0：
 - `QueueExecutor` 写统一 `queue_execution` 事件日志，至少包含 step、preflight、send_result、arrival、blocked_reason。
 
 P1：
-- 把 `SafetyGate` 的 policy 输出稳定下来，并给 operator panel 用中文摘要展示。
+- 稳定 Gateway 的统一 `decision` 输出，并给 operator panel 用中文摘要展示。
 - 增加 `capture_keyframe` 外部命令配置，保持 dry-run 默认安全。
 - 增加 C++ 单元测试：低电量、弱网、已到点、障碍阻断、队列失败停止。
 - 把 C++ 侧 template feedback renderer 抽象成可替换的 LLM service client；Python 原型已具备 `llm_feedback_results` 和 live/template/off 三种模式。
@@ -104,8 +112,8 @@ P2：
 
 - 地图只提供语义拓扑、姿态、标签和限制，不承载执行逻辑。
 - LLM 只产出意图和候选队列，不拥有最终执行权。
-- SafetyGate 是每个运动步骤的强制前置条件。
-- QueueExecutor 是唯一会下发运动命令的运行时组件。
+- SlamGateway 是运动授权与运行期安全的唯一权威。
+- supervised QueueExecutor 是主机侧唯一会请求运动的运行时组件。
 - UI 只展示和输入，不直接拼底层 SLAM 命令。
 
 ## 比赛展示与多模态扩展方向
@@ -117,7 +125,7 @@ P2：
 - **巡检任务模板**：多点导航、到达回复、拍照关键帧、异常摘要和结束报告。
 - **语音输入/播报**：语音转文本后仍进入同一套 `TaskQueue IR` 和 SafetyGate；播报只消费 `operator_feedback` 和 `llm_feedback_results`。
 - **拍照/关键帧**：`capture_keyframe` 从语义事件逐步接入真实相机命令；弱网下只传缩略图、路径、时间戳和摘要。
-- **双目深度相机**：作为近距离障碍和视野遮挡增强，只输出 `DepthCameraSummary`，不能放宽 LiDAR/SLAM 的安全阻断。
+- **双目深度相机**：Web 只显示前视诊断，不独立阻断解锁；机器人端 Gateway 可在 XT16 有效时保守融合前向深度，但 D435 不能单独授权导航。
 - **NX + TI 毫米波雷达边缘节点**：作为外部感知节点输出 `RadarDetectionSummary`，用于弱光、烟雾、遮挡或疑似人员/移动目标提示。第一阶段以点云、目标跟踪、占用/人员存在摘要为主，不把完整 SAR 成像作为 P0 承诺。
 
 详细路线见 `docs/multimodal_edge_autonomous_robot_plan.md`。这些能力都应保持可插拔：有硬件时增强感知，没有硬件时主闭环仍可用。

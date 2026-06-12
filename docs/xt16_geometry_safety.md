@@ -75,15 +75,18 @@ inside the range is reported clear to `range_m` and listed under
 
 ## Runtime policy
 
-The sidecar remains uncalibrated by default:
+The sidecar uses verified-record auto mode by default:
 
 ```text
-GO2W_XT16_GEOMETRY_CALIBRATED=0
+GO2W_XT16_GEOMETRY_CALIBRATED=auto
 ```
 
-Static validation does not authorize robot motion. Set the value to `1` only
-after a supervised movement test confirms that body, low-hazard, and no-return
-semantics remain stable while the robot moves.
+`auto` enables calibrated output only when the repository record passes the
+complete guard: verified status, non-empty identity, five accepted artifacts
+with hashes, accepted error, and exact runtime-parameter equality. A pending or
+invalid record stays uncalibrated and navigation remains fail-closed. Value `0`
+can still force diagnostic uncalibrated mode; value `1` makes a guard failure a
+startup error.
 
 Any confirmed rear hazard under `0.6 m` currently produces `pause`. Directional
 motion authorization can relax this later, but reverse commands must first

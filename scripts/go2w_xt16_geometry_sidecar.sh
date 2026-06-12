@@ -15,7 +15,7 @@ NICE_LEVEL="${GO2W_XT16_GEOMETRY_NICE_LEVEL:-5}"
 TOPIC="${GO2W_XT16_POINTCLOUD_TOPIC:-/unitree/slam_lidar/points}"
 RATE_LIMIT_HZ="${GO2W_XT16_GEOMETRY_RATE_LIMIT_HZ:-5}"
 SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-1000}"
-CALIBRATION_REQUESTED="${GO2W_XT16_GEOMETRY_CALIBRATED:-0}"
+CALIBRATION_REQUESTED="${GO2W_XT16_GEOMETRY_CALIBRATED:-auto}"
 CALIBRATION_RECORD="${GO2W_XT16_CALIBRATION_RECORD:-${REPO_ROOT}/configs/perception/xt16_geometry_calibration.json}"
 export GO2W_XT16_GEOMETRY_RANGE_M="${GO2W_XT16_GEOMETRY_RANGE_M:-6.0}"
 export GO2W_XT16_GEOMETRY_PERCENTILE="${GO2W_XT16_GEOMETRY_PERCENTILE:-10.0}"
@@ -160,17 +160,20 @@ start_sidecar() {
   fi
   : > "${LOG_FILE}"
   local calibrated_args=()
-  if [[ "${CALIBRATION_REQUESTED}" == "1" || "${CALIBRATION_REQUESTED}" == "true" || "${CALIBRATION_REQUESTED}" == "yes" ]]; then
+  if [[ "${CALIBRATION_REQUESTED}" == "1" || "${CALIBRATION_REQUESTED}" == "true" || "${CALIBRATION_REQUESTED}" == "yes" || "${CALIBRATION_REQUESTED}" == "auto" ]]; then
     if [[ -n "${GO2W_XT16_GEOMETRY_EXTRA_ARGS:-}" ]]; then
       echo "xt16_geometry=calibration_rejected reason=extra_args_not_allowed" >&2
       return 1
     fi
     local calibration_id
-    if ! calibration_id="$("${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_calibration_guard.py" --record "${CALIBRATION_RECORD}")"; then
+    if calibration_id="$("${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_calibration_guard.py" --record "${CALIBRATION_RECORD}")"; then
+      calibrated_args=(--calibrated --calibration-id "${calibration_id}")
+    elif [[ "${CALIBRATION_REQUESTED}" == "auto" ]]; then
+      echo "xt16_geometry=uncalibrated reason=${calibration_id}"
+    else
       echo "xt16_geometry=calibration_rejected reason=${calibration_id}" >&2
       return 1
     fi
-    calibrated_args=(--calibrated --calibration-id "${calibration_id}")
   fi
   # shellcheck disable=SC2086
   nohup nice -n "${NICE_LEVEL}" "${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_lidar_geometry_summary.py" \

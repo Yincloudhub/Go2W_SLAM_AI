@@ -14,6 +14,8 @@ from typing import Any, Callable, Iterable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SUMMARY = REPO_ROOT / "artifacts" / "lidar_geometry_summary.json"
 DEFAULT_CALIBRATION = REPO_ROOT / "configs" / "perception" / "xt16_geometry_calibration.json"
+DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
+DEFAULT_MAP_ID = "go2w_real_site"
 DIRECTIONS = ("front", "left", "right", "rear")
 SCENE_DIRECTIONS = {
     "baseline": DIRECTIONS,
@@ -52,6 +54,15 @@ def sha256_file(path: Path) -> str | None:
         return digest.hexdigest()
     except OSError:
         return None
+
+
+def selected_map(registry: dict[str, Any] | None, map_id: str) -> dict[str, Any] | None:
+    if not isinstance(registry, dict):
+        return None
+    for item in registry.get("maps", []):
+        if isinstance(item, dict) and item.get("map_id") == map_id:
+            return item
+    return None
 
 
 def run_command(command: list[str], *, timeout_s: int = 5) -> dict[str, Any]:
@@ -316,6 +327,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--operator-note", default="")
     parser.add_argument("--summary", default=str(DEFAULT_SUMMARY))
     parser.add_argument("--calibration", default=str(DEFAULT_CALIBRATION))
+    parser.add_argument("--registry", default=str(DEFAULT_REGISTRY))
+    parser.add_argument("--map-id", default=DEFAULT_MAP_ID)
     parser.add_argument("--samples", type=int, default=25)
     parser.add_argument("--timeout-s", type=float, default=20.0)
     parser.add_argument("--max-abs-error-m", type=float, default=0.15)
@@ -334,7 +347,11 @@ def main(argv: list[str] | None = None) -> int:
     timestamp_ms = int(time.time() * 1000)
     summary_path = Path(args.summary)
     calibration_path = Path(args.calibration)
+    registry_path = Path(args.registry)
     calibration = load_json(calibration_path)
+    registry = load_json(registry_path)
+    map_profile = selected_map(registry, args.map_id)
+    pcd_path = Path(str(map_profile.get("pcd_path"))) if isinstance(map_profile, dict) and map_profile.get("pcd_path") else None
     measurements = {
         direction: getattr(args, f"measured_{direction}_m")
         for direction in DIRECTIONS
@@ -382,6 +399,13 @@ def main(argv: list[str] | None = None) -> int:
             ),
             "status": calibration.get("status") if isinstance(calibration, dict) else None,
             "parameters": calibration.get("parameters") if isinstance(calibration, dict) else None,
+        },
+        "map_identity": {
+            "map_id": args.map_id,
+            "registry_path": str(registry_path),
+            "registry_sha256": sha256_file(registry_path),
+            "pcd_path": str(pcd_path) if pcd_path is not None else None,
+            "pcd_sha256": sha256_file(pcd_path) if pcd_path is not None else None,
         },
         "summary_path": str(summary_path),
         "physical_measurements_m": measurements,

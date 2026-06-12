@@ -6,6 +6,7 @@ from scripts.capture_xt16_calibration_scene import (
     assess_scene,
     build_statistics,
     compact_sample,
+    selected_map,
     validate_measurements,
 )
 
@@ -52,6 +53,12 @@ def producer_summary(
 
 
 class Xt16CalibrationSceneTests(unittest.TestCase):
+    def test_selected_map_uses_requested_map_id(self) -> None:
+        registry = {"maps": [{"map_id": "a"}, {"map_id": "b", "pcd_path": "/tmp/b.pcd"}]}
+
+        self.assertEqual(selected_map(registry, "b")["pcd_path"], "/tmp/b.pcd")
+        self.assertIsNone(selected_map(registry, "missing"))
+
     def samples(self, count: int = 5) -> list[dict]:
         return [
             compact_sample(
