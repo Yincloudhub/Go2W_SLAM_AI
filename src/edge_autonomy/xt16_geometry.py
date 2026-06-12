@@ -21,6 +21,7 @@ class Xt16GeometryConfig:
     footprint_front_m: float = 0.25
     footprint_rear_m: float = 0.50
     footprint_half_width_m: float = 0.30
+    footprint_filter_margin_m: float = 0.02
     min_z_m: float = -0.25
     body_min_z_m: float = -0.10
     max_z_m: float = 1.20
@@ -269,6 +270,7 @@ def build_xt16_geometry_summary(
     low_hazard_height_points = 0
     footprint_filtered_points = 0
     body_min_z_m = max(cfg.min_z_m, min(cfg.body_min_z_m, cfg.max_z_m))
+    footprint_filter_margin_m = max(0.0, float(cfg.footprint_filter_margin_m))
 
     for point in points:
         total_points += 1
@@ -286,8 +288,10 @@ def build_xt16_geometry_summary(
         else:
             low_hazard_height_points += 1
         in_footprint = (
-            -cfg.footprint_rear_m <= forward <= cfg.footprint_front_m
-            and abs(lateral) <= cfg.footprint_half_width_m
+            -(cfg.footprint_rear_m + footprint_filter_margin_m)
+            <= forward
+            <= cfg.footprint_front_m + footprint_filter_margin_m
+            and abs(lateral) <= cfg.footprint_half_width_m + footprint_filter_margin_m
         )
         if in_footprint:
             footprint_filtered_points += 1
@@ -496,6 +500,7 @@ def build_xt16_geometry_summary(
                 "front": cfg.footprint_front_m,
                 "rear": cfg.footprint_rear_m,
                 "half_width": cfg.footprint_half_width_m,
+                "filter_margin": footprint_filter_margin_m,
             },
         },
     }

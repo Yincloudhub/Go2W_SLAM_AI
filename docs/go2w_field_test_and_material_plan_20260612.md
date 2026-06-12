@@ -65,6 +65,7 @@ bash scripts/go2w_accept.sh snapshot relocation_origin_01 mapping_origin
 
 当前 footprint 采用外廓尺寸和安装偏置估算：前 `0.25 m`、后 `0.50 m`、
 左右半宽 `0.30 m`。它仍是待测初值，不能作为现场标定已经完成的证据。
+另有 `0.02 m` 的边界自体回波过滤容差，但输出净空仍以名义外廓为零点。
 
 每个场景记录：
 

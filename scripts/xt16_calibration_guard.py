@@ -19,6 +19,7 @@ PARAMETER_ENV = {
     "footprint_front_m": "GO2W_XT16_GEOMETRY_FOOTPRINT_FRONT_M",
     "footprint_rear_m": "GO2W_XT16_GEOMETRY_FOOTPRINT_REAR_M",
     "footprint_half_width_m": "GO2W_XT16_GEOMETRY_FOOTPRINT_HALF_WIDTH_M",
+    "footprint_filter_margin_m": "GO2W_XT16_GEOMETRY_FOOTPRINT_FILTER_MARGIN_M",
     "min_z_m": "GO2W_XT16_GEOMETRY_MIN_Z_M",
     "body_min_z_m": "GO2W_XT16_GEOMETRY_BODY_MIN_Z_M",
     "max_z_m": "GO2W_XT16_GEOMETRY_MAX_Z_M",

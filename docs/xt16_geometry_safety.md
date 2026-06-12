@@ -20,11 +20,16 @@ The current pending footprint is an engineering estimate from the published
 - front: `0.25 m`
 - rear: `0.50 m`
 - half-width: `0.30 m`
+- filter-only margin: `0.02 m`
 
 It intentionally stays close to the physical body envelope. Expanding the mask
 to suppress an unexplained return can hide a real obstacle and is prohibited.
 The photograph confirms the XT16 is approximately centered laterally, so the
 left and right footprint use the same value.
+
+The margin applies only when rejecting self-returns at the body boundary.
+Reported obstacle clearance remains measured from the nominal footprint, not
+from the expanded filter boundary.
 The values remain `pending_field_measurement` until five stationary measured
 scenes pass the calibration workflow.
 

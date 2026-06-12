@@ -74,6 +74,27 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertGreater(summary["front_clearance_m"], 3.0)
         self.assertGreater(summary["summary"]["points_excluded_footprint"], 0)
 
+    def test_filter_margin_removes_boundary_self_return_without_shifting_clearance(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(-0.31, 0.0, count=30, spread_m=0.0))
+        points.extend(repeated_point(-0.50, 0.0, count=30, spread_m=0.04))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="test-calibration",
+                min_points_per_roi=5,
+                footprint_half_width_m=0.30,
+                footprint_filter_margin_m=0.02,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertAlmostEqual(summary["right_clearance_m"], 0.18, delta=0.08)
+        self.assertEqual(summary["summary"]["footprint_m"]["half_width"], 0.30)
+        self.assertEqual(summary["summary"]["footprint_m"]["filter_margin"], 0.02)
+
     def test_uncalibrated_output_is_stale_even_with_good_roi(self) -> None:
         summary = build_xt16_geometry_summary(
             clear_roi_points(),
@@ -178,7 +199,7 @@ class Xt16GeometryTests(unittest.TestCase):
 
     def test_sparse_low_returns_do_not_override_supported_body_cluster(self) -> None:
         points = clear_roi_points()
-        points.extend(repeated_point(0.0, 0.58, z=-0.2, count=3))
+        points.extend(repeated_point(0.0, 0.68, z=-0.2, count=3))
         points.extend(repeated_point(0.0, 1.12, z=0.2, count=30))
 
         summary = build_xt16_geometry_summary(
