@@ -78,8 +78,16 @@ Python 和 C++ WorldState reducers 已改为只接受完整
 - context producer 不持有传感器、不启动 SLAM/Gateway、不控制底盘。
 - artifact 缺失、畸形或 stale 时所有消费者 fail closed。
 
-完成机器人 fast-forward 和无运动验收后，P0-2 即可关闭；下一阶段进入
-P0-3 唯一决定与执行路径收口。
+机器人已 fast-forward 到实现提交 `d8e9125` 并完成无运动验收：
+
+- robot Python targeted `81/81`，full unittest `286/286`。
+- C++ 全量构建通过，CTest `6/6`。
+- loader、Planner、WorldState、runtime log、Web UI 的 `context_id` 一致。
+- D435/context 服务停止，无 SLAM、Gateway 或底盘运动。
+
+P0-2 完成标记为
+`p0-2-perception-context-v1-accepted-20260613`。下一阶段唯一任务是 P0-3
+决定与执行路径收口。
 
 ## 定位
 

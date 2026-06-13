@@ -2,6 +2,12 @@
 
 更新：2026-06-13
 
+P0-2 completion marker:
+
+```text
+p0-2-perception-context-v1-accepted-20260613
+```
+
 ## Scope
 
 `SensorEnvelope v1` is the only normalized sensor input to
@@ -190,3 +196,8 @@ loaded `context_id`. They do not reopen XT16, D435, or TI/NX artifacts.
 The context producer may run while sensor producers are stopped. In that case
 it publishes explicit `offline` envelopes. This is diagnostic availability,
 not motion authorization.
+
+Robot no-motion acceptance completed on 2026-06-13 at implementation commit
+`d8e9125`: Python full regression passed, C++ built successfully, CTest passed,
+all five consumers reported one shared `context_id`, and the context/D435
+services were stopped afterward.

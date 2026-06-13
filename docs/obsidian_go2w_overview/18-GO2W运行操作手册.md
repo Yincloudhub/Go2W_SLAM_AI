@@ -67,6 +67,14 @@ bash scripts/go2w_perception_context_sidecar.sh stop
 
 该 sidecar 只读取紧凑摘要并发布 context，不持有相机，不启动 SLAM/Gateway。
 
+P0-2 于 2026-06-13 完成机器人无运动验收。验收结束必须同时看到：
+
+```text
+d435_capture_owner=stopped
+d435_summary_reducer=stopped
+perception_context=stopped
+```
+
 ### WorldState reducer 状态
 
 Python/C++ WorldState reducer 已完成接口切换：

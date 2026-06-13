@@ -398,8 +398,8 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 3. WorldState Reducer 只消费统一 loader。已完成 Python/C++ reducer
    `PerceptionContext v1` 接口和 context stale 校验。
 4. Python Planner、C++ LLM、UI 和 runtime log 改读同一份 context。已完成
-   本地实现，待提交后机器人 fast-forward 验收。
-5. 增加 stale/offline/uncalibrated 测试。已完成本地定向测试。
+   本地和机器人无运动验收。
+5. 增加 stale/offline/uncalibrated 测试。已完成。
 
 ### P0-3：收口决定与执行路径
 
@@ -449,11 +449,13 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
   接口和 fail-closed 测试。
 - P0-2 WorldState integration 已完成：Python/C++ reducer 只接受同一份
   PerceptionContext，旧自由格式 summary 输入已删除。
-- P0-2 unified runtime consumers 已完成本地实现：单一 producer 写
+- P0-2 unified runtime consumers 已完成：单一 producer 写
   `artifacts/perception_context_v1.json`，Planner、C++ LLM、UI 和 runtime
   log 不再独立读取传感器 artifact。
-- 当前唯一任务是提交、推送、机器人 fast-forward 和无运动验收；完成后关闭
-  P0-2，进入 P0-3 决定与执行路径收口。
+- 机器人实现提交 `d8e9125` 无运动验收通过：Python targeted `81/81`、
+  full `286/286`，C++ build/CTest `6/6`，五个消费者 `context_id` 一致。
+- P0-2 完成标记为 `p0-2-perception-context-v1-accepted-20260613`。
+- 下一步唯一任务是 P0-3：收口唯一决定与执行路径。
 
 稳定决策：
 
@@ -470,7 +472,7 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 已知风险：
 
 - XT16 仍是 `pending_field_measurement`，不在 P0-1 中扩展处理。
-- 机器人端尚未 fast-forward 到 unified runtime consumers 提交。
+- XT16 当前旧摘要归一化为非 fresh，正式标定和低速运动验收仍 deferred。
 - 当前 TI/NX 没有仓库内 bridge supervisor；未提供明确在线证据时 loader
   必须输出 `offline`，即使 artifact 存在。
 
