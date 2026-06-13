@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 import unittest
 from pathlib import Path
 
 from edge_autonomy.llm_context import build_planner_context, plan_to_slam_command, simulate_local_llm_plan
 from edge_autonomy.map_registry import MapRegistry
+from edge_autonomy.perception_context import build_perception_context
 
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_map_registry.example.json"
@@ -32,6 +34,23 @@ def make_snapshot(
 
 
 class LlmContextTests(unittest.TestCase):
+    def test_build_planner_context_preserves_valid_perception_context(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        snapshot = make_snapshot()
+        snapshot["timestamp_ms"] = int(time.time() * 1000)
+        perception_context = build_perception_context([], generated_at_ms=snapshot["timestamp_ms"])
+
+        context = build_planner_context(
+            snapshot,
+            registry,
+            user_command="观察前方",
+            perception_context=perception_context,
+        )
+
+        self.assertIs(context["perception_context"], perception_context)
+        self.assertFalse(context["perception_context"]["policy"]["raw_sensor_streams_allowed"])
+        self.assertFalse(context["perception_context"]["policy"]["llm_direct_motion"])
+
     def test_build_planner_context_nearest_node(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)
         context = build_planner_context(make_snapshot(), registry, user_command="回到起点")

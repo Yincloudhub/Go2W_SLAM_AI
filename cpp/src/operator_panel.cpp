@@ -1,5 +1,4 @@
 #include "go2w/operator_panel.hpp"
-#include "go2w/edge_perception.hpp"
 #include "go2w/llm_http_client.hpp"
 #include "go2w/queue_executor.hpp"
 #include "go2w/world_state_v1.hpp"
@@ -409,37 +408,6 @@ std::vector<std::string> unverifiedRouteTargets(const SemanticRoute& route)
     return targets;
 }
 
-nlohmann::json loadJsonFileOrNull(const std::string& path)
-{
-    std::ifstream file(path);
-    if (!file) return nullptr;
-    try {
-        return nlohmann::json::parse(readAll(file));
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-nlohmann::json loadFreshPerceptionForLlm(const std::string& path, int64_t max_age_ms)
-{
-    nlohmann::json payload = loadJsonFileOrNull(path);
-    if (!payload.is_object()) return {{"available", false}, {"excluded_reason", "missing_or_invalid"}};
-    const int64_t timestamp_ms = payload.value("timestamp_ms", int64_t{0});
-    const int64_t now_ms = static_cast<int64_t>(std::time(nullptr)) * 1000;
-    const int64_t age_ms = timestamp_ms > 0 ? now_ms - timestamp_ms : -1;
-    if (payload.value("stale", false) || timestamp_ms <= 0 || age_ms < 0 || age_ms > max_age_ms) {
-        return {
-            {"available", false},
-            {"excluded_reason", "stale_or_offline"},
-            {"source", payload.value("source", "")},
-            {"age_ms", age_ms},
-        };
-    }
-    payload["available"] = true;
-    payload["age_ms"] = age_ms;
-    return payload;
-}
-
 }  // namespace
 
 std::string shellQuote(const std::string& value)
@@ -589,6 +557,7 @@ nlohmann::json OperatorPanel::sendGatewayCommand(const nlohmann::json& command_j
 
 nlohmann::json OperatorPanel::buildPanelWorldState(const nlohmann::json& result) const
 {
+    const nlohmann::json perception_context = loadPerceptionContext();
     return buildWorldStateV1(
         result,
         {
@@ -597,7 +566,16 @@ nlohmann::json OperatorPanel::buildPanelWorldState(const nlohmann::json& result)
             {"network_level", config_.weak_link_mode ? "weak" : "normal"},
             {"task_phase", "idle"},
             {"capture_configured", !config_.capture_command.empty()},
+            {"perception_context", perception_context},
         });
+}
+
+nlohmann::json OperatorPanel::loadPerceptionContext() const
+{
+    const std::string path = isAbsolutePath(config_.perception_context_path)
+        ? config_.perception_context_path
+        : config_.repo_root + "/" + config_.perception_context_path;
+    return loadPerceptionContextFile(path);
 }
 
 std::string OperatorPanel::nearestNodeText(const nlohmann::json& result) const
@@ -754,13 +732,10 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
         "Preserve the user's target order for multi-stop tasks. Set capture_keyframe=true only when the user asks for a photo or inspection image. "
         "Do not output coordinates, speeds, Unitree API ids, markdown, or extra text. Never claim that the robot arrived before runtime feedback says so. "
         "Use capability_contract: ready or available conditional capabilities may be planned; not_wired capabilities such as relative_motion, mapless_scout, or raw_base_control must return empty targets with one short clarification reply. "
-        "Perception entries with available=false are diagnostic only and must not affect the plan. "
+        "Use only the validated PerceptionContext v1 summary. Raw point clouds, video, radar ADC, and direct motion control are prohibited. "
+        "Only sources with status=fresh may affect semantic planning; Gateway remains the final motion authority. "
         "If the command is unclear or a requested place is not registered, return targets as an empty array and ask one short clarification question in reply.";
-    nlohmann::json perception = {
-        {"stereo_depth", loadFreshPerceptionForLlm(config_.repo_root + "/artifacts/stereo_depth_summary.json", 1000)},
-        {"deepyolo_semantics", loadFreshPerceptionForLlm(config_.repo_root + "/artifacts/vision_semantic_summary.json", 3000)},
-        {"edge_node", loadEdgePerceptionSummary(config_.repo_root + "/artifacts/edge_perception_summary.json", 3000)},
-    };
+    const nlohmann::json perception_context = loadPerceptionContext();
     nlohmann::json capability_contract = {
         {"planning_style", "capability_bounded_topology_selection"},
         {"ready", nlohmann::json::array({"hold_position", "request_clarification", "registered_topology_dry_run"})},
@@ -801,7 +776,7 @@ std::vector<nlohmann::json> OperatorPanel::buildLlmHttpMessages(const std::strin
         {"execute_enabled", config_.execute_enabled},
         {"candidates", candidates},
         {"capability_contract", capability_contract},
-        {"perception", perception},
+        {"perception_context", perception_context},
     };
     return {
         {{"role", "system"}, {"content", system_prompt}},

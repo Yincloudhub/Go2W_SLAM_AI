@@ -9,7 +9,7 @@
 continuous video, radar ADC, and other high-rate streams remain inside their
 sensor producer.
 
-The first P0-2 commit defines:
+P0-2 defines:
 
 - `schemas/sensor_envelope_v1.schema.json`
 - `schemas/perception_context_v1.schema.json`
@@ -17,9 +17,14 @@ The first P0-2 commit defines:
 - adapters for XT16 geometry, D435 depth, D435 YOLO, and TI/NX summaries
 - reserved offline envelopes for future IMU and odometry motion summaries
 
-WorldState, C++ LLM, and UI migration are separate commits. Until that
-migration is complete, this module must not be described as the active motion
-control path.
+The runtime producer writes one atomic bounded artifact:
+
+```text
+artifacts/perception_context_v1.json
+```
+
+It reads compact producer summaries only. It never opens the D435 device,
+subscribes to raw point clouds/video, starts SLAM/Gateway, or controls motion.
 
 ## SensorEnvelope v1
 
@@ -164,8 +169,24 @@ compatibility projection of `PerceptionContext.sources`; it is never assembled
 from separate artifacts. `detected_objects` is projected from
 `visual_objects`.
 
-## Next Integration Boundary
+## Unified Runtime Consumers
 
-The next commit must make Python Planner, C++ LLM, UI, and runtime logs receive
-the same current context instance. They must not reopen XT16, D435, or TI/NX
-artifacts independently.
+`scripts/perception_context_service.py` and
+`scripts/go2w_perception_context_sidecar.sh` are the single context producer
+and lifecycle manager. Python and C++ loaders reject missing, oversized,
+malformed, policy-invalid, future, or stale context files.
+
+The following consumers now read only
+`artifacts/perception_context_v1.json`:
+
+- Python Planner and its lightweight prompt projection
+- Python WorldState and runtime log
+- C++ OperatorPanel WorldState and HTTP LLM payload
+- Web UI, including compatibility lidar/depth/semantic/radar panels
+
+Within one Web response, all compatibility panels are projected from the same
+loaded `context_id`. They do not reopen XT16, D435, or TI/NX artifacts.
+
+The context producer may run while sensor producers are stopped. In that case
+it publishes explicit `offline` envelopes. This is diagnostic availability,
+not motion authorization.

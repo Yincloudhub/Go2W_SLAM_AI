@@ -31,6 +31,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
                 "docs/stereo_depth_camera_integration.md",
                 "docs/go2w_runtime_operations_runbook.md",
                 "docs/perception_context_v1.md",
+                "docs/obsidian_go2w_logs/2026-06-12-GO2W定位安全闭环日志.md",
             )
             for index, source in enumerate(sources):
                 path = repo / source
@@ -68,6 +69,10 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             self.assertEqual(
                 (overview / "19-PerceptionContext-v1统一感知契约.md").read_text(encoding="utf-8"),
                 "source-7\n",
+            )
+            self.assertEqual(
+                (vault / "机器狗" / "现场日志" / "2026-06-12-GO2W定位安全闭环日志.md").read_text(encoding="utf-8"),
+                "source-8\n",
             )
 
     def test_export_overview_only_copies_markdown_and_replaces_credentials(self):

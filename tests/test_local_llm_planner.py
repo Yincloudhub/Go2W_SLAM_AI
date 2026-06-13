@@ -45,6 +45,18 @@ def make_plan() -> dict:
 
 
 class LocalLlmPlannerTests(unittest.TestCase):
+    def test_lightweight_context_preserves_unified_perception_context(self) -> None:
+        perception_context = {"schema": "go2w_perception_context_v1", "context_id": "pc-1"}
+        light = build_lightweight_planner_context(
+            {
+                "user_command": "观察前方",
+                "world_state_summary": {},
+                "perception_context": perception_context,
+            }
+        )
+
+        self.assertIs(light["perception_context"], perception_context)
+
     def test_extract_prefers_plan_object(self) -> None:
         text = '{"copied_input": true}\n{"plan_id":"p1","mode":"safe_hold","confidence":0.8,"reason":"stop","steps":[{"step_id":"h","tool":"hold_position","arguments":{}}],"communication_policy":{"mode":"normal","send":["task_state"],"drop":[]},"requires_human_ack":false}'
 

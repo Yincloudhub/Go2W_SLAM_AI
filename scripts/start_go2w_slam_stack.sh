@@ -380,4 +380,8 @@ if [[ "${GO2W_START_STEREO_DEPTH:-1}" == "1" ]]; then
   fi
 fi
 
+if ! bash "${SCRIPT_DIR}/go2w_perception_context_sidecar.sh" restart-if-stale; then
+  echo "warning: PerceptionContext producer is unavailable; Planner, LLM, and UI will fail closed" >&2
+fi
+
 echo "startup command finished"

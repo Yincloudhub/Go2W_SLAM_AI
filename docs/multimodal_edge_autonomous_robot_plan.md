@@ -69,8 +69,17 @@ Python 和 C++ WorldState reducers 已改为只接受完整
 - `detected_objects` 只从同一 context 的 `visual_objects` 投影。
 - stale、畸形或违反 Gateway/LLM policy 的 context 整体 fail closed。
 
-下一提交把 Planner、C++ LLM、UI 和 runtime log 接到同一 context instance，
-不在各消费者内重新读取传感器 artifact。
+### 2026-06-13 P0-2 unified runtime consumers
+
+- 单一 producer 原子写入 `artifacts/perception_context_v1.json`。
+- Python Planner、WorldState 和 runtime log 复用同一已校验 context 对象。
+- C++ OperatorPanel/LLM 只加载该 artifact，不再读取三份旧感知文件。
+- Web UI 一次响应内从同一 `context_id` 投影兼容面板。
+- context producer 不持有传感器、不启动 SLAM/Gateway、不控制底盘。
+- artifact 缺失、畸形或 stale 时所有消费者 fail closed。
+
+完成机器人 fast-forward 和无运动验收后，P0-2 即可关闭；下一阶段进入
+P0-3 唯一决定与执行路径收口。
 
 ## 定位
 

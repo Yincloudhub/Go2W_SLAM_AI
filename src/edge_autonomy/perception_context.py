@@ -828,3 +828,119 @@ def build_perception_context(
             ],
         },
     }
+
+
+def validate_perception_context(
+    value: Any,
+    *,
+    current_time_ms: Optional[int] = None,
+) -> Optional[dict[str, Any]]:
+    if not isinstance(value, dict):
+        return None
+    if value.get("schema_version") != 1 or value.get("schema") != "go2w_perception_context_v1":
+        return None
+    generated = _integer(value.get("generated_at_ms"))
+    stale_ms = _integer(value.get("stale_ms"))
+    sources = value.get("sources")
+    if (
+        generated is None
+        or generated <= 0
+        or stale_ms is None
+        or stale_ms <= 0
+        or not isinstance(sources, list)
+        or len(sources) > 32
+    ):
+        return None
+    current = current_time_ms if current_time_ms is not None else now_ms()
+    context_age_ms = current - generated
+    if context_age_ms < 0 or context_age_ms > stale_ms:
+        return None
+    if (
+        not isinstance(value.get("robot_motion"), dict)
+        or not isinstance(value.get("local_geometry"), dict)
+        or not isinstance(value.get("visual_objects"), list)
+        or not isinstance(value.get("radar_tracks"), list)
+        or not isinstance(value.get("risk_events"), list)
+        or not isinstance(value.get("degraded_capabilities"), list)
+        or not isinstance(value.get("policy"), dict)
+    ):
+        return None
+    for source in sources:
+        if (
+            not isinstance(source, dict)
+            or source.get("schema_version") != 1
+            or source.get("schema") != "go2w_sensor_envelope_v1"
+            or not isinstance(source.get("source_id"), str)
+            or not source.get("source_id")
+            or source.get("status") not in STATUS_VALUES
+        ):
+            return None
+    policy = value["policy"]
+    if (
+        policy.get("motion_authority") != "slam_gateway"
+        or policy.get("llm_direct_motion") is not False
+        or policy.get("raw_sensor_streams_allowed") is not False
+    ):
+        return None
+    return value
+
+
+def load_perception_context_file(
+    path: Path,
+    *,
+    current_time_ms: Optional[int] = None,
+) -> Optional[dict[str, Any]]:
+    value, error = _read_json_object(path)
+    if error is not None:
+        return None
+    return validate_perception_context(value, current_time_ms=current_time_ms)
+
+
+def write_perception_context_file(path: Path, context: Mapping[str, Any]) -> None:
+    text = json.dumps(context, ensure_ascii=False, separators=(",", ":")) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    temporary.replace(path)
+
+
+def build_live_perception_context(
+    repo_root: Path,
+    *,
+    generated_at_ms: Optional[int] = None,
+    sequence_tracker: Optional[SensorSequenceTracker] = None,
+    ti_producer_instance_id: Optional[str] = None,
+) -> dict[str, Any]:
+    generated = generated_at_ms if generated_at_ms is not None else now_ms()
+    artifacts = repo_root / "artifacts"
+    sources: list[dict[str, Any]] = [
+        load_xt16_geometry_envelope(
+            artifacts / "lidar_geometry_summary.json",
+            received_ms=generated,
+            pid_file=artifacts / "xt16_geometry_service" / "producer.pid",
+        ),
+        *load_d435_envelopes(
+            artifacts / "d435_perception_summary.json",
+            received_ms=generated,
+        ),
+        load_ti_nx_envelope(
+            artifacts / "edge_perception_summary.json",
+            received_ms=generated,
+            producer_instance_id=ti_producer_instance_id,
+        ),
+        reserved_motion_envelope(
+            "xt16_imu_motion",
+            "imu_motion",
+            received_ms=generated,
+        ),
+        reserved_motion_envelope(
+            "unitree_odometry_motion",
+            "odometry_motion",
+            received_ms=generated,
+        ),
+    ]
+    return build_perception_context(
+        sources,
+        generated_at_ms=generated,
+        sequence_tracker=sequence_tracker,
+    )

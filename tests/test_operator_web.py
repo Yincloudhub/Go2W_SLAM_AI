@@ -6,6 +6,8 @@ import time
 import unittest
 from pathlib import Path
 
+from edge_autonomy.perception_context import build_perception_context
+
 
 def load_operator_web():
     path = Path(__file__).resolve().parents[1] / "scripts" / "go2w_operator_web.py"
@@ -21,6 +23,51 @@ web = load_operator_web()
 
 
 class OperatorWebTests(unittest.TestCase):
+    @staticmethod
+    def write_perception_context(root: Path, sources: list[dict]) -> Path:
+        path = root / "artifacts" / "perception_context_v1.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        context = build_perception_context(
+            sources,
+            generated_at_ms=int(time.time() * 1000),
+        )
+        path.write_text(json.dumps(context), encoding="utf-8")
+        return path
+
+    @staticmethod
+    def sensor_envelope(
+        source_id: str,
+        source_kind: str,
+        payload: dict,
+        *,
+        status: str = "fresh",
+        age_ms: int = 100,
+        stale_ms: int = 3000,
+        calibration_status: str = "unknown",
+        calibration_id: str | None = None,
+    ) -> dict:
+        now_ms = int(time.time() * 1000)
+        return {
+            "schema_version": 1,
+            "schema": "go2w_sensor_envelope_v1",
+            "source_id": source_id,
+            "source_kind": source_kind,
+            "timestamp_ms": now_ms - age_ms,
+            "received_ms": now_ms,
+            "sequence": 1,
+            "age_ms": age_ms,
+            "stale_ms": stale_ms,
+            "frame_id": None,
+            "status": status,
+            "confidence": 0.8,
+            "calibration_status": calibration_status,
+            "calibration_id": calibration_id,
+            "producer": "test_producer",
+            "producer_instance_id": "test-instance",
+            "status_reasons": [],
+            "payload": payload,
+        }
+
     @staticmethod
     def write_relocation_registry(root: Path) -> Path:
         path = root / "registry.json"
@@ -365,8 +412,6 @@ class OperatorWebTests(unittest.TestCase):
     def test_execute_on_does_not_depend_on_stereo_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "artifacts" / "stereo_depth_summary.json"
-            summary_path.parent.mkdir(parents=True)
             config = web.WebConfig(
                 repo_root=root,
                 panel_bin=root / "missing",
@@ -382,28 +427,41 @@ class OperatorWebTests(unittest.TestCase):
             self.assertEqual(missing["stereo_diagnostic"]["reason"], "stereo_depth_offline_or_not_started")
             app.command("/execute off")
 
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "timestamp_ms": int(time.time() * 1000),
-                        "source": "stereo_depth",
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "d435_depth",
+                        "rgbd_depth_geometry",
+                        {
                         "front_clearance_m": 2.0,
                         "left_clearance_m": 2.0,
                         "right_clearance_m": 2.0,
                         "roi_confidence": {"front": 0.8, "left": 0.8, "right": 0.8},
-                    }
-                ),
-                encoding="utf-8",
+                        },
+                    )
+                ],
             )
             allowed = app.command("/execute on", confirmed=True)
             self.assertTrue(allowed["accepted"])
             self.assertTrue(app.state.execute_enabled)
             app.command("/execute off")
 
-            data = json.loads(summary_path.read_text(encoding="utf-8"))
-            data["timestamp_ms"] = int(time.time() * 1000)
-            data["right_clearance_m"] = 0.6
-            summary_path.write_text(json.dumps(data), encoding="utf-8")
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "d435_depth",
+                        "rgbd_depth_geometry",
+                        {
+                            "front_clearance_m": 2.0,
+                            "left_clearance_m": 2.0,
+                            "right_clearance_m": 0.6,
+                            "roi_confidence": {"front": 0.8, "left": 0.8, "right": 0.8},
+                        },
+                    )
+                ],
+            )
             armed = app.command("/execute on", confirmed=True)
             self.assertTrue(armed["accepted"])
             self.assertFalse(armed["stereo_diagnostic"]["healthy"])
@@ -562,11 +620,16 @@ class OperatorWebTests(unittest.TestCase):
     def test_stereo_summary_file_is_bounded_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "artifacts" / "stereo_depth_summary.json"
-            summary_path.parent.mkdir(parents=True)
-            summary_path.write_text(
-                json.dumps({"timestamp_ms": 1, "source": "stereo_depth", "front_clearance_m": 1.2, "confidence": 0.8}),
-                encoding="utf-8",
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "d435_depth",
+                        "rgbd_depth_geometry",
+                        {"front_clearance_m": 1.2, "roi_confidence": {"front": 0.8}},
+                        status="stale",
+                    )
+                ],
             )
             config = web.WebConfig(
                 repo_root=root,
@@ -574,38 +637,34 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
-                stereo_summary_path=Path("artifacts/stereo_depth_summary.json"),
-                stereo_stale_ms=12345,
             )
             app = web.OperatorWebApp(config)
             loaded = app.stereo_summary()
             self.assertTrue(loaded["available"])
-            self.assertEqual(loaded["data"]["source"], "stereo_depth")
-            self.assertEqual(loaded["stale_ms"], 12345)
+            self.assertEqual(loaded["source_id"], "d435_depth")
+            self.assertEqual(loaded["status"], "stale")
             self.assertTrue(loaded["stale_by_age"])
 
     def test_lidar_summary_reports_calibration_effective_age_and_four_way_clearance(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "artifacts" / "lidar_geometry_summary.json"
-            summary_path.parent.mkdir(parents=True)
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "timestamp_ms": int(time.time() * 1000) - 100,
-                        "source": "lidar_pointcloud",
-                        "parameters": {"calibrated": True, "calibration_id": "xt16-test"},
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "xt16_geometry",
+                        "lidar_geometry",
+                        {
                         "front_clearance_m": 2.0,
                         "left_clearance_m": 1.0,
                         "right_clearance_m": 1.1,
                         "rear_clearance_m": 0.9,
                         "body_clearance_m": {"front": 2.1, "left": 1.1, "right": 1.2, "rear": 1.0},
-                        "latency_ms": 50,
-                        "stale": False,
-                        "stale_reasons": [],
-                    }
-                ),
-                encoding="utf-8",
+                        },
+                        calibration_status="verified",
+                        calibration_id="xt16-test",
+                    )
+                ],
             )
             config = web.WebConfig(
                 repo_root=root,
@@ -613,8 +672,6 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
-                lidar_summary_path=Path("artifacts/lidar_geometry_summary.json"),
-                lidar_stale_ms=1000,
             )
 
             loaded = web.OperatorWebApp(config).lidar_summary()
@@ -623,25 +680,22 @@ class OperatorWebTests(unittest.TestCase):
             self.assertEqual(loaded["status"], "fresh")
             self.assertTrue(loaded["calibrated"])
             self.assertEqual(loaded["calibration_id"], "xt16-test")
-            self.assertGreaterEqual(loaded["effective_age_ms"], 150)
+            self.assertGreaterEqual(loaded["effective_age_ms"], 100)
+            self.assertLess(loaded["effective_age_ms"], 250)
             self.assertEqual(loaded["data"]["rear_clearance_m"], 0.9)
 
     def test_lidar_summary_fails_closed_without_verified_calibration(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "lidar.json"
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "timestamp_ms": int(time.time() * 1000),
-                        "source": "lidar_pointcloud",
-                        "parameters": {"calibrated": False, "calibration_id": None},
-                        "stale": True,
-                        "stale_reasons": ["uncalibrated_xt16_geometry"],
-                    }
-                ),
-                encoding="utf-8",
+            envelope = self.sensor_envelope(
+                "xt16_geometry",
+                "lidar_geometry",
+                {},
+                status="uncalibrated",
+                calibration_status="pending",
             )
+            envelope["status_reasons"] = ["uncalibrated_xt16_geometry"]
+            self.write_perception_context(root, [envelope])
             app = web.OperatorWebApp(
                 web.WebConfig(
                     repo_root=root,
@@ -649,7 +703,6 @@ class OperatorWebTests(unittest.TestCase):
                     gateway_client="missing",
                     start_slam_script="missing",
                     start_rviz2_script="missing",
-                    lidar_summary_path=summary_path,
                 )
             )
 
@@ -662,10 +715,18 @@ class OperatorWebTests(unittest.TestCase):
     def test_stereo_summary_stale_threshold_is_configurable(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "stereo.json"
-            summary_path.write_text(
-                json.dumps({"timestamp_ms": int(time.time() * 1000) - 2000, "source": "stereo_depth"}),
-                encoding="utf-8",
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "d435_depth",
+                        "rgbd_depth_geometry",
+                        {},
+                        status="fresh",
+                        age_ms=2000,
+                        stale_ms=5000,
+                    )
+                ],
             )
             config = web.WebConfig(
                 repo_root=root,
@@ -673,8 +734,6 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
-                stereo_summary_path=summary_path,
-                stereo_stale_ms=5000,
             )
             loaded = web.OperatorWebApp(config).stereo_summary()
             self.assertFalse(loaded["stale_by_age"])
@@ -682,19 +741,16 @@ class OperatorWebTests(unittest.TestCase):
     def test_semantic_summary_file_is_bounded_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "artifacts" / "vision_semantic_summary.json"
-            summary_path.parent.mkdir(parents=True)
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "timestamp_ms": 1,
-                        "available": True,
-                        "source": "deepyolo_realsense",
-                        "object_count": 1,
-                        "recommended_action": "slow_and_watch",
-                    }
-                ),
-                encoding="utf-8",
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "d435_yolo",
+                        "visual_object_semantics",
+                        {"objects": [{"class_name": "person"}]},
+                        status="stale",
+                    )
+                ],
             )
             config = web.WebConfig(
                 repo_root=root,
@@ -702,33 +758,25 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
-                semantic_summary_path=Path("artifacts/vision_semantic_summary.json"),
-                semantic_stale_ms=2345,
             )
             loaded = web.OperatorWebApp(config).semantic_summary()
             self.assertTrue(loaded["available"])
-            self.assertEqual(loaded["data"]["source"], "deepyolo_realsense")
-            self.assertEqual(loaded["stale_ms"], 2345)
+            self.assertEqual(loaded["source_id"], "d435_yolo")
             self.assertTrue(loaded["stale_by_age"])
 
     def test_semantic_summary_prefers_source_file_age(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "artifacts" / "vision_semantic_summary.json"
-            summary_path.parent.mkdir(parents=True)
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "timestamp_ms": 1,
-                        "source_file_age_ms": 120,
-                        "stale_ms": 3000,
-                        "available": True,
-                        "source": "deepyolo_realsense",
-                        "source_status": "fresh",
-                        "stale": False,
-                    }
-                ),
-                encoding="utf-8",
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "d435_yolo",
+                        "visual_object_semantics",
+                        {},
+                        age_ms=120,
+                    )
+                ],
             )
             config = web.WebConfig(
                 repo_root=root,
@@ -736,38 +784,35 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
-                semantic_summary_path=Path("artifacts/vision_semantic_summary.json"),
             )
 
             loaded = web.OperatorWebApp(config).semantic_summary()
 
-            self.assertEqual(loaded["age_ms"], 120)
+            self.assertGreaterEqual(loaded["age_ms"], 120)
+            self.assertLess(loaded["age_ms"], 250)
             self.assertFalse(loaded["stale_by_age"])
 
     def test_edge_summary_is_semantic_only_until_explicit_safety_adapter_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            summary_path = root / "artifacts" / "edge_perception_summary.json"
-            summary_path.parent.mkdir(parents=True)
-            summary_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "node_id": "nx_ti_radar_01",
-                        "sensor_type": "ti_millimeter_wave_radar",
-                        "source": "nx_ti_radar",
-                        "timestamp_ms": int(time.time() * 1000),
-                        "health": {"status": "ok"},
-                        "observations": [{"track_id": str(index)} for index in range(40)],
+            self.write_perception_context(
+                root,
+                [
+                    self.sensor_envelope(
+                        "ti_nx:nx_ti_radar_01",
+                        "radar_semantics",
+                        {
+                            "observations": [{"track_id": str(index)} for index in range(32)],
                         "policy": {
                             "mode": "semantic_only",
-                            "calibrated": True,
-                            "calibration_id": "test-calibration",
                             "safety_candidate": True,
+                                "safety_wired": False,
+                            },
                         },
-                    }
-                ),
-                encoding="utf-8",
+                        calibration_status="verified",
+                        calibration_id="test-calibration",
+                    )
+                ],
             )
             config = web.WebConfig(
                 repo_root=root,
@@ -775,7 +820,6 @@ class OperatorWebTests(unittest.TestCase):
                 gateway_client="missing",
                 start_slam_script="missing",
                 start_rviz2_script="missing",
-                edge_summary_path=Path("artifacts/edge_perception_summary.json"),
             )
 
             loaded = web.OperatorWebApp(config).edge_summary()

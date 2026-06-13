@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 from .map_registry import MapProfile, MapRegistry, TopologyNode
+from .perception_context import validate_perception_context
 
 
 NAVIGABLE_LOCALIZATION_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
@@ -265,6 +266,7 @@ def build_planner_context(
     *,
     user_command: str,
     map_id: str | None = None,
+    perception_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     profile = registry.get_map(map_id or snapshot.get("expected_map_id") or registry.default_map_id)
     pose = _pose_dict_from_snapshot(snapshot)
@@ -308,10 +310,16 @@ def build_planner_context(
 
     lidar = snapshot.get("lidar_state", {})
     pointcloud = snapshot.get("live_pointcloud", {})
+    timestamp_ms = int(snapshot.get("timestamp_ms", int(time.time() * 1000)))
+    validated_perception_context = validate_perception_context(
+        perception_context,
+        current_time_ms=int(time.time() * 1000),
+    )
     return {
         "schema_version": 1,
-        "timestamp_ms": int(snapshot.get("timestamp_ms", int(time.time() * 1000))),
+        "timestamp_ms": timestamp_ms,
         "user_command": user_command,
+        "perception_context": validated_perception_context,
         "world_state_summary": {
             "map": {
                 "map_id": profile.map_id,

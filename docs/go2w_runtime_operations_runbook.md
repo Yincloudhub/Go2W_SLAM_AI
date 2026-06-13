@@ -43,7 +43,7 @@ src/edge_autonomy/perception_context.py
 - `local_geometry.primary` 只接受 fresh 且已验证标定的 XT16；D435 只进入
   `forward_supplements`。
 - context 生成时重新计算有效 age，避免缓存中的旧 envelope 保持 fresh。
-- P0-2 schema/loaders 提交不启动 SLAM、Gateway 或底盘运动。
+- context producer 不启动 D435、XT16、SLAM、Gateway 或底盘运动。
 
 检查代码契约使用：
 
@@ -51,8 +51,21 @@ src/edge_autonomy/perception_context.py
 PYTHONPATH=src python3 -m unittest tests.test_perception_context
 ```
 
-当前 WorldState、LLM 和 UI 尚未切换到该入口；在下一接线提交前，不得把
-PerceptionContext schema/loaders 的存在误报为完整消费链已经完成。
+统一运行 artifact 为：
+
+```text
+artifacts/perception_context_v1.json
+```
+
+生命周期命令：
+
+```bash
+bash scripts/go2w_perception_context_sidecar.sh start
+bash scripts/go2w_perception_context_sidecar.sh health
+bash scripts/go2w_perception_context_sidecar.sh stop
+```
+
+该 sidecar 只读取紧凑摘要并发布 context，不持有相机，不启动 SLAM/Gateway。
 
 ### WorldState reducer 状态
 
@@ -63,8 +76,9 @@ Python/C++ WorldState reducer 已完成接口切换：
 - `perception_summaries` 仅是 `context.sources` 的兼容投影。
 - 未提供 fresh context 时显示 `perception_context_status=unavailable_or_stale`。
 
-当前 Planner、C++ OperatorPanel/Web UI 尚未统一传入同一 context instance；
-下一提交完成该消费接线前，页面上的旧独立摘要接口仍只作兼容诊断。
+Python Planner、C++ OperatorPanel/LLM、Web UI 和 runtime log 已统一消费该
+artifact。Web 的旧 lidar/depth/semantic/radar 响应字段仅是同一
+`context_id` 的兼容投影，不再读取旧独立 artifact。
 
 ## 本地浏览器入口
 

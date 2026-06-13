@@ -53,6 +53,13 @@ COPIES = (
     ),
 )
 
+LOG_COPIES = (
+    (
+        Path("docs/obsidian_go2w_logs/2026-06-12-GO2W定位安全闭环日志.md"),
+        Path("2026-06-12-GO2W定位安全闭环日志.md"),
+    ),
+)
+
 
 INDEX_BLOCK = f"""{START}
 ## 2026-06-12 比赛边缘自治交接
@@ -71,8 +78,8 @@ INDEX_BLOCK = f"""{START}
 - 比赛唯一真实执行链为 `TaskQueue -> MissionDecisionEngine -> SLAM Gateway -> Unitree SDK`。
 - Gateway 是最终运动权威，LLM 不得生成底层速度、任意坐标或 Unitree API ID。
 - P0-1 已完成：D435 深度与 DeepYOLO 由单一采集 owner 驱动，旧入口只做兼容转发。
-- P0-2 schema/loaders 已完成：旧 artifact 无生产者证据时必须 offline。
-- Python/C++ WorldState reducers 已只接受 fresh `PerceptionContext v1`。
+- P0-2 统一 context 已完成本地实现：旧 artifact 无生产者证据时必须 offline。
+- Planner、C++ LLM、WorldState、Web UI 和日志只消费同一 `PerceptionContext v1`。
 - TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
 - 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
 {END}
@@ -111,6 +118,10 @@ def copy_files(repo_root: Path, overview_dir: Path, copies: Iterable[tuple[Path,
         shutil.copyfile(source, destination)
         written.append(destination)
     return written
+
+
+def copy_logs(repo_root: Path, log_dir: Path) -> list[Path]:
+    return copy_files(repo_root, log_dir, LOG_COPIES)
 
 
 def sanitize_export_text(text: str) -> str:
@@ -158,6 +169,7 @@ def sync_docs(
 
     overview_dir = vault / "机器狗" / "GO2W边缘自治项目总览"
     written = copy_files(repo_root, overview_dir)
+    written.extend(copy_logs(repo_root, vault / "机器狗" / "现场日志"))
 
     index = overview_dir / "00-项目总览与阅读路径.md"
     if not index.is_file():

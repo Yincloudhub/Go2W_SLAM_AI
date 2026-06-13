@@ -208,9 +208,10 @@ The summary is now consumed by the motion-safety chain. Safety checks use the
 front/left/right ROI confidence values rather than treating whole-image valid
 fraction as a direct pass/fail signal.
 
-The operator Web UI reads this file through `--stereo-summary-path` and marks it
-stale by `--stereo-stale-ms` / `GO2W_STEREO_STALE_MS` without subscribing to raw
-camera streams. This keeps camera display decoupled from the real-time loop.
+The legacy file remains a producer-side compatibility artifact. The operator
+Web UI no longer reads it directly. D435 depth is normalized into
+`artifacts/perception_context_v1.json`, and the UI projects its depth panel
+from the `d435_depth` envelope.
 
 ## DeepYOLO Semantic Bridge
 
@@ -350,16 +351,14 @@ The JSONL producer is event-oriented rather than heartbeat-oriented. A short
 quiet scene therefore becomes `event_only_idle`, not an immediate crash. It is
 still excluded from safety actions until a fresh event arrives.
 
-The operator Web UI reads this file through
-`--semantic-summary-path` / `GO2W_SEMANTIC_SUMMARY_PATH` and marks it stale with
-`--semantic-stale-ms` / `GO2W_SEMANTIC_STALE_MS`.
+The operator Web UI and C++ LLM no longer read this file directly. D435 YOLO is
+normalized into the `d435_yolo` envelope in
+`artifacts/perception_context_v1.json`.
 
 Current routing policy:
 
-- UI and LLM may see the semantic summary as scene context. The C++ operator
-  panel includes `artifacts/stereo_depth_summary.json` and
-  `artifacts/vision_semantic_summary.json` in the LLM HTTP payload when those
-  files exist.
+- UI and LLM may see fresh semantic summaries only through validated
+  `PerceptionContext v1`.
 - `QueueExecutor` and `SafetyGate` do not block on DeepYOLO.
 - Future C++ fusion may use high-confidence, fresh semantic objects only to
   increase caution, such as slow/pause when a high-risk center object has valid

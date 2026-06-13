@@ -26,11 +26,17 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from edge_autonomy.perception_context import load_perception_context_file  # noqa: E402
+
+
 DEFAULT_PORT = 8765
 DEFAULT_MAP_ID = "go2w_real_site"
 DEFAULT_REGISTRY_PATH = Path("configs/maps/go2w_real_site_map_registry.json")
-MAX_EDGE_SUMMARY_BYTES = 256 * 1024
-MAX_EDGE_SUMMARY_ITEMS = 32
 DISABLED_NODE_TAGS = {"disabled", "ui_disabled", "deleted"}
 VERIFICATION_TAGS = {"needs_calibration", "needs_standing_verification"}
 PROTECTED_TOPOLOGY_NODE_IDS = {"initial_point"}
@@ -280,17 +286,10 @@ class WebConfig:
     panel_timeout_s: int = 90
     llm_http_url: str = ""
     llm_http_model: str = "local"
-    lidar_summary_path: Path = Path("artifacts/lidar_geometry_summary.json")
-    lidar_stale_ms: int = 1000
-    stereo_summary_path: Path = Path("artifacts/stereo_depth_summary.json")
-    stereo_stale_ms: int = 5000
+    perception_context_path: Path = Path("artifacts/perception_context_v1.json")
     stereo_diagnostic_stale_ms: int = 1000
     stereo_diagnostic_min_roi_confidence: float = 0.15
     stereo_diagnostic_min_clearance_m: float = 0.8
-    semantic_summary_path: Path = Path("artifacts/vision_semantic_summary.json")
-    semantic_stale_ms: int = 3000
-    edge_summary_path: Path = Path("artifacts/edge_perception_summary.json")
-    edge_stale_ms: int = 3000
     collection_status_path: Path = Path("~/go2w_dataset/collection_status.json")
     status_cache_ms: int = 1500
     ensure_slam_on_start: bool = False
@@ -304,6 +303,8 @@ class WebConfig:
             str(self.repo_root),
             "--registry",
             str(self.registry_path),
+            "--perception-context",
+            str(self.perception_context_path),
             "--map-id",
             self.map_id,
             "--gateway-client",
@@ -511,16 +512,22 @@ class OperatorWebApp:
 
     def _fresh_status(self) -> Dict[str, Any]:
         result = self.run_panel_session(["/quit"])
-        result["lidar_summary"] = self.lidar_summary()
-        result["stereo_summary"] = self.stereo_summary()
-        result["stereo_diagnostic"] = self.stereo_diagnostic()
-        result["semantic_summary"] = self.semantic_summary()
-        result["edge_summary"] = self.edge_summary()
+        self._attach_perception(result)
         result["collection_status"] = self.collection_status()
         result["capabilities"] = self.capabilities()
         with self.lock:
             result["state"] = self.state.snapshot()
         return result
+
+    def _attach_perception(self, result: Dict[str, Any]) -> None:
+        context_snapshot = self.perception_context()
+        stereo_summary = self.stereo_summary(context_snapshot)
+        result["perception_context"] = context_snapshot
+        result["lidar_summary"] = self.lidar_summary(context_snapshot)
+        result["stereo_summary"] = stereo_summary
+        result["stereo_diagnostic"] = self.stereo_diagnostic(stereo_summary)
+        result["semantic_summary"] = self.semantic_summary(context_snapshot)
+        result["edge_summary"] = self.edge_summary(context_snapshot)
 
     def invalidate_status_cache(self) -> None:
         with self.status_lock:
@@ -543,10 +550,11 @@ class OperatorWebApp:
                     "stdout": "",
                     "stderr": "relocate blocked: localization is already healthy; restart SLAM before a recovery relocation.\n",
                     "summary": summary,
-                    "lidar_summary": self.lidar_summary(),
-                    "stereo_summary": self.stereo_summary(),
-                    "semantic_summary": self.semantic_summary(),
-                    "edge_summary": self.edge_summary(),
+                    "perception_context": status.get("perception_context"),
+                    "lidar_summary": status.get("lidar_summary"),
+                    "stereo_summary": status.get("stereo_summary"),
+                    "semantic_summary": status.get("semantic_summary"),
+                    "edge_summary": status.get("edge_summary"),
                     "state": self.state.snapshot(),
                 }
             tokens = line.split()
@@ -598,17 +606,16 @@ class OperatorWebApp:
                 }
             remaining = RELOCATE_COOLDOWN_S - (now - self._last_relocate_ts)
             if remaining > 0:
-                return {
+                blocked = {
                     "accepted": False,
                     "exit_code": 3,
                     "stdout": "",
                     "stderr": f"relocate blocked: wait {remaining:.1f}s before retrying.\n",
                     "summary": summary,
-                    "stereo_summary": self.stereo_summary(),
-                    "semantic_summary": self.semantic_summary(),
-                    "edge_summary": self.edge_summary(),
                     "state": self.state.snapshot(),
                 }
+                self._attach_perception(blocked)
+                return blocked
             self._last_relocate_ts = now
 
         local: Optional[Dict[str, Any]] = None
@@ -616,11 +623,7 @@ class OperatorWebApp:
             local = self.state.apply_local_setting(line, confirmed=confirmed)
             if local is not None:
                 local["summary"] = {}
-                local["lidar_summary"] = self.lidar_summary()
-                local["stereo_summary"] = self.stereo_summary()
-                local["stereo_diagnostic"] = self.stereo_diagnostic()
-                local["semantic_summary"] = self.semantic_summary()
-                local["edge_summary"] = self.edge_summary()
+                self._attach_perception(local)
                 self.state.remember(line, local)
                 local["state"] = self.state.snapshot()
         if local is not None:
@@ -628,11 +631,7 @@ class OperatorWebApp:
             return local
 
         result = self.run_panel_session([line, "/quit"])
-        result["lidar_summary"] = self.lidar_summary()
-        result["stereo_summary"] = self.stereo_summary()
-        result["stereo_diagnostic"] = self.stereo_diagnostic()
-        result["semantic_summary"] = self.semantic_summary()
-        result["edge_summary"] = self.edge_summary()
+        self._attach_perception(result)
         result["capabilities"] = self.capabilities()
         with self.lock:
             self.state.remember(line, result)
@@ -917,119 +916,85 @@ class OperatorWebApp:
             },
         }
 
-    def lidar_summary(self) -> Dict[str, Any]:
-        path = self.config.lidar_summary_path
+    def perception_context(self) -> Dict[str, Any]:
+        path = self.config.perception_context_path
         if not path.is_absolute():
             path = self.config.repo_root / path
-        if not path.exists():
+        context = load_perception_context_file(path, current_time_ms=int(time.time() * 1000))
+        if context is None:
             return {
                 "available": False,
-                "status": "offline_or_not_started",
+                "status": "unavailable_or_stale",
                 "path": str(path),
-                "stale_ms": self.config.lidar_stale_ms,
+                "data": None,
             }
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            timestamp_ms = int(data.get("timestamp_ms") or 0)
-            receipt_age_ms = (
-                max(0, int(time.time() * 1000) - timestamp_ms)
-                if timestamp_ms > 0
-                else None
-            )
-            latency = data.get("latency_ms")
-            sensor_latency_ms = (
-                max(0.0, float(latency))
-                if isinstance(latency, (int, float))
-                and not isinstance(latency, bool)
-                and math.isfinite(float(latency))
-                else 0.0
-            )
-            effective_age_ms = (
-                float(receipt_age_ms) + sensor_latency_ms
-                if isinstance(receipt_age_ms, int)
-                else None
-            )
-            parameters = data.get("parameters") if isinstance(data.get("parameters"), dict) else {}
-            producer_summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-            calibration_id = str(
-                parameters.get("calibration_id")
-                or producer_summary.get("calibration_id")
-                or ""
-            ).strip()
-            calibrated = bool(
-                (
-                    parameters.get("calibrated") is True
-                    or producer_summary.get("calibrated") is True
-                )
-                and calibration_id
-            )
-            stale_reasons = [
-                str(value)
-                for value in data.get("stale_reasons", [])
-                if value
-            ] if isinstance(data.get("stale_reasons"), list) else []
-            stale_by_age = bool(
-                effective_age_ms is None
-                or effective_age_ms > self.config.lidar_stale_ms
-            )
-            producer_stale = bool(data.get("stale", True))
-            fresh = calibrated and not producer_stale and not stale_by_age
-            status = "fresh" if fresh else ("uncalibrated" if not calibrated else "stale_or_offline")
-            return {
-                "available": True,
-                "status": status,
-                "path": str(path),
-                "receipt_age_ms": receipt_age_ms,
-                "sensor_latency_ms": sensor_latency_ms,
-                "effective_age_ms": effective_age_ms,
-                "stale_ms": self.config.lidar_stale_ms,
-                "stale_by_age": stale_by_age,
-                "producer_stale": producer_stale,
-                "stale_reasons": stale_reasons,
-                "calibrated": calibrated,
-                "calibration_id": calibration_id or None,
-                "data": data,
-            }
-        except Exception as exc:  # noqa: BLE001
+        return {
+            "available": True,
+            "status": "fresh",
+            "path": str(path),
+            "context_id": context.get("context_id"),
+            "age_ms": max(0, int(time.time() * 1000) - int(context["generated_at_ms"])),
+            "stale_ms": context.get("stale_ms"),
+            "data": context,
+        }
+
+    def _source_summary(
+        self,
+        source_id: str,
+        context_snapshot: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        snapshot = context_snapshot or self.perception_context()
+        context = snapshot.get("data") if isinstance(snapshot, dict) else None
+        sources = context.get("sources", []) if isinstance(context, dict) else []
+        source = next(
+            (
+                item
+                for item in sources
+                if isinstance(item, dict) and item.get("source_id") == source_id
+            ),
+            None,
+        )
+        if source is None:
             return {
                 "available": False,
-                "status": "invalid",
-                "path": str(path),
-                "error": str(exc),
-                "stale_ms": self.config.lidar_stale_ms,
+                "status": "offline",
+                "path": snapshot.get("path") if isinstance(snapshot, dict) else None,
+                "source_id": source_id,
             }
+        status = str(source.get("status") or "invalid")
+        return {
+            "available": True,
+            "fresh": status == "fresh",
+            "status": status,
+            "path": snapshot.get("path"),
+            "source_id": source_id,
+            "age_ms": source.get("age_ms"),
+            "effective_age_ms": source.get("age_ms"),
+            "stale_ms": source.get("stale_ms"),
+            "stale_by_age": status != "fresh",
+            "producer_stale": status == "stale",
+            "stale_reasons": source.get("status_reasons", []),
+            "calibrated": source.get("calibration_status") == "verified",
+            "calibration_id": source.get("calibration_id"),
+            "data": source.get("payload", {}),
+            "envelope": source,
+        }
 
-    def stereo_summary(self) -> Dict[str, Any]:
-        path = self.config.stereo_summary_path
-        if not path.is_absolute():
-            path = self.config.repo_root / path
-        if not path.exists():
-            return {"available": False, "status": "offline_or_not_started", "path": str(path)}
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            ts = int(data.get("timestamp_ms") or 0)
-            age_ms = max(0, int(time.time() * 1000) - ts) if ts else None
-            return {
-                "available": True,
-                "status": "stale_or_offline" if bool(age_ms is not None and age_ms > self.config.stereo_stale_ms) else "fresh",
-                "path": str(path),
-                "age_ms": age_ms,
-                "stale_ms": self.config.stereo_stale_ms,
-                "stale_by_age": bool(age_ms is not None and age_ms > self.config.stereo_stale_ms),
-                "data": data,
-            }
-        except Exception as exc:  # noqa: BLE001
-            return {"available": False, "status": "invalid", "path": str(path), "error": str(exc)}
+    def lidar_summary(self, context_snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return self._source_summary("xt16_geometry", context_snapshot)
 
-    def stereo_diagnostic(self) -> Dict[str, Any]:
-        summary = self.stereo_summary()
+    def stereo_summary(self, context_snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return self._source_summary("d435_depth", context_snapshot)
+
+    def stereo_diagnostic(self, summary: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        summary = summary or self.stereo_summary()
         if not summary.get("available") or not isinstance(summary.get("data"), dict):
             return {"healthy": False, "reason": "stereo_depth_offline_or_not_started"}
         data = summary["data"]
-        if data.get("source") != "stereo_depth":
+        if summary.get("source_id") != "d435_depth":
             return {"healthy": False, "reason": "stereo_depth_source_is_not_trusted"}
         age_ms = summary.get("age_ms")
-        if bool(data.get("stale", False)) or not isinstance(age_ms, int) or age_ms > self.config.stereo_diagnostic_stale_ms:
+        if summary.get("status") != "fresh" or not isinstance(age_ms, int) or age_ms > self.config.stereo_diagnostic_stale_ms:
             return {"healthy": False, "reason": "stereo_depth_not_fresh", "age_ms": age_ms}
         roi = data.get("roi_confidence") if isinstance(data.get("roi_confidence"), dict) else {}
         clearances: Dict[str, float] = {}
@@ -1063,34 +1028,8 @@ class OperatorWebApp:
             "roi_confidence": roi_confidence,
         }
 
-    def semantic_summary(self) -> Dict[str, Any]:
-        path = self.config.semantic_summary_path
-        if not path.is_absolute():
-            path = self.config.repo_root / path
-        if not path.exists():
-            return {"available": False, "path": str(path)}
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-            source_file_age = data.get("source_file_age_ms")
-            source_file_mtime = int(data.get("source_file_mtime_ms") or 0)
-            packet_ts = int(data.get("timestamp_ms") or 0)
-            if isinstance(source_file_age, (int, float)) and not isinstance(source_file_age, bool):
-                age_ms = max(0, int(source_file_age))
-            elif source_file_mtime:
-                age_ms = max(0, int(time.time() * 1000) - source_file_mtime)
-            else:
-                age_ms = max(0, int(time.time() * 1000) - packet_ts) if packet_ts else None
-            stale_ms = int(data.get("stale_ms") or self.config.semantic_stale_ms)
-            return {
-                "available": bool(data.get("available", True)),
-                "path": str(path),
-                "age_ms": age_ms,
-                "stale_ms": stale_ms,
-                "stale_by_age": bool(data.get("stale", False) or (age_ms is not None and age_ms > stale_ms)),
-                "data": data,
-            }
-        except Exception as exc:  # noqa: BLE001
-            return {"available": False, "path": str(path), "error": str(exc)}
+    def semantic_summary(self, context_snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return self._source_summary("d435_yolo", context_snapshot)
 
     def collection_status(self) -> Dict[str, Any]:
         path = self.config.collection_status_path.expanduser()
@@ -1122,86 +1061,45 @@ class OperatorWebApp:
                 "error": str(exc),
             }
 
-    def edge_summary(self) -> Dict[str, Any]:
-        path = self.config.edge_summary_path
-        if not path.is_absolute():
-            path = self.config.repo_root / path
-        if not path.exists():
+    def edge_summary(self, context_snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        snapshot = context_snapshot or self.perception_context()
+        context = snapshot.get("data") if isinstance(snapshot, dict) else None
+        sources = context.get("sources", []) if isinstance(context, dict) else []
+        source = next(
+            (
+                item
+                for item in sources
+                if isinstance(item, dict) and item.get("source_kind") == "radar_semantics"
+            ),
+            None,
+        )
+        if source is None:
             return {
                 "available": False,
                 "fresh": False,
                 "eligible_for_llm": False,
                 "safety_candidate": False,
                 "safety_wired": False,
-                "status": "offline_or_not_started",
-                "path": str(path),
+                "status": "offline",
+                "path": snapshot.get("path") if isinstance(snapshot, dict) else None,
             }
-        try:
-            if path.stat().st_size > MAX_EDGE_SUMMARY_BYTES:
-                raise ValueError("summary exceeds 256 KiB limit")
-            data = json.loads(path.read_text(encoding="utf-8"))
-            timestamp_ms = int(data.get("timestamp_ms") or 0)
-            age_ms = max(0, int(time.time() * 1000) - timestamp_ms) if timestamp_ms else -1
-            health = data.get("health") if isinstance(data.get("health"), dict) else {}
-            policy = data.get("policy") if isinstance(data.get("policy"), dict) else {}
-            valid = (
-                data.get("schema_version") == 1
-                and bool(data.get("node_id"))
-                and bool(data.get("sensor_type"))
-                and bool(data.get("source"))
-                and timestamp_ms > 0
-            )
-            fresh = (
-                valid
-                and not bool(data.get("stale", False))
-                and 0 <= age_ms <= self.config.edge_stale_ms
-                and health.get("status") == "ok"
-            )
-            safe_data = {
-                "schema_version": data.get("schema_version"),
-                "node_id": data.get("node_id"),
-                "sensor_type": data.get("sensor_type"),
-                "source": data.get("source"),
-                "timestamp_ms": timestamp_ms,
-                "confidence": data.get("confidence", 0.0),
-                "latency_ms": data.get("latency_ms", 0.0),
-                "health": health,
-                "policy": {
-                    "mode": policy.get("mode", "semantic_only"),
-                    "calibrated": bool(policy.get("calibrated", False)),
-                    "safety_candidate": bool(policy.get("safety_candidate", False)),
-                },
-                "observations": data.get("observations", [])[:MAX_EDGE_SUMMARY_ITEMS]
-                if isinstance(data.get("observations"), list)
-                else [],
-                "events": data.get("events", [])[:MAX_EDGE_SUMMARY_ITEMS]
-                if isinstance(data.get("events"), list)
-                else [],
-                "summary": data.get("summary") if isinstance(data.get("summary"), dict) else {},
-            }
-            return {
-                "available": valid,
-                "fresh": fresh,
-                "eligible_for_llm": fresh,
-                "safety_candidate": bool(fresh and policy.get("calibrated", False) and policy.get("safety_candidate", False)),
-                "safety_wired": False,
-                "status": "fresh" if fresh else ("stale_or_unhealthy" if valid else "invalid_summary"),
-                "path": str(path),
-                "age_ms": age_ms,
-                "stale_ms": self.config.edge_stale_ms,
-                "data": safe_data,
-            }
-        except Exception as exc:  # noqa: BLE001
-            return {
-                "available": False,
-                "fresh": False,
-                "eligible_for_llm": False,
-                "safety_candidate": False,
-                "safety_wired": False,
-                "status": "invalid_summary",
-                "path": str(path),
-                "error": str(exc),
-            }
+        status = str(source.get("status") or "invalid")
+        payload = source.get("payload") if isinstance(source.get("payload"), dict) else {}
+        policy = payload.get("policy") if isinstance(payload.get("policy"), dict) else {}
+        fresh = status == "fresh"
+        return {
+            "available": True,
+            "fresh": fresh,
+            "eligible_for_llm": fresh,
+            "safety_candidate": bool(fresh and policy.get("safety_candidate", False)),
+            "safety_wired": False,
+            "status": status,
+            "path": snapshot.get("path"),
+            "age_ms": source.get("age_ms"),
+            "stale_ms": source.get("stale_ms"),
+            "data": payload,
+            "envelope": source,
+        }
 
 
 INDEX_HTML = r"""<!doctype html>
@@ -1677,6 +1575,9 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
         if parsed_path.path == "/api/state":
             self.send_json({"state": self.app.state_snapshot()})
             return
+        if parsed_path.path == "/api/perception-context":
+            self.send_json({"perception_context": self.app.perception_context()})
+            return
         if parsed_path.path == "/api/lidar-summary":
             self.send_json({"lidar_summary": self.app.lidar_summary()})
             return
@@ -1794,10 +1695,10 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--panel-timeout-s", type=int, default=int(env.get("GO2W_PANEL_TIMEOUT_S", "90")))
     parser.add_argument("--llm-http-url", default=env.get("GO2W_LLM_HTTP_URL", ""))
     parser.add_argument("--llm-http-model", default=env.get("GO2W_LLM_HTTP_MODEL", "local"))
-    parser.add_argument("--lidar-summary-path", default=env.get("GO2W_LIDAR_GEOMETRY_SUMMARY_PATH", "artifacts/lidar_geometry_summary.json"))
-    parser.add_argument("--lidar-stale-ms", type=int, default=int(env.get("GO2W_LIDAR_STALE_MS", "1000")))
-    parser.add_argument("--stereo-summary-path", default=env.get("GO2W_STEREO_SUMMARY_PATH", "artifacts/stereo_depth_summary.json"))
-    parser.add_argument("--stereo-stale-ms", type=int, default=int(env.get("GO2W_STEREO_STALE_MS", "5000")))
+    parser.add_argument(
+        "--perception-context-path",
+        default=env.get("GO2W_PERCEPTION_CONTEXT_PATH", "artifacts/perception_context_v1.json"),
+    )
     parser.add_argument(
         "--stereo-diagnostic-stale-ms",
         type=int,
@@ -1813,10 +1714,6 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         type=float,
         default=float(env.get("GO2W_STEREO_DIAGNOSTIC_MIN_CLEARANCE_M", env.get("GO2W_STEREO_MOTION_GUARD_MIN_CLEARANCE_M", "0.8"))),
     )
-    parser.add_argument("--semantic-summary-path", default=env.get("GO2W_SEMANTIC_SUMMARY_PATH", "artifacts/vision_semantic_summary.json"))
-    parser.add_argument("--semantic-stale-ms", type=int, default=int(env.get("GO2W_SEMANTIC_STALE_MS", "3000")))
-    parser.add_argument("--edge-summary-path", default=env.get("GO2W_EDGE_SUMMARY_PATH", "artifacts/edge_perception_summary.json"))
-    parser.add_argument("--edge-stale-ms", type=int, default=int(env.get("GO2W_EDGE_STALE_MS", "3000")))
     parser.add_argument(
         "--collection-status-path",
         default=env.get("GO2W_COLLECTION_STATUS_PATH", "~/go2w_dataset/collection_status.json"),
@@ -1848,17 +1745,10 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
         panel_timeout_s=args.panel_timeout_s,
         llm_http_url=args.llm_http_url,
         llm_http_model=args.llm_http_model,
-        lidar_summary_path=Path(args.lidar_summary_path).expanduser(),
-        lidar_stale_ms=max(1, args.lidar_stale_ms),
-        stereo_summary_path=Path(args.stereo_summary_path).expanduser(),
-        stereo_stale_ms=max(1, args.stereo_stale_ms),
+        perception_context_path=Path(args.perception_context_path).expanduser(),
         stereo_diagnostic_stale_ms=max(1, args.stereo_diagnostic_stale_ms),
         stereo_diagnostic_min_roi_confidence=max(0.0, args.stereo_diagnostic_min_roi_confidence),
         stereo_diagnostic_min_clearance_m=max(0.0, args.stereo_diagnostic_min_clearance_m),
-        semantic_summary_path=Path(args.semantic_summary_path).expanduser(),
-        semantic_stale_ms=max(1, args.semantic_stale_ms),
-        edge_summary_path=Path(args.edge_summary_path).expanduser(),
-        edge_stale_ms=max(1, args.edge_stale_ms),
         collection_status_path=Path(args.collection_status_path).expanduser(),
         status_cache_ms=max(0, args.status_cache_ms),
         ensure_slam_on_start=args.ensure_slam_on_start,

@@ -1,6 +1,7 @@
 #include "go2w/world_state_v1.hpp"
 
 #include <chrono>
+#include <fstream>
 #include <iomanip>
 #include <initializer_list>
 #include <sstream>
@@ -111,10 +112,9 @@ nlohmann::json refreshPolicy()
     };
 }
 
-nlohmann::json validPerceptionContext(const nlohmann::json& options, long long current_time_ms)
+nlohmann::json validPerceptionContextValue(const nlohmann::json& context, long long current_time_ms)
 {
-    if (!options.contains("perception_context") || !options.at("perception_context").is_object()) return nullptr;
-    const auto& context = options.at("perception_context");
+    if (!context.is_object()) return nullptr;
     if (context.value("schema_version", 0) != 1 ||
         context.value("schema", std::string("")) != "go2w_perception_context_v1" ||
         !context.contains("generated_at_ms") || !context.at("generated_at_ms").is_number_integer() ||
@@ -169,6 +169,12 @@ nlohmann::json validPerceptionContext(const nlohmann::json& options, long long c
     return context;
 }
 
+nlohmann::json validPerceptionContext(const nlohmann::json& options, long long current_time_ms)
+{
+    if (!options.contains("perception_context")) return nullptr;
+    return validPerceptionContextValue(options.at("perception_context"), current_time_ms);
+}
+
 nlohmann::json latestFeedback(const nlohmann::json& queue_execution, const std::string& key)
 {
     const auto* events = objectAt(queue_execution, {"events"});
@@ -208,6 +214,26 @@ std::string screenString(const nlohmann::json& screen, const char* key, const st
 
 }  // namespace
 
+nlohmann::json loadPerceptionContextFile(const std::string& path, std::int64_t current_time_ms)
+{
+    constexpr std::streamsize kMaxContextBytes = 512 * 1024;
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file) return nullptr;
+    const std::streamsize size = file.tellg();
+    if (size <= 0 || size > kMaxContextBytes) return nullptr;
+    file.seekg(0);
+    std::string text(static_cast<std::size_t>(size), '\0');
+    if (!file.read(text.data(), size)) return nullptr;
+    try {
+        const auto parsed = nlohmann::json::parse(text);
+        return validPerceptionContextValue(
+            parsed,
+            current_time_ms > 0 ? current_time_ms : nowMs());
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const nlohmann::json& options)
 {
     if (runtime_or_gateway.is_object() && runtime_or_gateway.value("schema_version", 0) == 1 &&
@@ -222,7 +248,10 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
         runtime_or_gateway,
         {"timestamp_ms"},
         integerAt(world, {"timestamp_ms"}, nowMs()));
-    const nlohmann::json perception_context = validPerceptionContext(options, world_timestamp_ms);
+    const long long perception_context_time_ms =
+        options.value("perception_context_current_time_ms", nowMs());
+    const nlohmann::json perception_context =
+        validPerceptionContext(options, perception_context_time_ms);
 
     const std::string loc_status = stringAt(world, {"localization", "status"}, stringAt(runtime_or_gateway, {"localization_status"}, ""));
     const std::string slam_status = stringAt(world, {"slam_health", "status"}, stringAt(runtime_or_gateway, {"health_status"}, ""));

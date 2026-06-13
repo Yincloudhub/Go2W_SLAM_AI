@@ -9,6 +9,8 @@ SERVICE_DIR="${GO2W_D435_SERVICE_DIR:-${REPO_ROOT}/artifacts/d435_perception_ser
 
 echo "timestamp=$(date --iso-8601=seconds)"
 bash "${SCRIPT_DIR}/go2w_d435_perception_sidecar.sh" status
+bash "${SCRIPT_DIR}/go2w_perception_context_sidecar.sh" status
+bash "${SCRIPT_DIR}/go2w_perception_context_sidecar.sh" health || true
 
 for pid_file in "${SERVICE_DIR}/capture_owner.pid" "${SERVICE_DIR}/summary_reducer.pid"; do
   if [[ -f "${pid_file}" ]]; then

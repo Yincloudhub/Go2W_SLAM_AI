@@ -327,6 +327,7 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
         "weak_bandwidth_kbps": weak_bandwidth,
         "weak_bandwidth": isinstance(bandwidth, (int, float)) and isinstance(weak_bandwidth, (int, float)) and float(bandwidth) < float(weak_bandwidth),
         "candidates": candidates,
+        "perception_context": planner_context.get("perception_context"),
         "capability_contract": planner_context.get("capability_contract"),
         "relative_motion_request": planner_context.get("relative_motion_request")
         or (summary.get("relative_motion_request") if isinstance(summary, dict) else None),

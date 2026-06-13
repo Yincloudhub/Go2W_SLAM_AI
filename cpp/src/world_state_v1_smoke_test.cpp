@@ -1,5 +1,6 @@
 #include "go2w/world_state_v1.hpp"
 
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -95,6 +96,7 @@ int main()
             {"execution_enabled", true},
             {"task_phase", "planning"},
             {"perception_context", perceptionContext()},
+            {"perception_context_current_time_ms", 123},
         });
     require(world.value("schema_version", 0) == 1, "schema_version mismatch");
     require(world.value("localized", false), "world should be localized");
@@ -112,13 +114,25 @@ int main()
     require(world_with_capture.at("capture_keyframe").value("configured", false), "configured capture state should be visible");
     require(world.at("perception_context").value("context_id", std::string("")) == "pc-cpp-test", "context mismatch");
     require(world.at("perception_summaries").at(0).value("source_id", std::string("")) == "ti_nx:radar_01", "source projection mismatch");
+    const std::string context_path = "/tmp/go2w_perception_context_v1_smoke.json";
+    {
+        std::ofstream context_file(context_path);
+        context_file << perceptionContext().dump();
+    }
+    require(
+        go2w::loadPerceptionContextFile(context_path, 123).value("context_id", std::string("")) == "pc-cpp-test",
+        "context file loader mismatch");
+    require(go2w::loadPerceptionContextFile(context_path, 5000).is_null(), "stale context file must be rejected");
 
     auto stale_context = perceptionContext();
     stale_context["generated_at_ms"] = 1;
     stale_context["stale_ms"] = 100;
     const auto world_without_stale_context = go2w::buildWorldStateV1(
         gateway,
-        {{"perception_context", stale_context}});
+        {
+            {"perception_context", stale_context},
+            {"perception_context_current_time_ms", 123},
+        });
     require(world_without_stale_context.at("perception_context").is_null(), "stale context must be rejected");
     require(world_without_stale_context.at("perception_summaries").empty(), "stale context sources must be hidden");
 
@@ -126,7 +140,10 @@ int main()
     malformed_context["sources"][0]["schema"] = "wrong";
     const auto world_without_malformed_context = go2w::buildWorldStateV1(
         gateway,
-        {{"perception_context", malformed_context}});
+        {
+            {"perception_context", malformed_context},
+            {"perception_context_current_time_ms", 123},
+        });
     require(world_without_malformed_context.at("perception_context").is_null(), "malformed context must be rejected");
 
     auto blocked_gateway = gateway;

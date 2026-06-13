@@ -5,11 +5,15 @@ from .perception_fusion import DepthCameraSummary, depth_summary_is_usable, fuse
 from .operator_display import build_operator_display_state
 from .perception_context import (
     SensorSequenceTracker,
+    build_live_perception_context,
     build_perception_context,
     load_d435_envelopes,
+    load_perception_context_file,
     load_ti_nx_envelope,
     load_xt16_geometry_envelope,
     reserved_motion_envelope,
+    validate_perception_context,
+    write_perception_context_file,
 )
 from .runtime_log import build_runtime_log_record
 from .safety import LinkQuality, SafetyDecision, SafetySupervisor, SupervisorAction
@@ -58,6 +62,7 @@ __all__ = [
     "Xt16GeometryConfig",
     "build_planner_context",
     "build_operator_display_state",
+    "build_live_perception_context",
     "build_perception_context",
     "build_runtime_log_record",
     "build_world_state_v1",
@@ -65,10 +70,13 @@ __all__ = [
     "depth_summary_is_usable",
     "fuse_local_obstacle_summary",
     "load_d435_envelopes",
+    "load_perception_context_file",
     "load_ti_nx_envelope",
     "load_xt16_geometry_envelope",
     "plan_to_slam_command",
     "reserved_motion_envelope",
     "simulate_local_llm_plan",
+    "validate_perception_context",
     "validate_task_queue",
+    "write_perception_context_file",
 ]

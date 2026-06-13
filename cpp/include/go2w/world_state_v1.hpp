@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -10,6 +11,7 @@ namespace go2w {
 // future LLM service. It deliberately keeps raw sensor streams out of the UI and
 // LLM boundary.
 nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const nlohmann::json& options = nlohmann::json::object());
+nlohmann::json loadPerceptionContextFile(const std::string& path, std::int64_t current_time_ms = 0);
 
 nlohmann::json buildOperatorDisplayState(
     const nlohmann::json& world_state,

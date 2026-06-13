@@ -17,10 +17,8 @@ START_SLAM_SCRIPT="${GO2W_START_SLAM_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_sla
 START_RVIZ2_SCRIPT="${GO2W_START_RVIZ2_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_rviz2.sh}"
 WEB_HOST="${GO2W_WEB_HOST:-127.0.0.1}"
 WEB_PORT="${GO2W_WEB_PORT:-8765}"
-export GO2W_STEREO_SUMMARY_PATH="${GO2W_STEREO_SUMMARY_PATH:-${REPO_ROOT}/artifacts/stereo_depth_summary.json}"
-export GO2W_LIDAR_GEOMETRY_SUMMARY_PATH="${GO2W_LIDAR_GEOMETRY_SUMMARY_PATH:-${REPO_ROOT}/artifacts/lidar_geometry_summary.json}"
+PERCEPTION_CONTEXT_PATH="${GO2W_PERCEPTION_CONTEXT_PATH:-${REPO_ROOT}/artifacts/perception_context_v1.json}"
 export GO2W_COLLECTION_STATUS_PATH="${GO2W_COLLECTION_STATUS_PATH:-${HOME}/go2w_dataset/collection_status.json}"
-export GO2W_STEREO_SAFETY_STALE_MS="${GO2W_STEREO_SAFETY_STALE_MS:-1000}"
 export GO2W_START_XT16_GEOMETRY="${GO2W_START_XT16_GEOMETRY:-1}"
 export GO2W_XT16_GEOMETRY_CALIBRATED="${GO2W_XT16_GEOMETRY_CALIBRATED:-auto}"
 export GO2W_START_STEREO_DEPTH="${GO2W_START_STEREO_DEPTH:-0}"
@@ -34,6 +32,10 @@ if [[ ! -x "${PANEL_BIN}" ]]; then
   cmake --build "${BUILD_DIR}" -j"$(nproc 2>/dev/null || echo 2)"
 fi
 
+if ! bash "${SCRIPT_DIR}/go2w_perception_context_sidecar.sh" restart-if-stale; then
+  echo "warning: PerceptionContext producer unavailable; UI perception panels will fail closed" >&2
+fi
+
 LLM_HTTP_ARGS=()
 if [[ -n "${GO2W_LLM_HTTP_URL:-}" ]]; then
   LLM_HTTP_ARGS+=(--llm-http-url "${GO2W_LLM_HTTP_URL}")
@@ -45,6 +47,7 @@ exec "${PYTHON:-python3}" "${REPO_ROOT}/scripts/go2w_operator_web.py" \
   --panel-bin "${PANEL_BIN}" \
   --registry "${REGISTRY_PATH}" \
   --map-id "${MAP_ID}" \
+  --perception-context-path "${PERCEPTION_CONTEXT_PATH}" \
   --gateway-client "${GATEWAY_CLIENT}" \
   --start-slam-script "${START_SLAM_SCRIPT}" \
   --start-rviz2-script "${START_RVIZ2_SCRIPT}" \

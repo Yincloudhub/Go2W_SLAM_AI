@@ -17,6 +17,7 @@ struct OperatorPanelConfig {
     std::string network_interface = "eth0";
     std::string python = "python3";
     std::string registry_path = "configs/maps/go2w_real_site_map_registry.json";
+    std::string perception_context_path = "artifacts/perception_context_v1.json";
     std::string map_id = "go2w_real_site";
     std::string start_slam_script = "scripts/start_go2w_slam_stack.sh";
     std::string start_rviz2_script = "scripts/start_go2w_rviz2.sh";
@@ -75,6 +76,7 @@ private:
     CommandResult fallbackPythonCommand(const std::string& text) const;
     std::vector<nlohmann::json> buildLlmHttpMessages(const std::string& text) const;
     nlohmann::json buildPanelWorldState(const nlohmann::json& result) const;
+    nlohmann::json loadPerceptionContext() const;
     std::string formatWorldState(const nlohmann::json& result) const;
     std::string formatFullWorldState(const nlohmann::json& result) const;
     std::string formatWeakWorldState(const nlohmann::json& result) const;

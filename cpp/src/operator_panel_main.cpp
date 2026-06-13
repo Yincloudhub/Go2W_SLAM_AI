@@ -12,6 +12,7 @@ void usage(const char* argv0)
               << "Options:\n"
               << "  --repo-root PATH             Repo root, default ..\n"
               << "  --registry PATH              Map registry path, default configs/maps/go2w_real_site_map_registry.json\n"
+              << "  --perception-context PATH    PerceptionContext v1 artifact path\n"
               << "  --map-id MAP_ID              Active semantic map id, default go2w_real_site\n"
               << "  --gateway-client PATH         slam_llm_command_client path\n"
               << "  --start-slam-script PATH      SLAM startup script relative to repo root or absolute\n"
@@ -56,6 +57,8 @@ int main(int argc, char** argv)
             config.repo_root = argv[++i];
         } else if (arg == "--registry" && i + 1 < argc) {
             config.registry_path = argv[++i];
+        } else if (arg == "--perception-context" && i + 1 < argc) {
+            config.perception_context_path = argv[++i];
         } else if (arg == "--map-id" && i + 1 < argc) {
             config.map_id = argv[++i];
         } else if (arg == "--gateway-client" && i + 1 < argc) {

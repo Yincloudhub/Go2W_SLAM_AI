@@ -37,6 +37,7 @@ from edge_autonomy.local_llm_planner import (  # noqa: E402
 )
 from edge_autonomy.map_registry import MapProfile, MapRegistry  # noqa: E402
 from edge_autonomy.operator_display import build_operator_display_state  # noqa: E402
+from edge_autonomy.perception_context import load_perception_context_file  # noqa: E402
 from edge_autonomy.runtime_state import build_runtime_snapshot  # noqa: E402
 from edge_autonomy.runtime_log import build_runtime_log_record  # noqa: E402
 from edge_autonomy.task_queue import task_step_id, validate_task_queue  # noqa: E402
@@ -1171,6 +1172,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY))
     parser.add_argument("--map-id", default=DEFAULT_MAP_ID)
     parser.add_argument("--map-path", default=DEFAULT_MAP_PATH)
+    parser.add_argument(
+        "--perception-context-path",
+        default=str(REPO_ROOT / "artifacts" / "perception_context_v1.json"),
+    )
     parser.add_argument("--prompt-mode", choices=["hybrid", "intent", "light", "full"], default="hybrid")
     parser.add_argument("--local-command", default=DEFAULT_LOCAL_COMMAND)
     parser.add_argument("--system", default=DEFAULT_SYSTEM_PROMPT)
@@ -1255,7 +1260,17 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     snapshot = build_snapshot(args)
     snapshot["capture_command_configured"] = bool(args.capture_command)
-    planner_context = build_planner_context(snapshot, registry, user_command=args.command, map_id=args.map_id)
+    perception_context = load_perception_context_file(
+        Path(args.perception_context_path),
+        current_time_ms=int(time.time() * 1000),
+    )
+    planner_context = build_planner_context(
+        snapshot,
+        registry,
+        user_command=args.command,
+        map_id=args.map_id,
+        perception_context=perception_context,
+    )
 
     result = run_local_llm_planner(
         planner_context,
@@ -1335,6 +1350,8 @@ def main(argv: list[str] | None = None) -> int:
         last_execution_result=blocked_reason or ("executed" if executed else ""),
         network_level="normal",
         motion_allowed=bool(args.execute and registry_allowed and topology_allowed and (gateway_allowed or args.skip_gateway_check)),
+        perception_context=perception_context,
+        timestamp_ms=int(time.time() * 1000),
     )
     operator_display = build_operator_display_state(
         world_state_v1,

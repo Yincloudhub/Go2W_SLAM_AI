@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from .perception_context import validate_perception_context
+
 
 LOCALIZED_STATUSES = {"localized", "localized_or_tracking", "tracking", "degraded"}
 GOOD_SLAM_STATUSES = {"ok", "degraded"}
@@ -135,65 +137,7 @@ def obstacle_status(front_clearance_m: float | None) -> str:
 
 
 def _valid_perception_context(value: Any, *, current_time_ms: int) -> dict[str, Any] | None:
-    if not isinstance(value, dict):
-        return None
-    if value.get("schema_version") != 1 or value.get("schema") != "go2w_perception_context_v1":
-        return None
-    generated_at_ms = value.get("generated_at_ms")
-    stale_ms = value.get("stale_ms")
-    sources = value.get("sources")
-    if (
-        not isinstance(generated_at_ms, int)
-        or isinstance(generated_at_ms, bool)
-        or generated_at_ms <= 0
-        or not isinstance(stale_ms, int)
-        or isinstance(stale_ms, bool)
-        or stale_ms <= 0
-        or not isinstance(sources, list)
-        or len(sources) > 32
-    ):
-        return None
-    context_age_ms = current_time_ms - generated_at_ms
-    if context_age_ms < 0 or context_age_ms > stale_ms:
-        return None
-    required_sections = (
-        "robot_motion",
-        "local_geometry",
-        "visual_objects",
-        "radar_tracks",
-        "risk_events",
-        "degraded_capabilities",
-        "policy",
-    )
-    if any(key not in value for key in required_sections):
-        return None
-    if (
-        not isinstance(value["robot_motion"], dict)
-        or not isinstance(value["local_geometry"], dict)
-        or not isinstance(value["visual_objects"], list)
-        or not isinstance(value["radar_tracks"], list)
-        or not isinstance(value["risk_events"], list)
-        or not isinstance(value["degraded_capabilities"], list)
-        or not isinstance(value["policy"], dict)
-    ):
-        return None
-    for source in sources:
-        if (
-            not isinstance(source, dict)
-            or source.get("schema_version") != 1
-            or source.get("schema") != "go2w_sensor_envelope_v1"
-            or not isinstance(source.get("source_id"), str)
-            or not source.get("source_id")
-            or source.get("status") not in {"fresh", "stale", "offline", "invalid", "uncalibrated"}
-        ):
-            return None
-    if (
-        value["policy"].get("motion_authority") != "slam_gateway"
-        or value["policy"].get("llm_direct_motion") is not False
-        or value["policy"].get("raw_sensor_streams_allowed") is not False
-    ):
-        return None
-    return value
+    return validate_perception_context(value, current_time_ms=current_time_ms)
 
 
 def _available_tools(*, localized: bool, motion_allowed: bool, map_loaded: bool, capture_configured: bool) -> list[str]:
