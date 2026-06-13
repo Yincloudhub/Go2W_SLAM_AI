@@ -44,6 +44,7 @@ start_service() {
     --repo-root "${REPO_ROOT}" \
     --output "${OUTPUT_PATH}" \
     --interval-ms "${INTERVAL_MS}" \
+    9>&- \
     >>"${LOG_FILE}" 2>&1 &
   local pid=$!
   echo "${pid}" > "${PID_FILE}"

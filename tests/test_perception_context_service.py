@@ -75,6 +75,7 @@ class PerceptionContextServiceTests(unittest.TestCase):
     def test_manager_never_starts_sensor_or_motion_services(self) -> None:
         text = MANAGER_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("perception_context_service.py", text)
+        self.assertIn("9>&-", text)
         self.assertNotIn("go2w_d435_perception_sidecar.sh start", text)
         self.assertNotIn("go2w_xt16_geometry_sidecar.sh start", text)
         self.assertNotIn("start_go2w_slam_stack.sh", text)
