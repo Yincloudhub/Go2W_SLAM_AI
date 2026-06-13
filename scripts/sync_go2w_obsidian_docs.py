@@ -55,6 +55,10 @@ COPIES = (
         Path("docs/mission_decision_v1.md"),
         Path("20-MissionDecision-v1与唯一执行链.md"),
     ),
+    (
+        Path("docs/go2w_current_system_status_20260613.md"),
+        Path("21-GO2W当前系统状态与实操.md"),
+    ),
 )
 
 LOG_COPIES = (
@@ -77,6 +81,7 @@ INDEX_BLOCK = f"""{START}
 - [[18-GO2W运行操作手册]]
 - [[19-PerceptionContext-v1统一感知契约]]
 - [[20-MissionDecision-v1与唯一执行链]]
+- [[21-GO2W当前系统状态与实操]]
 
 当前操作边界：
 
@@ -86,8 +91,10 @@ INDEX_BLOCK = f"""{START}
 - P0-2 统一 context 已完成机器人无运动验收：旧 artifact 无生产者证据时必须 offline。
 - Planner、C++ LLM、WorldState、Web UI 和日志只消费同一 `PerceptionContext v1`。
 - P0-2 完成标记为 `p0-2-perception-context-v1-accepted-20260613`。
-- P0-3 已完成本地实现：所有计划先进入 TaskQueue，MissionDecisionEngine 是唯一决定层，
-  Python supervisor 是唯一比赛上层执行 owner；等待机器人无运动验收后打完成标记。
+- P0-3 已完成机器人无运动验收：所有计划先进入 TaskQueue，MissionDecisionEngine
+  是唯一决定层，Python supervisor 是唯一比赛上层执行 owner。
+- P0-3 完成标记为 `p0-3-mission-decision-chain-accepted-20260613`。
+- 下一步唯一软件任务是 P0-4 弱网 journal、ack sequence 和补传执行器。
 - TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
 - 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
 {END}

@@ -70,6 +70,19 @@ Verified on `unitree@192.168.123.18` without chassis motion:
 The service was stopped after verification. No SLAM, localization, Gateway
 motion, or chassis command was started.
 
+### 2026-06-13 Current Operational Snapshot
+
+- Intel RealSense D435I serial `346222072418` is currently enumerated by the robot.
+- `d435_capture_owner` and `d435_summary_reducer` are stopped.
+- No competing RealSense/DeepYOLO process, systemd unit, autostart entry, or cron
+  entry is present.
+- Historical summaries remain on disk, but a live PerceptionContext rebuild
+  classifies both `d435_depth` and `d435_yolo` as `offline` because the owner is
+  stopped and the stale budgets are exceeded.
+
+The current state is therefore hardware connected, implementation accepted,
+service intentionally offline.
+
 ## Current Performance Position
 
 The closed-loop path already has the main protections needed for real-time behavior:

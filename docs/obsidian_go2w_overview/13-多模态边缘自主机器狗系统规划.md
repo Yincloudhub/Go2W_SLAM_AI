@@ -89,7 +89,7 @@ P0-2 完成标记为
 `p0-2-perception-context-v1-accepted-20260613`。下一阶段唯一任务是 P0-3
 决定与执行路径收口。
 
-### 2026-06-13 P0-3 本地实现状态
+### 2026-06-13 P0-3 完成状态
 
 - 任意最终 Planner 计划都先归一化为 `TaskQueue IR`；单目标、保持和人工确认
   不再绕过队列。
@@ -102,8 +102,15 @@ P0-2 完成标记为
 - 断定位、地图错配、传感器过期和 Gateway 断网均已增加 fail-closed 测试。
 - UI 和 runtime log 消费同一份 MissionDecision。
 
-本地全量 Python `298/298` 通过，未启动 SLAM、Gateway 或底盘运动。P0-3
-仍需机器人 fast-forward 后完成 C++ build/CTest 和无运动验收，之后才能打完成标记。
+本地全量 Python `298/298` 通过。机器人 fast-forward 到 `cf68b0e` 后，
+Python targeted `47/47`、full `298/298`、C++ build 和 CTest `6/6` 均通过；
+已知拓扑点 `yin_siyuan_station` dry-run 输出 `dry_run_queue`，
+`motion_allowed=false`。未启动 SLAM、Gateway 或底盘运动，三端提交一致且机器人
+工作区干净。
+
+P0-3 完成标记为
+`p0-3-mission-decision-chain-accepted-20260613`。下一步唯一软件任务是 P0-4
+弱网 journal、ack sequence 和重连补传执行器。
 
 ## 定位
 

@@ -455,7 +455,7 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 - 机器人实现提交 `d8e9125` 无运动验收通过：Python targeted `81/81`、
   full `286/286`，C++ build/CTest `6/6`，五个消费者 `context_id` 一致。
 - P0-2 完成标记为 `p0-2-perception-context-v1-accepted-20260613`。
-- 下一步唯一任务是 P0-3：收口唯一决定与执行路径。
+- P0-3 已完成机器人无运动验收，下一步唯一软件任务是 P0-4：真实弱网执行。
 
 稳定决策：
 
@@ -482,9 +482,9 @@ Deferred issues：
 - TI/NX live transport、时间同步、认证和重放保护。
 - 弱网 journal、ack sequence 和补传执行器。
 
-## 14. P0-3 本地实现状态
+## 14. P0-3 完成状态
 
-当前本地实现已完成：
+实现已完成：
 
 - 所有最终 Planner 计划归一化为 `TaskQueue IR`。
 - 新增 `MissionDecision v1` schema 和确定性决定层。
@@ -495,20 +495,34 @@ Deferred issues：
 - 断定位、地图错配、传感器过期和 Gateway 断网测试均 fail closed。
 - 策略覆盖后的 `human_confirm/safe_hold` 不会复用旧导航队列。
 
-本地验证：
+本地与机器人无运动验证：
 
 ```text
 python_targeted: 76/76 passed
 python_full_unittest: 298/298 passed
 python_compile: passed
 git_diff_check: passed
+robot_python_targeted: 47/47 passed
+robot_python_full_unittest: 298/298 passed
+robot_cpp_build: passed
+robot_ctest: 6/6 passed
+robot_dry_run_decision: dry_run_queue
+robot_motion_allowed: false
+local_origin_robot_commit: cf68b0ecca828a3881b69134a5b6ef6fd58fad3d
+robot_worktree: clean
+services_stopped: true
 motion_commands_sent: false
 ```
 
-当前 P0-3 尚未打完成标记。剩余唯一验收步骤是：提交推送后让机器人
-fast-forward 到该提交，执行 C++ build/CTest、Python 定向/全量无运动测试、
-三端 commit 核对和服务残留检查。
+P0-3 完成标记：
 
-P0-3 完成后下一步唯一任务是 P0-4：实现真实
+```text
+p0-3-mission-decision-chain-accepted-20260613
+```
+
+下一步唯一任务是 P0-4：实现真实
 `CommunicationPolicyExecutor + append-only journal + ack sequence`，验证断网继续
 本地执行和重连补传不重放运动命令。
+
+当前整体状态和操作者实操入口见
+`docs/go2w_current_system_status_20260613.md`。

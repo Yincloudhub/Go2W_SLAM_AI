@@ -32,6 +32,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
                 "docs/go2w_runtime_operations_runbook.md",
                 "docs/perception_context_v1.md",
                 "docs/mission_decision_v1.md",
+                "docs/go2w_current_system_status_20260613.md",
                 "docs/obsidian_go2w_logs/2026-06-12-GO2W定位安全闭环日志.md",
             )
             for index, source in enumerate(sources):
@@ -50,6 +51,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             self.assertIn("[[18-GO2W运行操作手册]]", index_text)
             self.assertIn("[[19-PerceptionContext-v1统一感知契约]]", index_text)
             self.assertIn("[[20-MissionDecision-v1与唯一执行链]]", index_text)
+            self.assertIn("[[21-GO2W当前系统状态与实操]]", index_text)
             self.assertIn("P0-1 已完成", index_text)
             self.assertEqual(desktop.read_text(encoding="utf-8"), "source-0\n")
             self.assertEqual(
@@ -77,8 +79,12 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
                 "source-8\n",
             )
             self.assertEqual(
-                (vault / "机器狗" / "现场日志" / "2026-06-12-GO2W定位安全闭环日志.md").read_text(encoding="utf-8"),
+                (overview / "21-GO2W当前系统状态与实操.md").read_text(encoding="utf-8"),
                 "source-9\n",
+            )
+            self.assertEqual(
+                (vault / "机器狗" / "现场日志" / "2026-06-12-GO2W定位安全闭环日志.md").read_text(encoding="utf-8"),
+                "source-10\n",
             )
 
     def test_export_overview_only_copies_markdown_and_replaces_credentials(self):

@@ -105,15 +105,33 @@ XT16 主几何源可信，并准备遥控器急停。
 
 ## 当前验收状态
 
-本地实现验证：
+本地与机器人无运动验证：
 
 ```text
 python_targeted: 76/76 passed
 python_full_unittest: 298/298 passed
 python_compile: passed
 git_diff_check: passed
+robot_python_targeted: 47/47 passed
+robot_python_full_unittest: 298/298 passed
+robot_cpp_build: passed
+robot_ctest: 6/6 passed
+robot_dry_run_target: yin_siyuan_station
+robot_dry_run_decision: dry_run_queue
+robot_gateway_checked: false
+robot_motion_allowed: false
+robot_worktree: clean
+local_origin_robot_commit: cf68b0ecca828a3881b69134a5b6ef6fd58fad3d
+slam_started: false
+gateway_started: false
 motion_commands_sent: false
 ```
 
-本地环境没有可用 CMake 命令；C++ build/CTest 在机器人 fast-forward 后执行。
-在机器人无运动验收、三端 commit 一致和服务残留检查完成前，P0-3 不打完成标记。
+P0-3 完成标记：
+
+```text
+p0-3-mission-decision-chain-accepted-20260613
+```
+
+下一步唯一软件任务是 P0-4：
+`CommunicationPolicyExecutor + append-only journal + ack sequence`。

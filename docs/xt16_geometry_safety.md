@@ -34,6 +34,12 @@ The values remain `pending_field_measurement`, and navigation remains blocked,
 until five stationary measured scenes confirm the physical body-edge
 relationship and the safety thresholds.
 
+The footprint rejection is already active in `src/edge_autonomy/xt16_geometry.py`.
+Each summary reports `points_excluded_footprint`; no second point-cloud filter
+should be added. The next field action is to measure the distance from the XT16
+center to the front, rear, left, and right physical body edges, update the four
+footprint values, and then collect five stationary measured scenes.
+
 ## Schema version 2
 
 Legacy directional fields remain authoritative and backward compatible:

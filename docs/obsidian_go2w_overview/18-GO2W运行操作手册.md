@@ -283,6 +283,29 @@ Gateway 断连时，真实执行 fail closed；dry-run 仍可输出队列和决�
 C++ 面板打开 `/execute on` 后，真实导航会转交 Python supervisor，C++ 内部
 `QueueExecutor` 不拥有比赛导航租约。
 
+### 2026-06-13 P0-3 部署记录
+
+```text
+implementation_commit: cf68b0ecca828a3881b69134a5b6ef6fd58fad3d
+branch: agent/llm-on-robot
+robot_python_targeted: 47/47 passed
+robot_python_full_unittest: 298/298 passed
+robot_cpp_build: passed
+robot_ctest: 6/6 passed
+robot_dry_run_target: yin_siyuan_station
+robot_dry_run_decision: dry_run_queue
+gateway_checked: false
+motion_allowed: false
+slam_started: false
+gateway_started: false
+services_stopped: true
+robot_worktree: clean
+```
+
+P0-3 完成标记为
+`p0-3-mission-decision-chain-accepted-20260613`。当前系统总览和操作者检查顺序见
+`docs/go2w_current_system_status_20260613.md`。
+
 ## Dry-run 与真实执行
 
 UI 默认是“仅预演”。机器人趴卧、锚点未站立复核、人员密集或现场未清空时，不要打开“允许真实执行”。
