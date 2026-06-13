@@ -1,6 +1,7 @@
 # 多模态边缘自主机器狗系统规划
 
 日期：2026-05-27
+更新：2026-06-13
 
 ## 2026-06-12 比赛架构收束
 
@@ -17,6 +18,23 @@
 - 弱网必须由实际通信策略执行器控制上传、缓存和补传，本地自治闭环不依赖网络。
 - LLM 只做歧义理解、任务拆解、重规划和解释，不直接控制底层运动。
 - 当前先不训练或 LoRA；先完成上下文、执行协议、约束输出、日志和评测闭环。
+
+### 2026-06-13 P0-1 完成状态
+
+统一 D435 感知服务已完成代码和真机无运动验收：
+
+- 单一 `D435CaptureOwner` 持有 RealSense RGBD。
+- 深度 ROI 与 YOLO 各自保留来源 frameset 的 frame sequence、sensor timestamp
+  和 capture time；两条异步输出不要求最新序号相等。
+- 深度独立刷新，不等待 YOLO 推理。
+- `go2w_stereo_depth_sidecar.sh` 与 `go2w_deepyolo_sidecar.sh` 只转发到
+  `go2w_d435_perception_sidecar.sh`。
+- 主摘要与两个兼容摘要共享 `generation_id`。
+- YOLO 缺失时只降级 `d435_yolo`，深度 freshness 保持独立。
+- 真机 Python 回归 `261/261` 通过，服务验收后已停止。
+
+P0-1 完成标记为 `p0-1-unified-d435-accepted-20260613`。下一阶段唯一任务是
+`SensorEnvelope / PerceptionContext v1`，不得重新引入第二个 D435 owner。
 
 ## 定位
 
@@ -305,10 +323,11 @@ TI mmWave Radar
 
 双目深度相机作为近距离障碍和空间理解增强，接入方式沿用 `DepthCameraSummary`：
 
-- 相机进程独立运行。
+- 单一 `D435CaptureOwner` 持有相机，深度 ROI 与 YOLO 共用 RGBD capture。
 - 主链路只消费低频 ROI 净空摘要。
 - 双目只能让安全判断更保守，不能放宽 LiDAR/SLAM 的阻断。
 - 相机 stale、低置信度或超时后自动忽略。
+- YOLO 变慢、缺失或失败不能阻塞深度摘要刷新。
 
 推荐用途：
 
@@ -411,7 +430,9 @@ XT16 LiDAR
 
 - SLAM 与 XT16 可一键检查/启动，重定位后 UI 可读到 `loc=true`、`map=true`、`motion=false`、`safety=ok`。
 - 中文 Web UI 已能显示机器狗回复、当前位置、视觉理解、安全策略和 LLM 任务输入。
-- DeepYOLO / D435I 已被收敛为可选语义侧车：正常时提供约 3 Hz 的语义摘要，stale 或设备离线时 UI 明确降级为“视觉离线”，主闭环继续按 LiDAR + SLAM 运行。
+- DeepYOLO / D435I 已收敛为统一 D435 服务：深度目标 `5-10 Hz`，YOLO
+  约 `3 Hz`；视觉 stale 或设备离线时 UI 明确降级，主闭环继续按
+  LiDAR + SLAM 策略运行。
 - 资源优化以不影响实时主链路为边界：Web 与桥接器开销接近零，DeepYOLO 只在相机可用时按 resident 档常驻；`unitree_slam` 仍是最大 CPU 项，暂不在比赛前改厂商参数。
 - 当前不把双目、TI 雷达、语音、拍照全部压进同一次演示，而是作为可插拔能力逐项接入。
 
@@ -421,7 +442,8 @@ XT16 LiDAR
 2. **巡检任务模板**：先做多点任务队列、到点反馈、失败停止和结束报告；拍照可先记录 `capture_keyframe` 事件，再接真实相机命令。
 3. **状态持久化**：补 `state_journal` 或长驻 operator core，保存任务队列、到达事件、SafetyGate 决策和人工确认记录，减少短进程状态丢失。
 4. **LLM 使用边界**：确定性拓扑匹配优先，LLM 只处理模糊目标、任务拆解和自然语言解释；不微调模型，直到日志样本达到 500-1000 条。
-5. **视觉恢复**：先解决 D435I 在系统层的枚举稳定性，再跑 resident / balanced A/B；不要为了视觉侧车牺牲 SLAM 主链路。
+5. **统一上下文**：把 D435、XT16 和 TI/NX 摘要纳入
+   `SensorEnvelope / PerceptionContext v1`；不要重新引入独立相机 owner。
 6. **弱网实验**：把 `/weak on` 做成可量化实验，比较全量视频、关键帧+语义、纯语义、本地智能体闭环四种模式的带宽、时延和任务成功率。
 7. **TI 雷达 / NX**：只发布 `RadarDetectionSummary`，作为巡检异常告警和 `slow/confirm/inspect_area` 的输入，不把原始 ADC 或高频点云送入 LLM。
 

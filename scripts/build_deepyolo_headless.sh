@@ -29,6 +29,131 @@ output_dir = os.environ["OUTPUT_DIR"]
 text = (src_dir / "main.cpp").read_text(encoding="utf-8", errors="replace")
 if "#include <cstdlib>" not in text:
     text = text.replace("#include <ctime>\n", "#include <ctime>\n#include <cstdlib>\n", 1)
+for header in (
+    "#include <algorithm>",
+    "#include <cmath>",
+    "#include <cstdio>",
+    "#include <iomanip>",
+    "#include <limits>",
+):
+    if header not in text:
+        text = text.replace("#include <cstdlib>\n", "#include <cstdlib>\n" + header + "\n", 1)
+
+helper_code = r'''
+
+static uint64_t go2wEpochMs() {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+}
+
+static std::string go2wJsonNumberOrNull(double value) {
+    if (!std::isfinite(value) || value <= 0.0) return "null";
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(3) << value;
+    return out.str();
+}
+
+static double go2wPercentile(std::vector<float>& values, double q) {
+    if (values.empty()) return std::numeric_limits<double>::quiet_NaN();
+    std::sort(values.begin(), values.end());
+    const double pos = std::max(0.0, std::min(100.0, q)) * 0.01 * (values.size() - 1);
+    const size_t lo = static_cast<size_t>(pos);
+    const size_t hi = std::min(lo + 1, values.size() - 1);
+    const double frac = pos - lo;
+    return values[lo] * (1.0 - frac) + values[hi] * frac;
+}
+
+static void go2wWriteDepthPacket(
+    const rs2::depth_frame& depth,
+    const std::string& output_path,
+    uint64_t captured_at_ms
+) {
+    if (!depth || output_path.empty()) return;
+    const int width = depth.get_width();
+    const int height = depth.get_height();
+    const int y0 = height / 3;
+    const int y1 = (height * 2) / 3;
+    const int sample_step = 4;
+    std::vector<float> left;
+    std::vector<float> front;
+    std::vector<float> right;
+    size_t valid_total = 0;
+    size_t sampled_total = 0;
+    for (int y = y0; y < y1; y += sample_step) {
+        for (int x = 0; x < width; x += sample_step) {
+            const float distance_m = depth.get_distance(x, y);
+            sampled_total++;
+            if (distance_m < 0.15f || distance_m > 8.0f) continue;
+            valid_total++;
+            if (x < width / 3) left.push_back(distance_m);
+            else if (x < (width * 2) / 3) front.push_back(distance_m);
+            else right.push_back(distance_m);
+        }
+    }
+    const double center_m = depth.get_distance(width / 2, height / 2);
+    const double front_m = go2wPercentile(front, 10.0);
+    const double left_m = go2wPercentile(left, 10.0);
+    const double right_m = go2wPercentile(right, 10.0);
+    const double confidence = sampled_total > 0
+        ? static_cast<double>(valid_total) / static_cast<double>(sampled_total)
+        : 0.0;
+    const size_t sector_total = std::max<size_t>(1, sampled_total / 3);
+    std::ostringstream json;
+    json << "{"
+         << "\"source\":\"d435_capture_owner\","
+         << "\"timestamp_ms\":" << captured_at_ms << ","
+         << "\"captured_at_ms\":" << captured_at_ms << ","
+         << "\"frame_sequence\":" << depth.get_frame_number() << ","
+         << "\"sensor_timestamp_ms\":" << std::fixed << std::setprecision(3) << depth.get_timestamp() << ","
+         << "\"sensor_timestamp_domain\":\"" << static_cast<int>(depth.get_frame_timestamp_domain()) << "\","
+         << "\"frame_id\":\"camera_depth_optical_frame\","
+         << "\"coverage\":\"forward_fov\","
+         << "\"center_distance_m\":" << go2wJsonNumberOrNull(center_m) << ","
+         << "\"center_window_m\":" << go2wJsonNumberOrNull(front_m) << ","
+         << "\"front_clearance_m\":" << go2wJsonNumberOrNull(front_m) << ","
+         << "\"left_clearance_m\":" << go2wJsonNumberOrNull(left_m) << ","
+         << "\"right_clearance_m\":" << go2wJsonNumberOrNull(right_m) << ","
+         << "\"rear_clearance_m\":null,"
+         << "\"confidence\":" << std::setprecision(3) << confidence << ","
+         << "\"roi_confidence\":{"
+         << "\"front\":" << static_cast<double>(front.size()) / sector_total << ","
+         << "\"left\":" << static_cast<double>(left.size()) / sector_total << ","
+         << "\"right\":" << static_cast<double>(right.size()) / sector_total << ","
+         << "\"center_window\":" << static_cast<double>(front.size()) / sector_total
+         << "},\"stale\":false,"
+         << "\"summary\":{\"shape\":[" << height << "," << width
+         << "],\"percentile\":10.0,\"valid_range_m\":[0.15,8.0],\"sample_step_px\":"
+         << sample_step << "}}";
+    const std::string tmp_path = output_path + ".tmp";
+    {
+        std::ofstream output(tmp_path, std::ios::out | std::ios::trunc);
+        if (!output.is_open()) return;
+        output << json.str() << std::endl;
+    }
+    std::rename(tmp_path.c_str(), output_path.c_str());
+}
+
+static std::string go2wAttachCaptureMetadata(
+    std::string json,
+    uint64_t frame_sequence,
+    double sensor_timestamp_ms,
+    uint64_t captured_at_ms
+) {
+    const size_t end = json.rfind('}');
+    if (end == std::string::npos) return json;
+    std::ostringstream metadata;
+    metadata << ",\"frame_sequence\":" << frame_sequence
+             << ",\"sensor_timestamp_ms\":" << std::fixed << std::setprecision(3) << sensor_timestamp_ms
+             << ",\"captured_at_ms\":" << captured_at_ms;
+    json.insert(end, metadata.str());
+    return json;
+}
+'''
+if "static void go2wWriteDepthPacket(" not in text:
+    capture_thread_index = text.find("void captureThread()")
+    if capture_thread_index < 0:
+        raise SystemExit("failed to locate captureThread insertion for D435 helpers")
+    text = text[:capture_thread_index] + helper_code + "\n" + text[capture_thread_index:]
 
 capture_marker = """    for (int mode : {2, 1, 0}) {
         rs2::config cfg;"""
@@ -64,9 +189,16 @@ capture_loop_replacement = """    rs2::align align_to_color(RS2_STREAM_COLOR);
     const char* capture_every_n_env = std::getenv("GO2W_DEEPYOLO_CAPTURE_EVERY_N");
     int capture_every_n = capture_every_n_env ? std::atoi(capture_every_n_env) : 5;
     if (capture_every_n <= 0) capture_every_n = 5;
+    const char* depth_every_n_env = std::getenv("GO2W_D435_DEPTH_EVERY_N");
+    int depth_every_n = depth_every_n_env ? std::atoi(depth_every_n_env) : 2;
+    if (depth_every_n <= 0) depth_every_n = 2;
+    const char* depth_packet_path_env = std::getenv("GO2W_D435_DEPTH_PACKET_PATH");
+    std::string depth_packet_path = depth_packet_path_env ? depth_packet_path_env : "";
     uint64_t capture_frame_count = 0;
 
     std::cout << "[GO2W] capture_every_n=" << capture_every_n << std::endl;
+    std::cout << "[GO2W] depth_every_n=" << depth_every_n
+              << " depth_packet_path=" << depth_packet_path << std::endl;
     std::cout << "[RealSense] RGBD";"""
 if capture_loop_marker not in text:
     raise SystemExit("failed to locate DeepYOLO capture loop setup")
@@ -75,6 +207,17 @@ capture_wait_marker = """            raw_frames = pipe.wait_for_frames();
             aligned_frames = align_to_color.process(raw_frames);"""
 capture_wait_replacement = """            raw_frames = pipe.wait_for_frames();
             capture_frame_count++;
+            rs2::depth_frame go2w_capture_depth = raw_frames.get_depth_frame();
+            go2w_captured_at_ms = go2wEpochMs();
+            go2w_frame_sequence = go2w_capture_depth
+                ? go2w_capture_depth.get_frame_number()
+                : capture_frame_count;
+            go2w_sensor_timestamp_ms = go2w_capture_depth
+                ? go2w_capture_depth.get_timestamp()
+                : 0.0;
+            if (go2w_capture_depth && capture_frame_count % depth_every_n == 0) {
+                go2wWriteDepthPacket(go2w_capture_depth, depth_packet_path, go2w_captured_at_ms);
+            }
             if (capture_every_n > 1 && capture_frame_count % capture_every_n != 0) {
                 continue;
             }
@@ -82,11 +225,27 @@ capture_wait_replacement = """            raw_frames = pipe.wait_for_frames();
 if capture_wait_marker not in text:
     raise SystemExit("failed to locate DeepYOLO capture frame wait")
 text = text.replace(capture_wait_marker, capture_wait_replacement, 1)
+capture_scope_marker = """        rs2::frameset raw_frames;
+        rs2::frameset aligned_frames;
+
+        try {"""
+capture_scope_replacement = """        rs2::frameset raw_frames;
+        rs2::frameset aligned_frames;
+        uint64_t go2w_captured_at_ms = 0;
+        uint64_t go2w_frame_sequence = 0;
+        double go2w_sensor_timestamp_ms = 0.0;
+
+        try {"""
+if capture_scope_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO capture metadata scope")
+text = text.replace(capture_scope_marker, capture_scope_replacement, 1)
 shared_frame_marker = """    uint64_t timestamp_ms = 0;
 
     bool valid_color = false;"""
 shared_frame_replacement = """    uint64_t timestamp_ms = 0;
     uint64_t frame_id = 0;
+    uint64_t captured_at_ms = 0;
+    double sensor_timestamp_ms = 0.0;
 
     bool valid_color = false;"""
 if shared_frame_marker not in text:
@@ -94,8 +253,10 @@ if shared_frame_marker not in text:
 text = text.replace(shared_frame_marker, shared_frame_replacement, 1)
 capture_publish_marker = """            shared_sensor.timestamp_ms = nowMs();
             shared_sensor.valid_color = true;"""
-capture_publish_replacement = """            shared_sensor.timestamp_ms = nowMs();
-            shared_sensor.frame_id = capture_frame_count;
+capture_publish_replacement = """            shared_sensor.timestamp_ms = go2w_captured_at_ms;
+            shared_sensor.frame_id = go2w_frame_sequence;
+            shared_sensor.captured_at_ms = go2w_captured_at_ms;
+            shared_sensor.sensor_timestamp_ms = go2w_sensor_timestamp_ms;
             shared_sensor.valid_color = true;"""
 if capture_publish_marker not in text:
     raise SystemExit("failed to locate DeepYOLO shared sensor publish")
@@ -164,7 +325,12 @@ semantic_write_replacement = """        if (semantic_out.is_open()) {
                     semantic_out.open(semantic_path, std::ios::out);
                 }
                 if (semantic_out.is_open()) {
-                    semantic_out << packetToJson(packet) << std::endl;
+                    semantic_out << go2wAttachCaptureMetadata(
+                        packetToJson(packet),
+                        inference_frame_sequence,
+                        inference_sensor_timestamp_ms,
+                        inference_captured_at_ms
+                    ) << std::endl;
                     last_semantic_write_ms = semantic_write_ts;
                     prev_packet = packet;
                     has_prev_packet = true;
@@ -206,6 +372,9 @@ overlay_setup_marker = """    uint64_t last_inference_sensor_frame_id = 0;
 
     while (is_running) {"""
 overlay_setup_replacement = """    uint64_t last_inference_sensor_frame_id = 0;
+    uint64_t inference_frame_sequence = 0;
+    uint64_t inference_captured_at_ms = 0;
+    double inference_sensor_timestamp_ms = 0.0;
     const char* render_overlay_env = std::getenv("GO2W_DEEPYOLO_RENDER_OVERLAY");
     bool render_overlay = render_overlay_env && std::atoi(render_overlay_env) != 0;
     std::cout << "[GO2W] render_overlay=" << (render_overlay ? 1 : 0) << std::endl;
@@ -220,6 +389,9 @@ inference_copy_marker = """            if (!shared_sensor.valid_color || shared_
 inference_copy_replacement = """            if (!shared_sensor.valid_color || shared_sensor.color_bgr.empty()) continue;
             if (shared_sensor.frame_id == last_inference_sensor_frame_id) continue;
             last_inference_sensor_frame_id = shared_sensor.frame_id;
+            inference_frame_sequence = shared_sensor.frame_id;
+            inference_captured_at_ms = shared_sensor.captured_at_ms;
+            inference_sensor_timestamp_ms = shared_sensor.sensor_timestamp_ms;
 
             shared_sensor.color_bgr.copyTo(frame);"""
 if inference_copy_marker not in text:
