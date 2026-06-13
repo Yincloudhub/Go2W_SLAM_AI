@@ -16,7 +16,7 @@
     "footprint_front_m": 0.3,
     "footprint_rear_m": 0.3,
     "footprint_half_width_m": 0.3,
-    "footprint_filter_margin_m": 0.02,
+    "footprint_filter_margin_m": 0.05,
     "min_z_m": -0.25,
     "body_min_z_m": -0.1,
     "max_z_m": 1.2,
@@ -41,6 +41,6 @@
     "artifact_sha256": {},
     "acceptance_max_abs_error_m": 0.15,
     "max_abs_error_m": null,
-    "notes": "The provisional footprint uses a symmetric 0.30 m body-edge offset in all four directions because the XT16 is mounted centrally. A 2 cm filter-only tolerance removes boundary self-returns while reported clearance remains referenced to the nominal body edge. This estimate can under-represent the full moving envelope and must remain pending until physical body-edge clearances are measured and compared in five stationary scenes."
+    "notes": "The provisional footprint uses a symmetric 0.30 m body-edge offset in all four directions because the XT16 is mounted centrally. A 5 cm body-height filter-only tolerance was selected from the 2026-06-13 stationary corridor baseline: 2-4 cm retained a symmetric rear self-return cluster at sensor-center radius 0.30-0.34 m, while 5 cm removed the cluster and 6-8 cm removed no additional points. The extra tolerance applies only at or above body_min_z_m; low hazards outside the nominal footprint remain visible. Reported clearance remains referenced to the nominal 0.30 m body edge. This estimate can under-represent the full moving envelope and must remain pending until five stationary scenes are accepted."
   }
 }

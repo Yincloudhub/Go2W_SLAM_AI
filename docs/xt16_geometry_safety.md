@@ -20,16 +20,18 @@ centrally mounted XT16:
 - front: `0.30 m`
 - rear: `0.30 m`
 - half-width: `0.30 m`
-- filter-only margin: `0.02 m`
+- filter-only margin: `0.05 m`
 
 The same nominal offset is used in all four directions. It is not evidence that
 the complete moving envelope fits inside a `0.60 x 0.60 m` square. Expanding the
 mask to suppress an unexplained return can hide a real obstacle and is
 prohibited; shrinking the footprint can overstate reported clearance.
 
-The margin applies only when rejecting self-returns at the body boundary.
-Reported obstacle clearance remains measured from the nominal footprint, not
-from the expanded filter boundary.
+The margin applies only when rejecting self-returns at the body boundary and at
+or above `body_min_z_m`. Low hazards below that height are rejected only inside
+the nominal footprint, so cables or floor-level obstacles immediately outside
+the body remain visible. Reported obstacle clearance remains measured from the
+nominal footprint, not from the expanded filter boundary.
 The values remain `pending_field_measurement`, and navigation remains blocked,
 until five stationary measured scenes confirm the physical body-edge
 relationship and the safety thresholds.
@@ -44,7 +46,7 @@ Earlier static work did include all four directions. The 2026-06-06 artifacts
 confirmed the axis mapping with front, left, right, and rear boxes. They used a
 `0.35 m` front/rear and `0.32 m` half-width footprint plus the earlier
 single-percentile algorithm. The current implementation uses a `0.30 m`
-symmetric footprint, a `0.02 m` filter margin, spatial cluster support, and a
+symmetric footprint, a `0.05 m` filter margin, spatial cluster support, and a
 separate low-hazard band. The older artifacts remain valid axis evidence but
 cannot certify the current geometry implementation.
 
@@ -62,6 +64,47 @@ This raw topic is available without starting SLAM or Gateway. It is useful for
 inspecting body self-returns. Final runtime comparison must later repeat against
 `/unitree/slam_lidar/points`, which is the processed topic consumed by the XT16
 geometry sidecar.
+
+## 2026-06-13 Stationary Corridor Baseline
+
+The robot was rebooted and placed stationary in a corridor with open front and
+rear space and at least `0.8 m` physical side clearance. Only `xt16_driver` was
+started temporarily; Unitree SLAM, Gateway, D435, and chassis motion remained
+stopped.
+
+Processed `/unitree/slam_lidar/points` results over 34 frames:
+
+```text
+points_per_frame: about 62,100
+front_clearance_m: 6.0
+left_clearance_m: median 1.025
+right_clearance_m: median 1.003
+rear_clearance_m with 0.02 m margin: median 0.021
+```
+
+The rear return was a symmetric 127-point self cluster:
+
+```text
+rear clearance from nominal body edge: 0.000-0.041 m
+lateral position: approximately -0.12 m and +0.12 m
+vertical position: -0.096 to -0.084 m
+```
+
+Same-frame margin comparison:
+
+```text
+0.02 m -> rear 0.020 m
+0.03 m -> rear 0.032 m
+0.04 m -> rear 0.042 m
+0.05 m -> rear no return inside 6.0 m
+0.06 m -> no additional points removed
+0.08 m -> no additional points removed
+```
+
+The minimum stable body-height filter-only margin is therefore `0.05 m`. The
+nominal footprint remains `0.30 m`; obstacle clearance is still reported from
+that nominal edge. The low-hazard band does not use the extra margin.
+Calibration remains `pending_field_measurement`.
 
 ## Schema version 2
 

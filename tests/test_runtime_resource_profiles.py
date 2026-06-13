@@ -71,7 +71,7 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("--footprint-front-m\", type=float, default=0.30", producer)
         self.assertIn("--footprint-rear-m\", type=float, default=0.30", producer)
         self.assertIn("--footprint-half-width-m\", type=float, default=0.30", producer)
-        self.assertIn("--footprint-filter-margin-m\", type=float, default=0.02", producer)
+        self.assertIn("--footprint-filter-margin-m\", type=float, default=0.05", producer)
 
     def test_slam_startup_self_heals_silent_xt16_once(self):
         text = (REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh").read_text(encoding="utf-8")

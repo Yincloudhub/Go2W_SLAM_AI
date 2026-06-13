@@ -129,7 +129,7 @@ rs-enumerate-devices -s
 front=0.30 m
 rear=0.30 m
 half_width=0.30 m
-filter_margin=0.02 m
+filter_margin=0.05 m
 ```
 
 输出会记录 `points_excluded_footprint`。D435 只允许保守地缩小前向净空，左右和
@@ -154,8 +154,13 @@ cd E:\GO2W_0
 
 脚本通过 SSH 在机器人侧临时订阅 PointCloud2，只向本地传输降采样点和当前算法
 摘要。它不启动 SLAM、Gateway、D435 或运动。红色点是 footprint 剔除点，青色是
-保留的机身高度点，橙色是低矮风险点。先用该图判断 `0.30 m + 0.02 m` 是否覆盖
-稳定机身回波，再决定是否必须补卷尺尺寸。
+保留的机身高度点，橙色是低矮风险点。
+
+2026-06-13 走廊静止基线已确认：正式 `rslidar` 点云前方净空 `6.0 m`，左右
+净空中位数 `1.025/1.003 m`；旧 2 cm 余量保留了一个后部左右对称自回波簇。
+同帧扫描显示 5 cm 是刚好去除该簇的最小余量，6-8 cm 不再删除额外点。因此
+body-height filter-only margin 更新为 `0.05 m`，名义机身边缘仍为 `0.30 m`。
+低矮风险不使用额外 margin，机身外近距离线缆仍保留。
 
 ## 完成度
 

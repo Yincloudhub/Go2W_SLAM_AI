@@ -47,6 +47,46 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertEqual(config.footprint_front_m, 0.30)
         self.assertEqual(config.footprint_rear_m, 0.30)
         self.assertEqual(config.footprint_half_width_m, 0.30)
+        self.assertEqual(config.footprint_filter_margin_m, 0.05)
+
+    def test_corridor_rear_self_return_is_removed_by_default_margin(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.11, 0.325, z=-0.09, count=30, spread_m=0.015))
+        points.extend(repeated_point(-0.11, 0.325, z=-0.09, count=30, spread_m=0.015))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="corridor-regression",
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertGreater(summary["rear_clearance_m"], 1.5)
+        self.assertGreaterEqual(summary["summary"]["points_excluded_footprint"], 60)
+        self.assertEqual(
+            summary["summary"]["footprint_m"]["filter_margin_applies_to"],
+            "body_height_only",
+        )
+
+    def test_body_margin_does_not_hide_low_hazard_outside_nominal_footprint(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.0, 0.33, z=-0.20, count=12, spread_m=0.01))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="low-hazard-regression",
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertAlmostEqual(summary["low_hazard_clearance_m"]["rear"], 0.03, delta=0.03)
+        self.assertIn("rear", summary["blocked_directions"])
 
     def test_front_obstacle_blocks_when_calibrated(self) -> None:
         points = clear_roi_points()

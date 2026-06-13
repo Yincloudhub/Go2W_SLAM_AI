@@ -106,17 +106,19 @@ def on_cloud(msg):
             continue
         if vertical < geometry.min_z_m or vertical > geometry.max_z_m:
             point_class = "height_rejected"
-        elif (
-            -(geometry.footprint_rear_m + margin)
-            <= forward
-            <= geometry.footprint_front_m + margin
-            and abs(lateral) <= geometry.footprint_half_width_m + margin
-        ):
-            point_class = "footprint_rejected"
-        elif vertical < geometry.body_min_z_m:
-            point_class = "low_hazard"
         else:
-            point_class = "body_height"
+            point_margin = margin if vertical >= geometry.body_min_z_m else 0.0
+            if (
+                -(geometry.footprint_rear_m + point_margin)
+                <= forward
+                <= geometry.footprint_front_m + point_margin
+                and abs(lateral) <= geometry.footprint_half_width_m + point_margin
+            ):
+                point_class = "footprint_rejected"
+            elif vertical < geometry.body_min_z_m:
+                point_class = "low_hazard"
+            else:
+                point_class = "body_height"
         plot_points.append(
             [
                 round(forward, 4),
@@ -194,11 +196,12 @@ def classify_body_point(
 ) -> str:
     if vertical < min_z_m or vertical > max_z_m:
         return "height_rejected"
+    point_margin = footprint_filter_margin_m if vertical >= body_min_z_m else 0.0
     if (
-        -(footprint_rear_m + footprint_filter_margin_m)
+        -(footprint_rear_m + point_margin)
         <= forward
-        <= footprint_front_m + footprint_filter_margin_m
-        and abs(lateral) <= footprint_half_width_m + footprint_filter_margin_m
+        <= footprint_front_m + point_margin
+        and abs(lateral) <= footprint_half_width_m + point_margin
     ):
         return "footprint_rejected"
     return "low_hazard" if vertical < body_min_z_m else "body_height"
@@ -522,7 +525,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--footprint-front-m", type=float, default=0.30)
     parser.add_argument("--footprint-rear-m", type=float, default=0.30)
     parser.add_argument("--footprint-half-width-m", type=float, default=0.30)
-    parser.add_argument("--footprint-filter-margin-m", type=float, default=0.02)
+    parser.add_argument("--footprint-filter-margin-m", type=float, default=0.05)
     parser.add_argument("--min-z-m", type=float, default=-0.25)
     parser.add_argument("--body-min-z-m", type=float, default=-0.10)
     parser.add_argument("--max-z-m", type=float, default=1.20)

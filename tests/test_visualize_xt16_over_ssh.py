@@ -15,7 +15,7 @@ class VisualizeXt16OverSshTests(unittest.TestCase):
             "footprint_front_m": 0.30,
             "footprint_rear_m": 0.30,
             "footprint_half_width_m": 0.30,
-            "footprint_filter_margin_m": 0.02,
+            "footprint_filter_margin_m": 0.05,
             "min_z_m": -0.25,
             "body_min_z_m": -0.10,
             "max_z_m": 1.20,
@@ -31,6 +31,10 @@ class VisualizeXt16OverSshTests(unittest.TestCase):
         )
         self.assertEqual(
             classify_body_point(0.50, 0.0, -0.20, **common),
+            "low_hazard",
+        )
+        self.assertEqual(
+            classify_body_point(0.33, 0.0, -0.20, **common),
             "low_hazard",
         )
         self.assertEqual(

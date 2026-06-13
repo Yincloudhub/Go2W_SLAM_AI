@@ -371,6 +371,13 @@ gray:   高度带外诊断点
 `points_excluded_footprint`。关闭窗口会关闭 SSH 订阅。它是诊断工具，不会把
 XT16 标记为 calibrated，也不会改变 Gateway 运动授权。
 
+2026-06-13 走廊静止基线确认默认 filter-only margin 为 `0.05 m`。该 margin
+只用于删除名义 `0.30 m` footprint 边界上、`body_min_z_m` 以上的对称机身
+回波；低矮风险仅删除名义 footprint 内部点，机身外的线缆仍保留。净空仍从名义
+机身边缘计算，XT16 标定状态仍为 `pending_field_measurement`。正式比较应短时
+只启 `xt16_driver`，读取运行时使用的 `/unitree/slam_lidar/points`，采样后立即
+停止 driver；不得因此启动 Unitree SLAM、Gateway 或底盘运动。
+
 ## 注意事项
 
 1. 真实执行前必须确认 `loc=true`、`map=true`、`motion=false`、`safety=ok`。
