@@ -107,6 +107,43 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertIn("front", summary["blocked_directions"])
         self.assertEqual(summary["recommended_action"], "pause")
 
+    def test_corridor_side_wall_slows_without_blocking_navigation(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.80, 0.0, count=30, spread_m=0.04))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="corridor-policy",
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertGreater(summary["left_clearance_m"], 0.2)
+        self.assertLess(summary["left_clearance_m"], 0.6)
+        self.assertNotIn("left", summary["blocked_directions"])
+        self.assertEqual(summary["recommended_action"], "go_slow")
+
+    def test_extremely_close_side_wall_blocks_navigation(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.44, 0.0, count=30, spread_m=0.03))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="corridor-policy",
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertLess(summary["left_clearance_m"], 0.2)
+        self.assertIn("left", summary["blocked_directions"])
+        self.assertEqual(summary["recommended_action"], "pause")
+
     def test_footprint_returns_are_ignored(self) -> None:
         points = clear_roi_points()
         points.extend(repeated_point(0.05, -0.05, count=30))

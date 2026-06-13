@@ -502,6 +502,11 @@ XT16 LiDAR
   -> Web UI / LLM 输入口
 ```
 
+走廊导航使用统一 `corridor_clearance_v1`：前向 `<0.80 m` 暂停，左右仅在距
+名义机身边缘 `<0.20 m` 时暂停；左右 `0.20-0.60 m` 允许继续使用 Unitree
+避障规划，但 Gateway 将真实导航速度限制为 `0.20 m/s`。该规则用于避免侧墙
+低于 `0.8 m` 时误拦可通行走廊，不放宽 stale、未标定或低置信度阻断。
+
 趴卧静止调试状态下，当前可作为基线认定：
 
 - SLAM 与 XT16 可一键检查/启动，重定位后 UI 可读到 `loc=true`、`map=true`、`motion=false`、`safety=ok`。

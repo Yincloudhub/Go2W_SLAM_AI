@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <json.hpp>
+#include "slam_gateway/obstacle_policy.hpp"
 
 namespace slam_gateway {
 
@@ -306,6 +307,9 @@ struct SafetyDecision {
     bool should_pause{false};
     std::string recommended_mode{"stop"};
     std::string reason{"uninitialized"};
+    std::string policy_version{obstacle_policy::kPolicyVersion};
+    std::string motion_direction{"planner_controlled"};
+    double speed_limit_mps{-1.0};
 
     nlohmann::json toJson() const
     {
@@ -313,7 +317,10 @@ struct SafetyDecision {
             {"allow_navigation", allow_navigation},
             {"should_pause", should_pause},
             {"recommended_mode", recommended_mode},
-            {"reason", reason}
+            {"reason", reason},
+            {"policy_version", policy_version},
+            {"motion_direction", motion_direction},
+            {"speed_limit_mps", speed_limit_mps >= 0.0 ? nlohmann::json(speed_limit_mps) : nlohmann::json(nullptr)}
         };
     }
 };

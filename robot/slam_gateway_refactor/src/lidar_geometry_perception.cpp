@@ -1,4 +1,5 @@
 #include "slam_gateway/lidar_geometry_perception.hpp"
+#include "slam_gateway/obstacle_policy.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -67,26 +68,29 @@ void keepNearestClearance(
 void updateDerivedState(LocalObstacleSummary& summary)
 {
     summary.blocked_directions.clear();
-    if (clearanceBelow(summary.front_clearance_m, 0.8)) summary.blocked_directions.push_back("front");
-    if (clearanceBelow(summary.left_clearance_m, 0.8)) summary.blocked_directions.push_back("left");
-    if (clearanceBelow(summary.right_clearance_m, 0.8)) summary.blocked_directions.push_back("right");
-    if (clearanceBelow(summary.rear_clearance_m, 0.6)) summary.blocked_directions.push_back("rear");
+    if (clearanceBelow(summary.front_clearance_m, obstacle_policy::kFrontPauseM)) summary.blocked_directions.push_back("front");
+    if (clearanceBelow(summary.left_clearance_m, obstacle_policy::kSidePauseM)) summary.blocked_directions.push_back("left");
+    if (clearanceBelow(summary.right_clearance_m, obstacle_policy::kSidePauseM)) summary.blocked_directions.push_back("right");
+    if (clearanceBelow(summary.rear_clearance_m, obstacle_policy::kRearPauseM)) summary.blocked_directions.push_back("rear");
 
     summary.low_hazard_directions.clear();
-    if (clearanceBelow(summary.low_hazard_front_clearance_m, 0.8)) summary.low_hazard_directions.push_back("front");
-    if (clearanceBelow(summary.low_hazard_left_clearance_m, 0.8)) summary.low_hazard_directions.push_back("left");
-    if (clearanceBelow(summary.low_hazard_right_clearance_m, 0.8)) summary.low_hazard_directions.push_back("right");
-    if (clearanceBelow(summary.low_hazard_rear_clearance_m, 0.6)) summary.low_hazard_directions.push_back("rear");
+    if (clearanceBelow(summary.low_hazard_front_clearance_m, obstacle_policy::kFrontPauseM)) summary.low_hazard_directions.push_back("front");
+    if (clearanceBelow(summary.low_hazard_left_clearance_m, obstacle_policy::kSideSlowM)) summary.low_hazard_directions.push_back("left");
+    if (clearanceBelow(summary.low_hazard_right_clearance_m, obstacle_policy::kSideSlowM)) summary.low_hazard_directions.push_back("right");
+    if (clearanceBelow(summary.low_hazard_rear_clearance_m, obstacle_policy::kRearSlowM)) summary.low_hazard_directions.push_back("rear");
 
-    summary.narrow_passage = clearanceBelow(summary.left_clearance_m, 0.8) && clearanceBelow(summary.right_clearance_m, 0.8);
-    if (clearanceBelow(summary.front_clearance_m, 0.8) ||
-        clearanceBelow(summary.left_clearance_m, 0.8) ||
-        clearanceBelow(summary.right_clearance_m, 0.8) ||
-        clearanceBelow(summary.rear_clearance_m, 0.6)) {
+    summary.narrow_passage =
+        clearanceBelow(summary.left_clearance_m, obstacle_policy::kSideSlowM) &&
+        clearanceBelow(summary.right_clearance_m, obstacle_policy::kSideSlowM);
+    if (clearanceBelow(summary.front_clearance_m, obstacle_policy::kFrontPauseM) ||
+        clearanceBelow(summary.left_clearance_m, obstacle_policy::kSidePauseM) ||
+        clearanceBelow(summary.right_clearance_m, obstacle_policy::kSidePauseM) ||
+        clearanceBelow(summary.rear_clearance_m, obstacle_policy::kRearPauseM)) {
         summary.recommended_action = "pause";
-    } else if (clearanceBelow(summary.front_clearance_m, 1.5) ||
-               clearanceBelow(summary.left_clearance_m, 1.0) ||
-               clearanceBelow(summary.right_clearance_m, 1.0)) {
+    } else if (clearanceBelow(summary.front_clearance_m, obstacle_policy::kFrontSlowM) ||
+               clearanceBelow(summary.left_clearance_m, obstacle_policy::kSideSlowM) ||
+               clearanceBelow(summary.right_clearance_m, obstacle_policy::kSideSlowM) ||
+               clearanceBelow(summary.rear_clearance_m, obstacle_policy::kRearSlowM)) {
         summary.recommended_action = "go_slow";
     } else {
         summary.recommended_action = "normal";

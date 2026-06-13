@@ -149,6 +149,22 @@ int main()
         nested_calibration.calibration_id == "python-producer-contract",
         "nested Python calibration ID must be preserved");
 
+    writeSummary(lidar_path, "lidar_pointcloud", false, 2.0, 0.5, 2.0, 0.8, 0.7, 0.6);
+    const auto corridor_side = perception.getExternalSummaryOrFallback(lidar_path, 1000);
+    require(corridor_side.recommended_action == "go_slow",
+            "corridor side clearance should request low speed");
+    require(corridor_side.blocked_directions.empty(),
+            "corridor side clearance must not become a hard block");
+
+    writeSummary(lidar_path, "lidar_pointcloud", false, 2.0, 0.1, 2.0, 0.8, 0.7, 0.6);
+    const auto extreme_side = perception.getExternalSummaryOrFallback(lidar_path, 1000);
+    require(extreme_side.recommended_action == "pause",
+            "extremely close side obstacle should request pause");
+    require(
+        !extreme_side.blocked_directions.empty() &&
+        extreme_side.blocked_directions.front() == "left",
+        "extremely close side obstacle should block left");
+
     writeSummary(lidar_path, "lidar_pointcloud", false, 2.0, 2.0, 2.0, 0.8, 0.7, 0.6);
     writeSummary(stereo_path, "stereo_depth", false, 0.6, 3.0, 1.0, 0.95, 0.9, 0.85);
     const auto fused = perception.getFusedSummaryOrFallback(lidar_path, 1000, stereo_path, 1000);

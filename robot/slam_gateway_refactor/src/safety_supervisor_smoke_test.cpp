@@ -88,10 +88,28 @@ int main()
     require(!stale_decision.allow_navigation, "stale trusted lidar should fail closed");
     require(stale_decision.reason == "local_obstacle_not_fresh", "stale lidar reason mismatch");
 
-    auto side = clear;
-    side.right_clearance_m = 0.5;
-    side.recommended_action = "pause";
-    require(!supervisor.evaluate(health, localization, side).allow_navigation, "close side obstacle should block");
+    auto corridor_side = clear;
+    corridor_side.right_clearance_m = 0.5;
+    corridor_side.recommended_action = "go_slow";
+    const auto corridor_decision = supervisor.evaluate(health, localization, corridor_side);
+    require(corridor_decision.allow_navigation, "corridor side clearance should remain navigable");
+    require(corridor_decision.recommended_mode == "conservative",
+            "corridor side clearance should force conservative mode");
+    require(corridor_decision.speed_limit_mps == 0.2,
+            "conservative corridor mode must expose a real speed limit");
+    const auto corridor_json = corridor_decision.toJson();
+    require(corridor_json.value("policy_version", std::string{}) == "corridor_clearance_v1",
+            "safety JSON must identify the active clearance policy");
+    require(corridor_json.value("motion_direction", std::string{}) == "planner_controlled",
+            "safety JSON must keep direction under planner control");
+    require(corridor_json.value("speed_limit_mps", -1.0) == 0.2,
+            "safety JSON must expose the conservative speed limit");
+
+    auto extreme_side = clear;
+    extreme_side.right_clearance_m = 0.1;
+    extreme_side.recommended_action = "pause";
+    require(!supervisor.evaluate(health, localization, extreme_side).allow_navigation,
+            "extremely close side obstacle should block");
 
     auto stub = clear;
     stub.source = "manual_stub";

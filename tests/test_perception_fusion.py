@@ -44,6 +44,30 @@ class PerceptionFusionTests(unittest.TestCase):
         self.assertEqual(fused.low_hazard_clearance_m, {"front": 0.6})
         self.assertEqual(fused.low_hazard_directions, ["front"])
 
+    def test_side_corridor_clearance_remains_slow_not_blocked(self) -> None:
+        lidar = LocalObstacleSummary(
+            timestamp_ms=1000,
+            source="lidar_pointcloud",
+            front_clearance_m=2.4,
+            left_clearance_m=0.5,
+            right_clearance_m=0.5,
+            rear_clearance_m=2.0,
+            recommended_action="go_slow",
+            confidence=0.9,
+            stale=False,
+        )
+        depth = DepthCameraSummary(
+            timestamp_ms=1050,
+            front_clearance_m=2.0,
+            confidence=0.9,
+        )
+
+        fused = fuse_local_obstacle_summary(lidar, depth, now_ms=1100)
+
+        self.assertEqual(fused.blocked_directions, [])
+        self.assertTrue(fused.narrow_passage)
+        self.assertEqual(fused.recommended_action, "go_slow")
+
     def test_stale_depth_is_ignored(self) -> None:
         lidar = LocalObstacleSummary(timestamp_ms=1000, source="lidar_pointcloud", front_clearance_m=2.4, confidence=0.9, stale=False)
         depth = DepthCameraSummary(timestamp_ms=1050, front_clearance_m=0.4, confidence=0.9, stale=True)

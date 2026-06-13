@@ -1,5 +1,7 @@
 #include "slam_gateway/llm_command_processor.hpp"
+#include "slam_gateway/obstacle_policy.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -261,6 +263,14 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
             }
         }
         PoseData goal = authorization.authorized_pose;
+        if (safety.recommended_mode == "conservative") {
+            goal.speed = static_cast<float>(
+                std::min<double>(
+                    goal.speed,
+                    safety.speed_limit_mps >= 0.0
+                        ? safety.speed_limit_mps
+                        : obstacle_policy::kConservativeSpeedMps));
+        }
         return ok(action, gateway_.submitNavigationGoal(goal));
     }
 

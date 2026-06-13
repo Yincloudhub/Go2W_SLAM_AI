@@ -5,6 +5,17 @@ import time
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
+from .obstacle_policy import (
+    FRONT_PAUSE_M,
+    REAR_PAUSE_M,
+    REAR_SLOW_M,
+    SIDE_PAUSE_M,
+    SIDE_SLOW_M,
+    blocked_directions,
+    narrow_passage,
+    recommended_action,
+)
+
 
 def now_ms() -> int:
     return int(time.time() * 1000)
@@ -176,10 +187,10 @@ def _low_hazard_directions(
     low_hazard_clearance: Mapping[str, float | None],
 ) -> list[str]:
     thresholds = {
-        "front": 0.8,
-        "left": 0.8,
-        "right": 0.8,
-        "rear": 0.6,
+        "front": FRONT_PAUSE_M,
+        "left": SIDE_SLOW_M,
+        "right": SIDE_SLOW_M,
+        "rear": REAR_SLOW_M,
     }
     return [
         direction
@@ -193,10 +204,10 @@ def _pending_low_hazard_directions(
     pending_clearance: Mapping[str, float | None],
 ) -> list[str]:
     thresholds = {
-        "front": 0.8,
-        "left": 0.8,
-        "right": 0.8,
-        "rear": 0.6,
+        "front": FRONT_PAUSE_M,
+        "left": SIDE_SLOW_M,
+        "right": SIDE_SLOW_M,
+        "rear": REAR_SLOW_M,
     }
     return [
         direction
@@ -204,43 +215,6 @@ def _pending_low_hazard_directions(
         if isinstance(pending_clearance.get(direction), (int, float))
         and float(pending_clearance[direction]) < thresholds[direction]
     ]
-
-
-def _blocked_directions(summary: dict[str, Any]) -> list[str]:
-    blocked: list[str] = []
-    thresholds = {
-        "front": 0.8,
-        "left": 0.8,
-        "right": 0.8,
-        "rear": 0.6,
-    }
-    for direction, threshold in thresholds.items():
-        value = summary.get(f"{direction}_clearance_m")
-        if isinstance(value, (int, float)) and math.isfinite(float(value)) and 0 <= float(value) < threshold:
-            blocked.append(direction)
-    return blocked
-
-
-def _recommended_action(summary: dict[str, Any]) -> str:
-    front = summary.get("front_clearance_m")
-    left = summary.get("left_clearance_m")
-    right = summary.get("right_clearance_m")
-    rear = summary.get("rear_clearance_m")
-    if isinstance(front, (int, float)) and 0 <= float(front) < 0.8:
-        return "pause"
-    if isinstance(left, (int, float)) and 0 <= float(left) < 0.8:
-        return "pause"
-    if isinstance(right, (int, float)) and 0 <= float(right) < 0.8:
-        return "pause"
-    if isinstance(rear, (int, float)) and 0 <= float(rear) < 0.6:
-        return "pause"
-    if isinstance(front, (int, float)) and 0 <= float(front) < 1.5:
-        return "go_slow"
-    if isinstance(left, (int, float)) and 0 <= float(left) < 1.0:
-        return "go_slow"
-    if isinstance(right, (int, float)) and 0 <= float(right) < 1.0:
-        return "go_slow"
-    return "normal"
 
 
 def build_xt16_geometry_summary(
@@ -510,12 +484,13 @@ def build_xt16_geometry_summary(
             },
         },
     }
-    summary["blocked_directions"] = _blocked_directions(summary)
-    summary["narrow_passage"] = (
-        isinstance(left, (int, float))
-        and isinstance(right, (int, float))
-        and 0 <= float(left) < 0.8
-        and 0 <= float(right) < 0.8
-    )
-    summary["recommended_action"] = _recommended_action(summary)
+    directional_clearance = {
+        "front": front,
+        "left": left,
+        "right": right,
+        "rear": rear,
+    }
+    summary["blocked_directions"] = blocked_directions(directional_clearance)
+    summary["narrow_passage"] = narrow_passage(directional_clearance)
+    summary["recommended_action"] = recommended_action(directional_clearance)
     return summary

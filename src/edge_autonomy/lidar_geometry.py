@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .obstacle_policy import blocked_directions, narrow_passage, recommended_action
 from .slam_state import LocalObstacleSummary
 from .slam_topics import now_ms
 
@@ -20,22 +21,12 @@ class ManualLidarGeometryPerception:
         *,
         timestamp_ms: int | None = None,
     ) -> LocalObstacleSummary:
-        blocked_directions: list[str] = []
-        if front_clearance_m < 0.8:
-            blocked_directions.append("front")
-        if left_clearance_m < 0.6:
-            blocked_directions.append("left")
-        if right_clearance_m < 0.6:
-            blocked_directions.append("right")
-        if rear_clearance_m < 0.6:
-            blocked_directions.append("rear")
-
-        if front_clearance_m < 0.8:
-            recommended_action = "pause"
-        elif front_clearance_m < 1.5 or left_clearance_m < 0.8 or right_clearance_m < 0.8:
-            recommended_action = "go_slow"
-        else:
-            recommended_action = "normal"
+        clearance = {
+            "front": front_clearance_m,
+            "left": left_clearance_m,
+            "right": right_clearance_m,
+            "rear": rear_clearance_m,
+        }
 
         self._summary = LocalObstacleSummary(
             timestamp_ms=timestamp_ms if timestamp_ms is not None else now_ms(),
@@ -45,9 +36,9 @@ class ManualLidarGeometryPerception:
             left_clearance_m=left_clearance_m,
             right_clearance_m=right_clearance_m,
             rear_clearance_m=rear_clearance_m,
-            blocked_directions=blocked_directions,
-            narrow_passage=left_clearance_m < 0.8 and right_clearance_m < 0.8,
-            recommended_action=recommended_action,
+            blocked_directions=blocked_directions(clearance),
+            narrow_passage=narrow_passage(clearance),
+            recommended_action=recommended_action(clearance),
             confidence=0.0,
             stale=True,
         )

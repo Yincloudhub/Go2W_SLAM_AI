@@ -169,6 +169,20 @@ body-height filter-only margin 更新为 `0.05 m`，名义机身边缘仍为 `0.
 stale，没有把“无点”猜成“安全”。因此本次只验收机身边界过滤，不签发 XT16
 正式标定。
 
+针对“侧墙较近但导航路径可通行”的误拦问题，`corridor_clearance_v1` 将阈值
+改为按名义机身边缘净空分级：
+
+```text
+front: pause <0.80 m, conservative <1.50 m
+side:  pause <0.20 m, conservative <0.60 m
+rear:  pause <0.30 m, conservative <0.50 m
+conservative navigation speed cap: 0.20 m/s
+```
+
+侧墙不再因为低于 `0.8 m` 就全局暂停。Gateway 是唯一阈值权威，并在保守模式
+实际钳制导航速度，而不是只显示提示。stale、未标定、低置信度或缺少方向值仍
+失败关闭；因此这项策略修正本身不代表当前已允许真实运动。
+
 ## 完成度
 
 | 阶段 | 状态 |

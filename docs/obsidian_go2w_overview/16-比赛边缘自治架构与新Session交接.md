@@ -482,6 +482,22 @@ Deferred issues：
 - TI/NX live transport、时间同步、认证和重放保护。
 - 弱网 journal、ack sequence 和补传执行器。
 
+### 2026-06-13 corridor clearance policy
+
+真实 Gateway 的侧向净空不再使用旧的 `<0.8 m` 全局暂停规则。统一
+`corridor_clearance_v1` 为：
+
+```text
+front: conservative <1.50 m, pause <0.80 m
+side:  conservative <0.60 m, pause <0.20 m
+rear:  conservative <0.50 m, pause <0.30 m
+conservative speed limit: 0.20 m/s
+```
+
+所有距离从名义机身边缘计算。Gateway 是唯一阈值权威，并负责把保守模式实际
+转换为速度上限。兼容 C++ SafetyGate 不再重复判断净空阈值。stale、未标定、
+低置信度和缺少 ROI 仍失败关闭；本策略不会自行解锁真实运动。
+
 ## 14. P0-3 完成状态
 
 实现已完成：

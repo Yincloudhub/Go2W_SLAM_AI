@@ -186,6 +186,24 @@ invalid record stays uncalibrated and navigation remains fail-closed. Value `0`
 can still force diagnostic uncalibrated mode; value `1` makes a guard failure a
 startup error.
 
-Any confirmed rear hazard under `0.6 m` currently produces `pause`. Directional
-motion authorization can relax this later, but reverse commands must first
-check the rear blocked direction explicitly.
+### Corridor clearance policy v1
+
+Clearance thresholds are measured from the nominal body edge after self-return
+filtering, not from the XT16 center:
+
+| Direction | Conservative speed | Pause |
+|---|---:|---:|
+| Front | `< 1.50 m` | `< 0.80 m` |
+| Left/right | `< 0.60 m` | `< 0.20 m` |
+| Rear | `< 0.50 m` | `< 0.30 m` |
+
+Side clearance below `0.8 m` is no longer a global navigation block. A corridor
+with supported side returns between `0.20 m` and `0.60 m` remains navigable, but
+Gateway returns `recommended_mode=conservative` and clamps the submitted
+navigation speed to `0.20 m/s`. A confirmed side return below `0.20 m` still
+pauses. Unitree navigation remains in obstacle-avoidance mode `0`.
+
+This policy does not override stale, uncalibrated, low-confidence, or missing
+directional data. The 2026-06-13 corridor capture still has
+`missing_required_roi:front`, so it cannot authorize movement until formal XT16
+calibration and a supervised no-motion preflight pass.

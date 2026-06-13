@@ -378,6 +378,21 @@ XT16 标记为 calibrated，也不会改变 Gateway 运动授权。
 只启 `xt16_driver`，读取运行时使用的 `/unitree/slam_lidar/points`，采样后立即
 停止 driver；不得因此启动 Unitree SLAM、Gateway 或底盘运动。
 
+## 走廊净空与导航限速
+
+`corridor_clearance_v1` 的净空以名义机身边缘为零点，不包含已过滤的机身回波：
+
+```text
+front: <1.50 m conservative, <0.80 m pause
+side:  <0.60 m conservative, <0.20 m pause
+rear:  <0.50 m conservative, <0.30 m pause
+```
+
+左右侧墙在 `0.20-0.60 m` 时允许 Unitree 避障导航继续规划，但 Gateway 会把
+实际目标速度限制到 `0.20 m/s`。侧向 `<0.20 m`、前向 `<0.80 m` 或后向
+`<0.30 m` 才是几何硬暂停。任何 stale、未标定、低置信度或缺失 ROI 仍直接
+阻断，不能用走廊模式绕过。
+
 ## 注意事项
 
 1. 真实执行前必须确认 `loc=true`、`map=true`、`motion=false`、`safety=ok`。

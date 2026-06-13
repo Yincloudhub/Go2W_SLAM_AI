@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from .obstacle_policy import blocked_directions, narrow_passage, recommended_action
 from .slam_state import LocalObstacleSummary
 
 
@@ -35,27 +36,6 @@ def _clearance_min(primary_value: float, secondary_value: float | None) -> float
     if secondary_value is None or secondary_value < 0.0:
         return primary_value
     return min(primary_value, secondary_value)
-
-
-def _recommended_action(front: float, left: float, right: float, base_action: str) -> str:
-    if base_action == "pause" or front < 0.8:
-        return "pause"
-    if base_action == "go_slow" or front < 1.5 or left < 0.8 or right < 0.8:
-        return "go_slow"
-    return "normal"
-
-
-def _blocked_directions(front: float, left: float, right: float, rear: float, base: list[str]) -> list[str]:
-    blocked = set(base)
-    if front < 0.8:
-        blocked.add("front")
-    if left < 0.6:
-        blocked.add("left")
-    if right < 0.6:
-        blocked.add("right")
-    if rear < 0.6:
-        blocked.add("rear")
-    return [direction for direction in ("front", "left", "right", "rear") if direction in blocked]
 
 
 def depth_summary_is_usable(
@@ -104,7 +84,7 @@ def fuse_local_obstacle_summary(
     left = lidar_summary.left_clearance_m
     right = lidar_summary.right_clearance_m
     rear = lidar_summary.rear_clearance_m
-    blocked = _blocked_directions(front, left, right, rear, list(lidar_summary.blocked_directions))
+    clearance = {"front": front, "left": left, "right": right, "rear": rear}
     confidence = (
         depth_summary.confidence
         if lidar_summary.confidence is None
@@ -123,9 +103,9 @@ def fuse_local_obstacle_summary(
         body_clearance_m=dict(lidar_summary.body_clearance_m),
         low_hazard_clearance_m=dict(lidar_summary.low_hazard_clearance_m),
         low_hazard_directions=list(lidar_summary.low_hazard_directions),
-        blocked_directions=blocked,
-        narrow_passage=lidar_summary.narrow_passage or (left < 0.8 and right < 0.8),
-        recommended_action=_recommended_action(front, left, right, lidar_summary.recommended_action),
+        blocked_directions=blocked_directions(clearance),
+        narrow_passage=narrow_passage(clearance),
+        recommended_action=recommended_action(clearance),
         confidence=confidence,
         stale=False,
         latency_ms=depth_summary.latency_ms,

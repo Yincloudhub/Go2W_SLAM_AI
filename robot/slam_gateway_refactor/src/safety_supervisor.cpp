@@ -1,4 +1,5 @@
 #include "slam_gateway/safety_supervisor.hpp"
+#include "slam_gateway/obstacle_policy.hpp"
 
 namespace slam_gateway {
 
@@ -83,7 +84,8 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             return d;
         }
 
-        if (obstacle.front_clearance_m >= 0.0 && obstacle.front_clearance_m < 0.8) {
+        if (obstacle.front_clearance_m >= 0.0 &&
+            obstacle.front_clearance_m < obstacle_policy::kFrontPauseM) {
             d.allow_navigation = false;
             d.should_pause = true;
             d.recommended_mode = "pause";
@@ -91,12 +93,22 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             return d;
         }
 
-        if ((obstacle.left_clearance_m >= 0.0 && obstacle.left_clearance_m < 0.8) ||
-            (obstacle.right_clearance_m >= 0.0 && obstacle.right_clearance_m < 0.8)) {
+        if ((obstacle.left_clearance_m >= 0.0 &&
+             obstacle.left_clearance_m < obstacle_policy::kSidePauseM) ||
+            (obstacle.right_clearance_m >= 0.0 &&
+             obstacle.right_clearance_m < obstacle_policy::kSidePauseM)) {
             d.allow_navigation = false;
             d.should_pause = true;
             d.recommended_mode = "pause";
             d.reason = "side_obstacle_too_close";
+            return d;
+        }
+        if (obstacle.rear_clearance_m >= 0.0 &&
+            obstacle.rear_clearance_m < obstacle_policy::kRearPauseM) {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "pause";
+            d.reason = "rear_obstacle_too_close";
             return d;
         }
     }
@@ -109,11 +121,23 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
         return d;
     }
 
-    if (fresh_obstacle && obstacle.recommended_action == "go_slow") {
+    const bool corridor_conservative =
+        fresh_obstacle &&
+        ((obstacle.front_clearance_m >= 0.0 &&
+          obstacle.front_clearance_m < obstacle_policy::kFrontSlowM) ||
+         (obstacle.left_clearance_m >= 0.0 &&
+          obstacle.left_clearance_m < obstacle_policy::kSideSlowM) ||
+         (obstacle.right_clearance_m >= 0.0 &&
+          obstacle.right_clearance_m < obstacle_policy::kSideSlowM) ||
+         (obstacle.rear_clearance_m >= 0.0 &&
+          obstacle.rear_clearance_m < obstacle_policy::kRearSlowM));
+    if (fresh_obstacle &&
+        (obstacle.recommended_action == "go_slow" || corridor_conservative)) {
         d.allow_navigation = true;
         d.should_pause = false;
         d.recommended_mode = "conservative";
-        d.reason = "near_obstacle";
+        d.reason = "corridor_clearance_requires_low_speed";
+        d.speed_limit_mps = obstacle_policy::kConservativeSpeedMps;
         return d;
     }
 

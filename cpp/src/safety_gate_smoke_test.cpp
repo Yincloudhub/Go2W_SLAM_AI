@@ -41,7 +41,9 @@ int main()
 {
     go2w::SafetyGate gate;
     require(gate.evaluateWorldState(world(2.0, 2.0, 2.0)).allowed, "fresh XT16 geometry should pass");
-    require(!gate.evaluateWorldState(world(2.0, 2.0, 0.6)).allowed, "right-side obstacle should block");
+    require(
+        gate.evaluateWorldState(world(2.0, 2.0, 0.6)).allowed,
+        "compatibility gate must not duplicate Gateway clearance thresholds");
 
     auto stale = world(2.0, 2.0, 2.0);
     stale["world_state"]["local_obstacle"]["stale"] = true;
@@ -49,7 +51,9 @@ int main()
 
     auto adapter_fresh = world(2.0, 2.0, 0.6);
     adapter_fresh["world_state"]["local_obstacle"]["age_ms"] = 2500;
-    require(!gate.evaluateWorldState(adapter_fresh).allowed, "adapter-fresh obstacle should block even past the default producer period");
+    require(
+        gate.evaluateWorldState(adapter_fresh).allowed,
+        "Gateway-owned freshness decision should remain authoritative");
 
     auto stub = world(6.0, 6.0, 6.0);
     stub["world_state"]["local_obstacle"]["source"] = "manual_stub";

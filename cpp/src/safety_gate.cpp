@@ -140,34 +140,9 @@ SafetyDecision SafetyGate::evaluateWorldState(const nlohmann::json& world_state_
         if (obstacle->value("stale", true) || obstacle_age_ms < 0.0) {
             return blocked("trusted local_obstacle is stale", "hold");
         }
-        const bool fresh_obstacle = !obstacle->value("stale", true) &&
-            obstacle_age_ms >= 0.0;
-        if (fresh_obstacle) {
-            const std::string obstacle_action = stringAt(*world, {"local_obstacle", "recommended_action"});
-            if (obstacle_action == "stop" || obstacle_action == "emergency_stop") {
-                return blocked("local_obstacle recommends " + obstacle_action, "emergency_stop");
-            }
-            if (obstacle_action == "pause") {
-                return blocked("local_obstacle recommends pause", "pause");
-            }
-
-            const double front_clearance = numberAt(*world, {"local_obstacle", "front_clearance_m"}, -1.0);
-            const double left_clearance = numberAt(*world, {"local_obstacle", "left_clearance_m"}, -1.0);
-            const double right_clearance = numberAt(*world, {"local_obstacle", "right_clearance_m"}, -1.0);
-            const double front_confidence = obstacle->value("front_confidence", 0.0);
-            const double left_confidence = obstacle->value("left_confidence", 0.0);
-            const double right_confidence = obstacle->value("right_confidence", 0.0);
-            if (front_confidence >= 0.15 && front_clearance >= 0.0 && front_clearance < limits_.emergency_clearance_m) {
-                return blocked("front obstacle inside emergency distance", "emergency_stop");
-            }
-            if ((left_confidence >= 0.15 && left_clearance >= 0.0 && left_clearance < limits_.emergency_clearance_m) ||
-                (right_confidence >= 0.15 && right_clearance >= 0.0 && right_clearance < limits_.emergency_clearance_m)) {
-                return blocked("side obstacle inside emergency distance", "pause");
-            }
-            if (front_confidence >= 0.15 && front_clearance >= 0.0 && front_clearance < limits_.pause_clearance_m) {
-                return blocked("front obstacle inside pause distance", "pause");
-            }
-        }
+        // Gateway world_state.safety is the final motion authority. This
+        // compatibility gate validates freshness/source only and must not
+        // maintain a second set of clearance thresholds.
     }
 
     const auto* risk_events = objectAt(*world, {"risk_events"});
