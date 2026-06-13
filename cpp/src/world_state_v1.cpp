@@ -111,16 +111,62 @@ nlohmann::json refreshPolicy()
     };
 }
 
-nlohmann::json normalizePerceptionSummary(const nlohmann::json& value)
+nlohmann::json validPerceptionContext(const nlohmann::json& options, long long current_time_ms)
 {
-    return {
-        {"source", value.value("source", std::string("unknown"))},
-        {"confidence", value.contains("confidence") && value.at("confidence").is_number() ? value.at("confidence") : nlohmann::json(nullptr)},
-        {"stale", value.value("stale", false)},
-        {"latency_ms", value.contains("latency_ms") && value.at("latency_ms").is_number() ? value.at("latency_ms") : nlohmann::json(nullptr)},
-        {"timestamp_ms", value.value("timestamp_ms", nowMs())},
-        {"summary", value.value("summary", nlohmann::json::object())},
-    };
+    if (!options.contains("perception_context") || !options.at("perception_context").is_object()) return nullptr;
+    const auto& context = options.at("perception_context");
+    if (context.value("schema_version", 0) != 1 ||
+        context.value("schema", std::string("")) != "go2w_perception_context_v1" ||
+        !context.contains("generated_at_ms") || !context.at("generated_at_ms").is_number_integer() ||
+        !context.contains("stale_ms") || !context.at("stale_ms").is_number_integer() ||
+        !context.contains("sources") || !context.at("sources").is_array() ||
+        context.at("sources").size() > 32) {
+        return nullptr;
+    }
+    const long long generated_at_ms = context.at("generated_at_ms").get<long long>();
+    const long long stale_ms = context.at("stale_ms").get<long long>();
+    const long long age_ms = current_time_ms - generated_at_ms;
+    if (generated_at_ms <= 0 || stale_ms <= 0 || age_ms < 0 || age_ms > stale_ms) return nullptr;
+    for (const char* key : {
+             "robot_motion",
+             "local_geometry",
+             "visual_objects",
+             "radar_tracks",
+             "risk_events",
+             "degraded_capabilities",
+             "policy",
+    }) {
+        if (!context.contains(key)) return nullptr;
+    }
+    if (!context.at("robot_motion").is_object() ||
+        !context.at("local_geometry").is_object() ||
+        !context.at("visual_objects").is_array() ||
+        !context.at("radar_tracks").is_array() ||
+        !context.at("risk_events").is_array() ||
+        !context.at("degraded_capabilities").is_array() ||
+        !context.at("policy").is_object()) {
+        return nullptr;
+    }
+    for (const auto& source : context.at("sources")) {
+        if (!source.is_object() ||
+            source.value("schema_version", 0) != 1 ||
+            source.value("schema", std::string("")) != "go2w_sensor_envelope_v1" ||
+            source.value("source_id", std::string("")).empty()) {
+            return nullptr;
+        }
+        const std::string status = source.value("status", std::string(""));
+        if (status != "fresh" && status != "stale" && status != "offline" &&
+            status != "invalid" && status != "uncalibrated") {
+            return nullptr;
+        }
+    }
+    const auto& policy = context.at("policy");
+    if (policy.value("motion_authority", std::string("")) != "slam_gateway" ||
+        policy.value("llm_direct_motion", true) ||
+        policy.value("raw_sensor_streams_allowed", true)) {
+        return nullptr;
+    }
+    return context;
 }
 
 nlohmann::json latestFeedback(const nlohmann::json& queue_execution, const std::string& key)
@@ -165,12 +211,18 @@ std::string screenString(const nlohmann::json& screen, const char* key, const st
 nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const nlohmann::json& options)
 {
     if (runtime_or_gateway.is_object() && runtime_or_gateway.value("schema_version", 0) == 1 &&
-        runtime_or_gateway.contains("localized") && runtime_or_gateway.contains("available_tools")) {
+        runtime_or_gateway.contains("localized") && runtime_or_gateway.contains("available_tools") &&
+        runtime_or_gateway.contains("perception_context")) {
         return runtime_or_gateway;
     }
 
     const auto* world_ptr = objectAt(runtime_or_gateway, {"world_state"});
     const nlohmann::json& world = world_ptr && world_ptr->is_object() ? *world_ptr : runtime_or_gateway;
+    const long long world_timestamp_ms = integerAt(
+        runtime_or_gateway,
+        {"timestamp_ms"},
+        integerAt(world, {"timestamp_ms"}, nowMs()));
+    const nlohmann::json perception_context = validPerceptionContext(options, world_timestamp_ms);
 
     const std::string loc_status = stringAt(world, {"localization", "status"}, stringAt(runtime_or_gateway, {"localization_status"}, ""));
     const std::string slam_status = stringAt(world, {"slam_health", "status"}, stringAt(runtime_or_gateway, {"health_status"}, ""));
@@ -204,23 +256,18 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
     if (front_clearance.is_null() && options.contains("front_clearance_m") && options.at("front_clearance_m").is_number()) {
         front_clearance = options.at("front_clearance_m");
     }
-
-    nlohmann::json perception_summaries = nlohmann::json::array();
-    if (options.contains("perception_summaries") && options.at("perception_summaries").is_array()) {
-        for (const auto& item : options.at("perception_summaries")) {
-            if (item.is_object()) perception_summaries.push_back(normalizePerceptionSummary(item));
+    if (front_clearance.is_null() && perception_context.is_object()) {
+        double context_clearance = 0.0;
+        if (numberAt(perception_context, {"local_geometry", "primary", "front_clearance_m"}, &context_clearance)) {
+            front_clearance = context_clearance;
         }
     }
-    if (!front_clearance.is_null()) {
-        perception_summaries.push_back(normalizePerceptionSummary({
-            {"source", "local_obstacle"},
-            {"confidence", objectAt(world, {"local_obstacle", "confidence"}) ? *objectAt(world, {"local_obstacle", "confidence"}) : nlohmann::json(0.5)},
-            {"stale", boolAt(world, {"local_obstacle", "stale"}, false)},
-            {"latency_ms", objectAt(world, {"local_obstacle", "latency_ms"}) ? *objectAt(world, {"local_obstacle", "latency_ms"}) : nlohmann::json(nullptr)},
-            {"timestamp_ms", integerAt(world, {"local_obstacle", "timestamp_ms"}, nowMs())},
-            {"summary", {{"front_clearance_m", front_clearance}}},
-        }));
-    }
+    const nlohmann::json perception_summaries =
+        perception_context.is_object() ? perception_context.at("sources") : nlohmann::json::array();
+    const nlohmann::json detected_objects =
+        perception_context.is_object() && perception_context.at("visual_objects").is_array()
+        ? perception_context.at("visual_objects")
+        : nlohmann::json::array();
 
     const std::string task_phase = options.value("task_phase", localized ? std::string("idle") : std::string("not_localized"));
     const std::string current_node = options.value("current_node", std::string(""));
@@ -230,7 +277,7 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
 
     return {
         {"schema_version", 1},
-        {"timestamp_ms", integerAt(runtime_or_gateway, {"timestamp_ms"}, integerAt(world, {"timestamp_ms"}, nowMs()))},
+        {"timestamp_ms", world_timestamp_ms},
         {"localized", localized},
         {"map_loaded", map_loaded},
         {"map_id", map_id},
@@ -239,7 +286,7 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
         {"candidate_nodes", candidate_nodes},
         {"front_clearance_m", front_clearance},
         {"obstacle_status", obstacleStatus(front_clearance)},
-        {"detected_objects", options.value("detected_objects", nlohmann::json::array())},
+        {"detected_objects", detected_objects},
         {"network_level", options.value("network_level", std::string("normal"))},
         {"task_phase", task_phase},
         {"last_execution_result", options.value("last_execution_result", std::string(""))},
@@ -258,7 +305,9 @@ nlohmann::json buildWorldStateV1(const nlohmann::json& runtime_or_gateway, const
             {"slam_status", slam_status.empty() ? std::string("unknown") : slam_status},
             {"localization_status", loc_status.empty() ? std::string("unknown") : loc_status},
             {"safety_reason", stringAt(world, {"safety", "reason"}, "")},
+            {"perception_context_status", perception_context.is_object() ? "fresh" : "unavailable_or_stale"},
         }},
+        {"perception_context", perception_context},
         {"perception_summaries", perception_summaries},
         {"refresh_policy", refreshPolicy()},
     };

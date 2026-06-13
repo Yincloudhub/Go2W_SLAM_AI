@@ -54,6 +54,18 @@ PYTHONPATH=src python3 -m unittest tests.test_perception_context
 当前 WorldState、LLM 和 UI 尚未切换到该入口；在下一接线提交前，不得把
 PerceptionContext schema/loaders 的存在误报为完整消费链已经完成。
 
+### WorldState reducer 状态
+
+Python/C++ WorldState reducer 已完成接口切换：
+
+- 只接收 `perception_context`，不接收自由格式传感器 summary 列表。
+- context 超过自身 `stale_ms`、结构错误或 policy 不一致时整体拒绝。
+- `perception_summaries` 仅是 `context.sources` 的兼容投影。
+- 未提供 fresh context 时显示 `perception_context_status=unavailable_or_stale`。
+
+当前 Planner、C++ OperatorPanel/Web UI 尚未统一传入同一 context instance；
+下一提交完成该消费接线前，页面上的旧独立摘要接口仍只作兼容诊断。
+
 ## 本地浏览器入口
 
 机器人侧启动 UI：

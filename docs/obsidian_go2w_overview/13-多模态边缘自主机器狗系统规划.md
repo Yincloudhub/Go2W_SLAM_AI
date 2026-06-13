@@ -57,6 +57,21 @@ P0-2 首个独立提交已建立统一感知输入契约：
 WorldState 的宽松 artifact normalization 替换为统一上下文，尤其禁止把缺失
 timestamp 补成当前时间。
 
+### 2026-06-13 P0-2 WorldState integration
+
+Python 和 C++ WorldState reducers 已改为只接受完整
+`PerceptionContext v1`：
+
+- context 自身使用 `generated_at_ms + stale_ms` 失效，旧 context artifact
+  不能继续提供 fresh 来源。
+- 删除自由格式 `perception_summaries` 输入和缺失 timestamp 补当前时间逻辑。
+- `WorldState.perception_summaries` 仅保留为 `context.sources` 的兼容投影。
+- `detected_objects` 只从同一 context 的 `visual_objects` 投影。
+- stale、畸形或违反 Gateway/LLM policy 的 context 整体 fail closed。
+
+下一提交把 Planner、C++ LLM、UI 和 runtime log 接到同一 context instance，
+不在各消费者内重新读取传感器 artifact。
+
 ## 定位
 
 当前项目不建议继续用“伪 6G”作为主表述。更稳的定位是：

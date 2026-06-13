@@ -132,6 +132,9 @@ Only `fresh` sources contribute to derived semantic sections. All sources,
 including offline reservations, remain visible in `sources` for diagnostics.
 The builder recomputes effective age at `generated_at_ms`, so an envelope
 cannot stay fresh merely because it was fresh when first loaded.
+Consumers also reject the entire context when
+`current_time_ms - generated_at_ms > stale_ms`; an old context artifact cannot
+keep previously fresh sources alive.
 
 The policy is fixed:
 
@@ -149,10 +152,20 @@ execution_chain =
 The context is an input contract, not a second execution path. Gateway remains
 the final motion authority.
 
+## WorldState Integration
+
+Python and C++ WorldState reducers now accept only one
+`perception_context`. They reject stale, malformed, or policy-inconsistent
+contexts. The old free-form `perception_summaries` input and its missing
+timestamp fallback have been removed.
+
+`WorldState.perception_summaries` remains temporarily as a read-only
+compatibility projection of `PerceptionContext.sources`; it is never assembled
+from separate artifacts. `detected_objects` is projected from
+`visual_objects`.
+
 ## Next Integration Boundary
 
-The next commit must replace the permissive Python and C++ WorldState
-perception normalization with this context. Missing timestamps must not be
-filled with the current time. Python Planner, C++ LLM, UI, and runtime logs
-must then consume the same normalized context rather than reopening individual
-artifacts.
+The next commit must make Python Planner, C++ LLM, UI, and runtime logs receive
+the same current context instance. They must not reopen XT16, D435, or TI/NX
+artifacts independently.

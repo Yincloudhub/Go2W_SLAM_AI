@@ -9,6 +9,7 @@
     "schema",
     "context_id",
     "generated_at_ms",
+    "stale_ms",
     "robot_motion",
     "local_geometry",
     "visual_objects",
@@ -23,6 +24,7 @@
     "schema": {"const": "go2w_perception_context_v1"},
     "context_id": {"type": "string", "minLength": 1, "maxLength": 128},
     "generated_at_ms": {"type": "integer", "minimum": 1},
+    "stale_ms": {"type": "integer", "minimum": 1},
     "robot_motion": {
       "type": "object",
       "additionalProperties": false,

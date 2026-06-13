@@ -19,6 +19,59 @@ bool arrayContainsString(const nlohmann::json& values, const std::string& expect
     return false;
 }
 
+nlohmann::json perceptionContext()
+{
+    return {
+        {"schema_version", 1},
+        {"schema", "go2w_perception_context_v1"},
+        {"context_id", "pc-cpp-test"},
+        {"generated_at_ms", 123},
+        {"stale_ms", 1000},
+        {"robot_motion", {{"sources", nlohmann::json::array()}}},
+        {"local_geometry", {
+            {"primary", nullptr},
+            {"forward_supplements", nlohmann::json::array()},
+        }},
+        {"visual_objects", nlohmann::json::array()},
+        {"radar_tracks", nlohmann::json::array()},
+        {"risk_events", nlohmann::json::array()},
+        {"sources", nlohmann::json::array({
+            {
+                {"schema_version", 1},
+                {"schema", "go2w_sensor_envelope_v1"},
+                {"source_id", "ti_nx:radar_01"},
+                {"source_kind", "radar_semantics"},
+                {"timestamp_ms", nullptr},
+                {"received_ms", 123},
+                {"sequence", nullptr},
+                {"age_ms", nullptr},
+                {"stale_ms", 3000},
+                {"frame_id", nullptr},
+                {"status", "offline"},
+                {"confidence", 0.0},
+                {"calibration_status", "unknown"},
+                {"calibration_id", nullptr},
+                {"producer", "nx_edge_bridge"},
+                {"producer_instance_id", nullptr},
+                {"status_reasons", nlohmann::json::array({"producer_online_unverified"})},
+                {"payload", nlohmann::json::object()},
+            },
+        })},
+        {"degraded_capabilities", nlohmann::json::array({"ti_nx:radar_01"})},
+        {"policy", {
+            {"motion_authority", "slam_gateway"},
+            {"llm_direct_motion", false},
+            {"raw_sensor_streams_allowed", false},
+            {"execution_chain", nlohmann::json::array({
+                "task_queue",
+                "mission_decision_engine",
+                "slam_gateway",
+                "unitree_sdk",
+            })},
+        }},
+    };
+}
+
 }  // namespace
 
 int main()
@@ -41,16 +94,7 @@ int main()
             {"current_node", "wp_1"},
             {"execution_enabled", true},
             {"task_phase", "planning"},
-            {"perception_summaries", nlohmann::json::array({
-                {
-                    {"source", "nx_ti_radar"},
-                    {"confidence", 0.85},
-                    {"stale", false},
-                    {"latency_ms", 40},
-                    {"timestamp_ms", 123},
-                    {"summary", {{"nearest_track_range_m", 2.4}}},
-                },
-            })},
+            {"perception_context", perceptionContext()},
         });
     require(world.value("schema_version", 0) == 1, "schema_version mismatch");
     require(world.value("localized", false), "world should be localized");
@@ -66,7 +110,24 @@ int main()
     const auto world_with_capture = go2w::buildWorldStateV1(gateway, {{"capture_configured", true}});
     require(arrayContainsString(world_with_capture.at("available_tools"), "capture_keyframe"), "configured capture should be advertised");
     require(world_with_capture.at("capture_keyframe").value("configured", false), "configured capture state should be visible");
-    require(world.at("perception_summaries").at(0).value("source", std::string("")) == "nx_ti_radar", "edge summary mismatch");
+    require(world.at("perception_context").value("context_id", std::string("")) == "pc-cpp-test", "context mismatch");
+    require(world.at("perception_summaries").at(0).value("source_id", std::string("")) == "ti_nx:radar_01", "source projection mismatch");
+
+    auto stale_context = perceptionContext();
+    stale_context["generated_at_ms"] = 1;
+    stale_context["stale_ms"] = 100;
+    const auto world_without_stale_context = go2w::buildWorldStateV1(
+        gateway,
+        {{"perception_context", stale_context}});
+    require(world_without_stale_context.at("perception_context").is_null(), "stale context must be rejected");
+    require(world_without_stale_context.at("perception_summaries").empty(), "stale context sources must be hidden");
+
+    auto malformed_context = perceptionContext();
+    malformed_context["sources"][0]["schema"] = "wrong";
+    const auto world_without_malformed_context = go2w::buildWorldStateV1(
+        gateway,
+        {{"perception_context", malformed_context}});
+    require(world_without_malformed_context.at("perception_context").is_null(), "malformed context must be rejected");
 
     auto blocked_gateway = gateway;
     blocked_gateway["world_state"]["safety"]["allow_navigation"] = false;

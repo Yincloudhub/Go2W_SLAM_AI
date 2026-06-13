@@ -728,11 +728,14 @@ def build_perception_context(
     *,
     generated_at_ms: Optional[int] = None,
     context_id: Optional[str] = None,
+    stale_ms: int = 1000,
     sequence_tracker: Optional[SensorSequenceTracker] = None,
 ) -> dict[str, Any]:
     generated = generated_at_ms if generated_at_ms is not None else now_ms()
     if generated <= 0:
         raise ValueError("generated_at_ms must be positive")
+    if not isinstance(stale_ms, int) or isinstance(stale_ms, bool) or stale_ms <= 0:
+        raise ValueError("stale_ms must be a positive integer")
     sources = [_validate_and_refresh_envelope(envelope, generated) for envelope in envelopes]
     if len(sources) > 32:
         raise ValueError("PerceptionContext supports at most 32 sources")
@@ -805,6 +808,7 @@ def build_perception_context(
         "schema": "go2w_perception_context_v1",
         "context_id": context_id or f"pc-{generated}-{uuid.uuid4().hex[:8]}",
         "generated_at_ms": generated,
+        "stale_ms": stale_ms,
         "robot_motion": robot_motion,
         "local_geometry": local_geometry,
         "visual_objects": visual_objects[:64],

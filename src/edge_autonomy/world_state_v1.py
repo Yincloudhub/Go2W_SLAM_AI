@@ -134,15 +134,66 @@ def obstacle_status(front_clearance_m: float | None) -> str:
     return "clear"
 
 
-def _normalize_perception_summary(value: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "source": str(value.get("source") or "unknown"),
-        "confidence": _as_float(value.get("confidence")),
-        "stale": _as_bool(value.get("stale"), False),
-        "latency_ms": _as_float(value.get("latency_ms")),
-        "timestamp_ms": int(value.get("timestamp_ms") or now_ms()),
-        "summary": value.get("summary", {}),
-    }
+def _valid_perception_context(value: Any, *, current_time_ms: int) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    if value.get("schema_version") != 1 or value.get("schema") != "go2w_perception_context_v1":
+        return None
+    generated_at_ms = value.get("generated_at_ms")
+    stale_ms = value.get("stale_ms")
+    sources = value.get("sources")
+    if (
+        not isinstance(generated_at_ms, int)
+        or isinstance(generated_at_ms, bool)
+        or generated_at_ms <= 0
+        or not isinstance(stale_ms, int)
+        or isinstance(stale_ms, bool)
+        or stale_ms <= 0
+        or not isinstance(sources, list)
+        or len(sources) > 32
+    ):
+        return None
+    context_age_ms = current_time_ms - generated_at_ms
+    if context_age_ms < 0 or context_age_ms > stale_ms:
+        return None
+    required_sections = (
+        "robot_motion",
+        "local_geometry",
+        "visual_objects",
+        "radar_tracks",
+        "risk_events",
+        "degraded_capabilities",
+        "policy",
+    )
+    if any(key not in value for key in required_sections):
+        return None
+    if (
+        not isinstance(value["robot_motion"], dict)
+        or not isinstance(value["local_geometry"], dict)
+        or not isinstance(value["visual_objects"], list)
+        or not isinstance(value["radar_tracks"], list)
+        or not isinstance(value["risk_events"], list)
+        or not isinstance(value["degraded_capabilities"], list)
+        or not isinstance(value["policy"], dict)
+    ):
+        return None
+    for source in sources:
+        if (
+            not isinstance(source, dict)
+            or source.get("schema_version") != 1
+            or source.get("schema") != "go2w_sensor_envelope_v1"
+            or not isinstance(source.get("source_id"), str)
+            or not source.get("source_id")
+            or source.get("status") not in {"fresh", "stale", "offline", "invalid", "uncalibrated"}
+        ):
+            return None
+    if (
+        value["policy"].get("motion_authority") != "slam_gateway"
+        or value["policy"].get("llm_direct_motion") is not False
+        or value["policy"].get("raw_sensor_streams_allowed") is not False
+    ):
+        return None
+    return value
 
 
 def _available_tools(*, localized: bool, motion_allowed: bool, map_loaded: bool, capture_configured: bool) -> list[str]:
@@ -173,8 +224,7 @@ def build_world_state_v1(
     last_execution_result: str = "",
     network_level: str = "normal",
     motion_allowed: bool | None = None,
-    detected_objects: list[dict[str, Any]] | None = None,
-    perception_summaries: list[dict[str, Any]] | None = None,
+    perception_context: dict[str, Any] | None = None,
     timestamp_ms: int | None = None,
 ) -> dict[str, Any]:
     """Build the low-rate state contract consumed by UI, LLM, and policy code.
@@ -187,6 +237,16 @@ def build_world_state_v1(
 
     summary = _planner_summary(planner_context)
     gateway_world = _gateway_world(runtime_or_gateway)
+    world_timestamp_ms = int(
+        timestamp_ms
+        if timestamp_ms is not None
+        else runtime_or_gateway.get("timestamp_ms")
+        or _path(gateway_world, ["timestamp_ms"], now_ms())
+    )
+    normalized_context = _valid_perception_context(
+        perception_context,
+        current_time_ms=world_timestamp_ms,
+    )
 
     loc_status = str(
         _path(gateway_world, ["localization", "status"], "")
@@ -222,31 +282,15 @@ def build_world_state_v1(
     front_clearance = _first_not_none(
         _as_float(_path(gateway_world, ["local_obstacle", "front_clearance_m"])),
         _as_float(_path(summary, ["lidar", "front_clearance_m"])),
+        _as_float(_path(normalized_context, ["local_geometry", "primary", "front_clearance_m"])),
     )
-
-    normalized_perception = [
-        _normalize_perception_summary(item)
-        for item in (perception_summaries or [])
-        if isinstance(item, dict)
-    ]
-    if front_clearance is not None:
-        normalized_perception.append(
-            _normalize_perception_summary(
-                {
-                    "source": "local_obstacle",
-                    "confidence": _path(gateway_world, ["local_obstacle", "confidence"], 0.5),
-                    "stale": _path(gateway_world, ["local_obstacle", "stale"], False),
-                    "latency_ms": _path(gateway_world, ["local_obstacle", "latency_ms"]),
-                    "timestamp_ms": _path(gateway_world, ["local_obstacle", "timestamp_ms"], timestamp_ms or now_ms()),
-                    "summary": {"front_clearance_m": front_clearance},
-                }
-            )
-        )
+    normalized_perception = list(normalized_context.get("sources", [])) if normalized_context else []
+    detected_objects = list(normalized_context.get("visual_objects", [])) if normalized_context else []
 
     phase = _task_phase(task_phase, localized=localized)
     return {
         "schema_version": 1,
-        "timestamp_ms": int(timestamp_ms or runtime_or_gateway.get("timestamp_ms") or _path(gateway_world, ["timestamp_ms"], now_ms())),
+        "timestamp_ms": world_timestamp_ms,
         "localized": localized,
         "map_loaded": map_loaded,
         "map_id": map_id,
@@ -274,7 +318,9 @@ def build_world_state_v1(
             "slam_status": slam_status or "unknown",
             "localization_status": loc_status or "unknown",
             "safety_reason": safety.get("reason") if isinstance(safety, dict) else "",
+            "perception_context_status": "fresh" if normalized_context else "unavailable_or_stale",
         },
+        "perception_context": normalized_context,
         "perception_summaries": normalized_perception,
         "refresh_policy": REFRESH_POLICY,
     }

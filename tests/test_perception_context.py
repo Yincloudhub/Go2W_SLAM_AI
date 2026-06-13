@@ -251,6 +251,7 @@ class PerceptionContextTests(unittest.TestCase):
             context = build_perception_context(sources, generated_at_ms=10_100, context_id="pc-test")
 
             self.assertEqual(context["policy"]["motion_authority"], "slam_gateway")
+            self.assertEqual(context["stale_ms"], 1000)
             self.assertFalse(context["policy"]["llm_direct_motion"])
             self.assertFalse(context["policy"]["raw_sensor_streams_allowed"])
             self.assertEqual(len(context["visual_objects"]), 1)

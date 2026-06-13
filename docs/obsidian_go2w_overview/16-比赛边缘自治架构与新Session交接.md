@@ -395,8 +395,9 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 1. 新建 `SensorEnvelope / PerceptionContext v1` schema。已完成。
 2. 为 XT16、D435、TI/NX 增加统一 freshness loader。已完成 Python
    归一化入口、producer instance 和序号回退检测。
-3. WorldState Reducer 只消费统一 loader。
-4. Python Planner、C++ LLM 和 UI 改读同一份 WorldState。
+3. WorldState Reducer 只消费统一 loader。已完成 Python/C++ reducer
+   `PerceptionContext v1` 接口和 context stale 校验。
+4. Python Planner、C++ LLM 和 UI 改读同一份 WorldState。下一步唯一任务。
 5. 增加 stale/offline/uncalibrated 测试。
 
 ### P0-3：收口决定与执行路径
@@ -445,8 +446,10 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 - P0-1 Git 完成标记为 `p0-1-unified-d435-accepted-20260613`。
 - P0-2 首个独立提交已完成 schema、XT16/D435/TI-NX loaders、运动摘要预留
   接口和 fail-closed 测试。
-- 下一步唯一任务是 P0-2 WorldState integration：Python/C++ reducer 只消费
-  同一份 PerceptionContext；不在该步骤修改 LLM/UI 或执行链。
+- P0-2 WorldState integration 已完成：Python/C++ reducer 只接受同一份
+  PerceptionContext，旧自由格式 summary 输入已删除。
+- 下一步唯一任务是 P0-2 LLM/UI unified context：让 Planner、C++ LLM、UI 和
+  runtime log 接收同一 context instance，不再独立读取 artifact。
 
 稳定决策：
 
@@ -463,7 +466,7 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 已知风险：
 
 - XT16 仍是 `pending_field_measurement`，不在 P0-1 中扩展处理。
-- P0-2 前 Python Planner、C++ LLM、UI 仍可能构造不同上下文。
+- Python Planner、C++ LLM、UI 尚未统一传入同一 context instance。
 - 当前 TI/NX 没有仓库内 bridge supervisor；未提供明确在线证据时 loader
   必须输出 `offline`，即使 artifact 存在。
 

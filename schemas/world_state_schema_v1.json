@@ -20,6 +20,7 @@
     "motion_allowed",
     "available_tools",
     "source_health",
+    "perception_context",
     "perception_summaries",
     "refresh_policy"
   ],
@@ -77,9 +78,16 @@
     "motion_allowed": {"type": "boolean"},
     "available_tools": {"type": "array", "items": {"type": "string"}},
     "source_health": {"type": "object"},
+    "perception_context": {
+      "anyOf": [
+        {"$ref": "https://example.com/schemas/perception_context_v1.schema.json"},
+        {"type": "null"}
+      ]
+    },
     "perception_summaries": {
       "type": "array",
-      "items": {"$ref": "#/$defs/perception_summary"}
+      "maxItems": 32,
+      "items": {"$ref": "https://example.com/schemas/sensor_envelope_v1.schema.json"}
     },
     "refresh_policy": {"type": "object"}
   },
@@ -110,29 +118,6 @@
         },
         "node_type": {"type": "string"},
         "tags": {"type": "array", "items": {"type": "string"}}
-      }
-    },
-    "perception_summary": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": ["source", "stale", "timestamp_ms"],
-      "properties": {
-        "source": {"type": "string"},
-        "confidence": {
-          "anyOf": [
-            {"type": "number", "minimum": 0, "maximum": 1},
-            {"type": "null"}
-          ]
-        },
-        "stale": {"type": "boolean"},
-        "latency_ms": {
-          "anyOf": [
-            {"type": "number", "minimum": 0},
-            {"type": "null"}
-          ]
-        },
-        "timestamp_ms": {"type": "integer", "minimum": 0},
-        "summary": {"type": "object"}
       }
     }
   }
