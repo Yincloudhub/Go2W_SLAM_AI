@@ -85,7 +85,7 @@ UI / voice / remote task
 
 | 来源 | 当前事实输入 | 当前/目标语义频率 | 进入系统的语义 | 用途 |
 |---|---|---:|---|---|
-| XT16 点云 | ROS2 `PointCloud2`，真机观测约 `15.34 Hz` | 当前限速 `5 Hz` | 四向净空、置信度、阻断方向、标定状态 | 主几何安全源、局部避障依据 |
+| XT16 点云 | `/unitree/slam_lidar/points`，`frame_id=rslidar`，600 rpm 实测约 `10 Hz` | 当前限速 `5 Hz` | 四向净空、置信度、阻断方向、标定状态 | 主几何安全源、局部避障依据 |
 | XT16 IMU | 真机观测约 `250.27 Hz` | 目标运动摘要 `10-20 Hz` | 静止/运动、角速度异常、姿态可信度 | 状态估计、滑移和运动质量诊断 |
 | 里程计/SLAM 位姿 | Unitree DDS/ROS2 | 位姿内部高频；WorldState `2-5 Hz` | 位姿、定位质量、漂移、当前拓扑邻域 | 导航、重定位、轨迹和到达判定 |
 | D435 RGBD | `640x480 @ 15 FPS` | 深度目标 `5-10 Hz`；YOLO 约 `3 Hz` | 前视深度 ROI、目标类别/区域/距离 | 前向保守补充、场景语义 |
@@ -473,6 +473,10 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 
 - XT16 仍是 `pending_field_measurement`，不在 P0-1 中扩展处理。
 - XT16 当前旧摘要归一化为非 fresh，正式标定和低速运动验收仍 deferred。
+- PandarXT-16 重启后必须先由 `go2w_xt16_ptp.sh` 锁定 PTP，再启动
+  `xt16_driver`。未锁定时雷达可能恢复出厂旧 UTC，正式驱动会丢弃时间异常帧。
+- `/utlidar/cloud` 的 `frame_id=utlidar_lidar` 属于不同 Unitree LiDAR
+  pipeline/frame，不得套用 XT16 `rslidar` 坐标、footprint 或安全阈值。
 - 当前 TI/NX 没有仓库内 bridge supervisor；未提供明确在线证据时 loader
   必须输出 `offline`，即使 artifact 存在。
 

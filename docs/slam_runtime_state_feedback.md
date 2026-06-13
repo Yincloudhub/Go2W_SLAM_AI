@@ -106,15 +106,16 @@ SLAM 在线
 
 ## 4. 为什么不直接返回完整点云
 
-当前 `/unitree/slam_lidar/points` 单帧约 5 到 6 万点，频率约 15Hz。完整点云适合 RViz 和底层算法，不适合直接给 LLM 或弱网远端。
+当前 `/unitree/slam_lidar/points` 单帧约 6.2 万点，600 rpm 实测频率约
+10 Hz。完整点云适合 RViz 和底层算法，不适合直接给 LLM 或弱网远端。
 
 上层应该拿到的是：
 
 ```json
 {
   "pointcloud_alive": true,
-  "cloud_frequency_hz": 15.0,
-  "cloud_size": 56000,
+  "cloud_frequency_hz": 10.0,
+  "cloud_size": 62000,
   "front_clearance_m": 2.4,
   "left_clearance_m": 1.2,
   "right_clearance_m": 0.9,

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from collections import deque
 import getpass
 import json
 import math
@@ -19,7 +20,8 @@ from typing import Any
 
 
 DEFAULT_HOST = os.environ.get("GO2W_SSH_HOST", "192.168.123.18")
-DEFAULT_TOPIC = "/utlidar/cloud"
+DEFAULT_TOPIC = "/unitree/slam_lidar/points"
+DEFAULT_FRAME_ID = "rslidar"
 
 
 REMOTE_STREAMER = r"""
@@ -76,6 +78,12 @@ def on_cloud(msg):
     now_s = time.time()
     if now_s - state["last_emit"] < interval_s:
         return
+    frame_id = str(msg.header.frame_id or "unknown")
+    if frame_id != config["expected_frame_id"]:
+        raise RuntimeError(
+            "XT16 frame contract mismatch: "
+            f"expected={config['expected_frame_id']} actual={frame_id}"
+        )
 
     raw_points = []
     for value in point_cloud2.read_points(
@@ -94,7 +102,7 @@ def on_cloud(msg):
         config=geometry,
         timestamp_ms=timestamp_ms,
         sequence=state["sequence"],
-        frame_id=str(msg.header.frame_id or "unknown"),
+        frame_id=frame_id,
     )
 
     stride = max(1, int(math.ceil(len(raw_points) / max_plot_points)))
@@ -133,7 +141,7 @@ def on_cloud(msg):
         "timestamp_ms": timestamp_ms,
         "sequence": state["sequence"],
         "topic": config["topic"],
-        "frame_id": str(msg.header.frame_id or "unknown"),
+        "frame_id": frame_id,
         "raw_width": int(msg.width),
         "raw_points": len(raw_points),
         "plot_stride": stride,
@@ -179,6 +187,98 @@ POINT_COLORS = {
     "low_hazard": "#f59e0b",
     "height_rejected": "#4b5563",
 }
+CANVAS_BACKGROUND = "#030712"
+
+
+def blend_hex(foreground: str, background: str, weight: float) -> str:
+    weight = min(1.0, max(0.0, float(weight)))
+    foreground_rgb = tuple(
+        int(foreground[index : index + 2], 16) for index in (1, 3, 5)
+    )
+    background_rgb = tuple(
+        int(background[index : index + 2], 16) for index in (1, 3, 5)
+    )
+    blended = tuple(
+        round(background_channel + (foreground_channel - background_channel) * weight)
+        for foreground_channel, background_channel in zip(
+            foreground_rgb, background_rgb
+        )
+    )
+    return "#" + "".join(f"{channel:02x}" for channel in blended)
+
+
+def trail_weight(age_s: float, trail_seconds: float) -> float:
+    if trail_seconds <= 0.0:
+        return 1.0
+    progress = min(1.0, max(0.0, age_s / trail_seconds))
+    return 0.12 + 0.88 * (1.0 - progress) ** 1.5
+
+
+def stable_trail_cells(
+    history: list[tuple[float, dict[str, Any]]],
+    *,
+    voxel_m: float,
+    min_hits: int,
+    show_rejected: bool,
+    show_low_hazard: bool,
+    max_cells: int,
+) -> list[tuple[float, float, str, float, int]]:
+    voxel_m = max(0.02, float(voxel_m))
+    cells: dict[tuple[int, int, str], dict[str, Any]] = {}
+    for frame_index, (received_s, packet) in enumerate(history):
+        frame_cells: set[tuple[int, int, str]] = set()
+        for value in packet.get("plot_points", []):
+            if not isinstance(value, list) or len(value) < 4:
+                continue
+            forward, lateral, _vertical, point_class = value
+            point_class = str(point_class)
+            if (
+                not show_rejected
+                and point_class in {"footprint_rejected", "height_rejected"}
+            ):
+                continue
+            if not show_low_hazard and point_class == "low_hazard":
+                continue
+            key = (
+                round(float(forward) / voxel_m),
+                round(float(lateral) / voxel_m),
+                point_class,
+            )
+            cell = cells.setdefault(
+                key,
+                {
+                    "forward_sum": 0.0,
+                    "lateral_sum": 0.0,
+                    "samples": 0,
+                    "frames": set(),
+                    "latest_s": received_s,
+                },
+            )
+            cell["forward_sum"] += float(forward)
+            cell["lateral_sum"] += float(lateral)
+            cell["samples"] += 1
+            cell["latest_s"] = max(float(cell["latest_s"]), received_s)
+            frame_cells.add(key)
+        for key in frame_cells:
+            cells[key]["frames"].add(frame_index)
+
+    stable = []
+    for key, cell in cells.items():
+        frame_hits = len(cell["frames"])
+        if frame_hits < max(1, int(min_hits)):
+            continue
+        samples = max(1, int(cell["samples"]))
+        stable.append(
+            (
+                cell["forward_sum"] / samples,
+                cell["lateral_sum"] / samples,
+                key[2],
+                float(cell["latest_s"]),
+                frame_hits,
+            )
+        )
+    stable.sort(key=lambda value: (value[3], value[4]), reverse=True)
+    return stable[: max(1, int(max_cells))]
 
 
 def classify_body_point(
@@ -303,6 +403,9 @@ class Xt16Viewer:
         self.messages = messages
         self.args = args
         self.packet: dict[str, Any] | None = None
+        self.packet_history: deque[tuple[float, dict[str, Any]]] = deque()
+        self.show_rejected = False
+        self.show_low_hazard = False
         self.closed = False
         self.started_s = time.time()
 
@@ -322,9 +425,15 @@ class Xt16Viewer:
             justify="left",
         ).pack(fill="x", padx=12, pady=(10, 4))
 
-        self.canvas = tk.Canvas(root, bg="#030712", highlightthickness=0)
+        self.canvas = tk.Canvas(root, bg=CANVAS_BACKGROUND, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True, padx=12, pady=(4, 12))
         self.canvas.bind("<Configure>", lambda _event: self.draw())
+        root.bind("<KeyPress-c>", lambda _event: self.clear_history())
+        root.bind("<KeyPress-C>", lambda _event: self.clear_history())
+        root.bind("<KeyPress-r>", lambda _event: self.toggle_rejected())
+        root.bind("<KeyPress-R>", lambda _event: self.toggle_rejected())
+        root.bind("<KeyPress-l>", lambda _event: self.toggle_low_hazard())
+        root.bind("<KeyPress-L>", lambda _event: self.toggle_low_hazard())
 
         self.reader.start()
         self.root.after(50, self.poll)
@@ -337,6 +446,8 @@ class Xt16Viewer:
                 break
             if kind == "packet":
                 self.packet = value
+                self.packet_history.append((time.monotonic(), value))
+                self.prune_history()
                 self.update_status()
                 self.draw()
             elif kind == "error":
@@ -353,6 +464,30 @@ class Xt16Viewer:
         if not self.closed:
             self.root.after(50, self.poll)
 
+    def prune_history(self) -> None:
+        now = time.monotonic()
+        while self.packet_history and (
+            len(self.packet_history) > self.args.trail_frames
+            or now - self.packet_history[0][0] > self.args.trail_seconds
+        ):
+            self.packet_history.popleft()
+
+    def clear_history(self) -> None:
+        self.packet_history.clear()
+        if self.packet is not None:
+            self.packet_history.append((time.monotonic(), self.packet))
+        self.draw()
+
+    def toggle_rejected(self) -> None:
+        self.show_rejected = not self.show_rejected
+        self.update_status()
+        self.draw()
+
+    def toggle_low_hazard(self) -> None:
+        self.show_low_hazard = not self.show_low_hazard
+        self.update_status()
+        self.draw()
+
     def update_status(self) -> None:
         assert self.packet is not None
         geometry = self.packet.get("geometry", {})
@@ -367,7 +502,10 @@ class Xt16Viewer:
             f"rear={format_clearance(geometry.get('rear_clearance_m'))}m\n"
             f"low_hazard={geometry.get('low_hazard_directions') or []}  "
             f"pending_low={geometry.get('pending_low_hazard_directions') or []}  "
-            f"blocked={geometry.get('blocked_directions') or []}"
+            f"blocked={geometry.get('blocked_directions') or []}  "
+            f"trail={len(self.packet_history)} frames/{self.args.trail_seconds:.1f}s  "
+            f"low={'shown' if self.show_low_hazard else 'hidden'}  "
+            f"rejected={'shown' if self.show_rejected else 'hidden'}"
         )
 
     def draw(self) -> None:
@@ -410,29 +548,39 @@ class Xt16Viewer:
 
         self.draw_footprint(width, height)
 
-        if self.packet is not None:
-            for value in self.packet.get("plot_points", []):
-                if not isinstance(value, list) or len(value) < 4:
-                    continue
-                forward, lateral, _vertical, point_class = value
-                x, y = canvas_point(
-                    float(forward),
-                    float(lateral),
-                    width=width,
-                    height=height,
-                    range_m=self.args.range_m,
+        self.prune_history()
+        history = list(self.packet_history)
+        cells = stable_trail_cells(
+            history,
+            voxel_m=self.args.trail_voxel_m,
+            min_hits=self.args.min_trail_hits,
+            show_rejected=self.show_rejected,
+            show_low_hazard=self.show_low_hazard,
+            max_cells=self.args.max_trail_points,
+        )
+        now = time.monotonic()
+        for forward, lateral, point_class, latest_s, frame_hits in cells:
+            age_s = max(0.0, now - latest_s)
+            weight = trail_weight(age_s, self.args.trail_seconds)
+            x, y = canvas_point(
+                forward,
+                lateral,
+                width=width,
+                height=height,
+                range_m=self.args.range_m,
+            )
+            if 0 <= x <= width and 0 <= y <= height:
+                base_color = POINT_COLORS.get(point_class, "#9ca3af")
+                color = blend_hex(base_color, CANVAS_BACKGROUND, weight)
+                radius = min(4, 1 + frame_hits // 2)
+                self.canvas.create_oval(
+                    x - radius,
+                    y - radius,
+                    x + radius,
+                    y + radius,
+                    fill=color,
+                    outline="",
                 )
-                if 0 <= x <= width and 0 <= y <= height:
-                    color = POINT_COLORS.get(str(point_class), "#9ca3af")
-                    radius = 2 if point_class != "height_rejected" else 1
-                    self.canvas.create_oval(
-                        x - radius,
-                        y - radius,
-                        x + radius,
-                        y + radius,
-                        fill=color,
-                        outline="",
-                    )
 
         self.canvas.create_text(12, 12, text="FRONT", fill="#f9fafb", anchor="nw")
         self.canvas.create_text(
@@ -457,8 +605,9 @@ class Xt16Viewer:
             anchor="e",
         )
         legend = (
-            "red=footprint rejected   cyan=body-height retained   "
-            "orange=low hazard   gray=height rejected"
+            "new points bright, old points fade   "
+            "cyan=stable obstacle   C=clear trail   "
+            "L=low hazard   R=rejected/ground"
         )
         self.canvas.create_text(
             width - 12,
@@ -520,6 +669,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--range-m", type=float, default=4.0)
     parser.add_argument("--rate-hz", type=float, default=2.0)
     parser.add_argument("--max-plot-points", type=int, default=6000)
+    parser.add_argument("--trail-seconds", type=float, default=3.0)
+    parser.add_argument("--trail-frames", type=int, default=8)
+    parser.add_argument("--max-trail-points", type=int, default=18000)
+    parser.add_argument("--trail-voxel-m", type=float, default=0.08)
+    parser.add_argument("--min-trail-hits", type=int, default=2)
     parser.add_argument("--duration-s", type=float, default=0.0)
     parser.add_argument("--record-jsonl", default="")
     parser.add_argument("--footprint-front-m", type=float, default=0.30)
@@ -534,6 +688,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.topic != DEFAULT_TOPIC:
+        raise SystemExit(
+            "This XT16 viewer only accepts /unitree/slam_lidar/points "
+            "(frame_id=rslidar). /utlidar/cloud uses a different Unitree "
+            "LiDAR pipeline/frame and must not use the XT16 body transform."
+        )
     try:
         import paramiko
     except ImportError as exc:
@@ -546,6 +706,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     remote_config = {
         "topic": args.topic,
+        "expected_frame_id": DEFAULT_FRAME_ID,
         "repo_root": args.repo_root,
         "range_m": args.range_m,
         "rate_hz": args.rate_hz,

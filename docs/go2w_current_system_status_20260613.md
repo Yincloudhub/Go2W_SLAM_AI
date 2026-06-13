@@ -148,13 +148,18 @@ artifact 使用旧 footprint 和旧单百分位算法，只能作为方向证据
 cd E:\GO2W_0
 .\.venv\Scripts\python.exe scripts\visualize_xt16_over_ssh.py `
   --host 192.168.123.18 `
-  --topic /utlidar/cloud `
+  --topic /unitree/slam_lidar/points `
   --record-jsonl artifacts\xt16_visual\corridor_baseline.jsonl
 ```
 
 脚本通过 SSH 在机器人侧临时订阅 PointCloud2，只向本地传输降采样点和当前算法
-摘要。它不启动 SLAM、Gateway、D435 或运动。红色点是 footprint 剔除点，青色是
-保留的机身高度点，橙色是低矮风险点。
+摘要。机器人或雷达重启后，先执行 `sudo scripts/go2w_xt16_ptp.sh start` 并确认
+`PTPStatus=Locked`，再只启动 `xt16_driver`；不启动 Unitree SLAM、Gateway、
+D435 或运动。2026-06-13 重启故障已定位为 XT16 UDP 时间仍停留在
+`2020-05-20`，PTP 锁定后正式 `rslidar` 点云恢复约 10 Hz、约 62k 点/帧。
+脚本拒绝把另一条 `frame_id=utlidar_lidar` 的 `/utlidar/cloud` 当作 XT16，并
+对收到的每帧再次校验 `frame_id=rslidar`。
+红色点是 footprint 剔除点，青色是保留的机身高度点，橙色是低矮风险点。
 
 2026-06-13 走廊静止基线已确认：正式 `rslidar` 点云前方净空 `6.0 m`，左右
 净空中位数 `1.025/1.003 m`；旧 2 cm 余量保留了一个后部左右对称自回波簇。

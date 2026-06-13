@@ -56,14 +56,33 @@ baseline with the read-only local viewer:
 ```powershell
 .\.venv\Scripts\python.exe scripts\visualize_xt16_over_ssh.py `
   --host 192.168.123.18 `
-  --topic /utlidar/cloud `
+  --topic /unitree/slam_lidar/points `
   --record-jsonl artifacts\xt16_visual\corridor_baseline.jsonl
 ```
 
-This raw topic is available without starting SLAM or Gateway. It is useful for
-inspecting body self-returns. Final runtime comparison must later repeat against
-`/unitree/slam_lidar/points`, which is the processed topic consumed by the XT16
-geometry sidecar.
+This topic requires `xt16_driver`, but not Unitree SLAM or Gateway. Before
+starting the driver after a robot or LiDAR reboot, run
+`sudo scripts/go2w_xt16_ptp.sh start` and require the LiDAR status to report
+`PTPStatus=Locked`. A 2026-06-13 packet capture found that the rebooted LiDAR
+was still stamping UDP packets with 2020-05-20; the Unitree driver discarded
+those frames until PTP restored current UTC. The formal topic is the same
+`frame_id=rslidar` cloud consumed by the XT16 geometry sidecar.
+
+The viewer keeps a bounded short trail by default. New samples are bright and
+older samples fade over about three seconds, producing a readable accumulated
+outline without changing any geometry result. Press `C` after the robot or an
+obstacle moves to clear stale display trails.
+
+The viewer refuses `/utlidar/cloud`: that stream uses
+`frame_id=utlidar_lidar` and belongs to a different Unitree LiDAR
+pipeline/frame. It must not inherit the XT16 `rslidar` body transform,
+footprint, or safety thresholds. The remote subscriber also stops if the
+selected topic yields any frame other than `rslidar`.
+The default XT16 view retains body-height cells repeated in at least two
+frames, while single-frame points, low hazards, ground-height points, and
+footprint returns are hidden. Press `L` for the low-hazard layer and `R` for
+rejected/ground diagnostics. This display filtering does not change the
+Gateway geometry contract.
 
 ## 2026-06-13 Stationary Corridor Baseline
 

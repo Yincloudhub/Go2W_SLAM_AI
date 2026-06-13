@@ -3,9 +3,16 @@ from __future__ import annotations
 import unittest
 
 from scripts.visualize_xt16_over_ssh import (
+    DEFAULT_FRAME_ID,
+    DEFAULT_TOPIC,
+    REMOTE_STREAMER,
+    blend_hex,
     build_remote_command,
     canvas_point,
     classify_body_point,
+    main,
+    stable_trail_cells,
+    trail_weight,
 )
 
 
@@ -62,6 +69,58 @@ class VisualizeXt16OverSshTests(unittest.TestCase):
         self.assertIn("base64 -d", command)
         self.assertNotIn("password", command.lower())
         self.assertNotIn("123", command)
+
+    def test_trail_colors_fade_toward_canvas_background(self) -> None:
+        self.assertEqual(blend_hex("#22d3ee", "#030712", 1.0), "#22d3ee")
+        self.assertEqual(blend_hex("#22d3ee", "#030712", 0.0), "#030712")
+        self.assertGreater(trail_weight(0.0, 3.0), trail_weight(2.0, 3.0))
+        self.assertAlmostEqual(trail_weight(3.0, 3.0), 0.12)
+
+    def test_default_topic_is_formal_xt16_runtime_cloud(self) -> None:
+        self.assertEqual(DEFAULT_TOPIC, "/unitree/slam_lidar/points")
+        self.assertEqual(DEFAULT_FRAME_ID, "rslidar")
+        self.assertIn(
+            'frame_id != config["expected_frame_id"]',
+            REMOTE_STREAMER,
+        )
+
+    def test_main_rejects_non_xt16_topic_before_connecting(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "pipeline/frame"):
+            main(["--topic", "/utlidar/cloud"])
+
+    def test_stable_trail_cells_drop_single_frame_noise(self) -> None:
+        history = [
+            (
+                1.0,
+                {
+                    "plot_points": [
+                        [1.0, 0.0, 0.2, "body_height"],
+                        [2.0, 0.0, 0.2, "body_height"],
+                        [0.5, 0.0, -0.2, "low_hazard"],
+                    ]
+                },
+            ),
+            (
+                2.0,
+                {
+                    "plot_points": [
+                        [1.02, 0.01, 0.2, "body_height"],
+                    ]
+                },
+            ),
+        ]
+        cells = stable_trail_cells(
+            history,
+            voxel_m=0.1,
+            min_hits=2,
+            show_rejected=False,
+            show_low_hazard=False,
+            max_cells=100,
+        )
+        self.assertEqual(len(cells), 1)
+        self.assertAlmostEqual(cells[0][0], 1.01)
+        self.assertEqual(cells[0][2], "body_height")
+        self.assertEqual(cells[0][4], 2)
 
 
 if __name__ == "__main__":

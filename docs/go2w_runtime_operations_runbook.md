@@ -347,14 +347,26 @@ python3 scripts/go2w_encode_command.py --mode go "去目标点拍照，然后返
 
 ## XT16 走廊静止可视化
 
-不启动 SLAM、Gateway 或底盘运动时，可以直接读取底层 `/utlidar/cloud`。建议
-电脑通过有线地址连接：
+不启动 Unitree SLAM、Gateway 或底盘运动时，先锁定 XT16 的 PTP 时钟，再只
+启动 `xt16_driver`，读取正式运行时话题 `/unitree/slam_lidar/points`：
+
+```bash
+sudo apt-get install linuxptp  # 机器人首次使用时执行一次
+cd /home/unitree/Go2W_SLAM_AI
+sudo scripts/go2w_xt16_ptp.sh start
+```
+
+`status` 必须显示 `xt16_ptp=running` 且雷达配置包含
+`"PTPStatus":"Locked ..."`，然后再启动 `xt16_driver`。2026-06-13 重启后的
+故障样本中，雷达 UDP 包仍携带 `2020-05-20`，导致正式驱动以时间异常丢弃整帧；
+PTP 锁定后 UDP 时间恢复为当前 UTC，正式点云恢复到约 10 Hz、约 62k 点/帧。
+电脑建议通过有线地址连接：
 
 ```powershell
 cd E:\GO2W_0
 .\.venv\Scripts\python.exe scripts\visualize_xt16_over_ssh.py `
   --host 192.168.123.18 `
-  --topic /utlidar/cloud `
+  --topic /unitree/slam_lidar/points `
   --record-jsonl artifacts\xt16_visual\corridor_baseline.jsonl
 ```
 
@@ -370,6 +382,20 @@ gray:   高度带外诊断点
 该工具同时显示当前算法的前、左、右、后净空和
 `points_excluded_footprint`。关闭窗口会关闭 SSH 订阅。它是诊断工具，不会把
 XT16 标记为 calibrated，也不会改变 Gateway 运动授权。
+
+查看器默认保留最近 `3 s`、最多 `8` 帧点云，并按时间从亮到暗淡出，静止观察时
+可以形成短时累积轮廓。按 `C` 清空历史点；机器人或目标移动后应清空一次，避免
+残影被误认为当前障碍。可通过 `--trail-seconds`、`--trail-frames` 和
+`--max-trail-points` 调整显示效果，这些参数只影响本地画面。
+
+查看器只接受 `frame_id=rslidar` 的 `/unitree/slam_lidar/points`，使用已经通过
+前、左、右、后纸箱差分确认的 XT16 机身轴向。`/utlidar/cloud`
+（`frame_id=utlidar_lidar`，约 4k 点/帧）属于不同的 Unitree LiDAR
+pipeline/frame，不得套用 XT16 轴向、footprint 或安全阈值。即使 topic 被错误
+重映射，查看器也会在 `frame_id` 不是 `rslidar` 时停止。默认只显示至少连续
+两帧落入同一 `0.08 m` 平面格的青色稳定实体点。橙色低矮层默认隐藏，按 `L`
+切换；地面高度拒绝点和红色机身回波默认隐藏，按 `R` 切换。该显示过滤不参与
+Gateway 运动授权。
 
 2026-06-13 走廊静止基线确认默认 filter-only margin 为 `0.05 m`。该 margin
 只用于删除名义 `0.30 m` footprint 边界上、`body_min_z_m` 以上的对称机身
