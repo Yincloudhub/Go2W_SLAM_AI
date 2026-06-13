@@ -1,6 +1,7 @@
 from .models import MapReference, NavigationGoal, Pose2D, RiskEvent, RobotState, SemanticObject, WorldState
 from .map_registry import MapProfile, MapRegistry, RelocalizationAnchor, TopologyEdge, TopologyNode, UnitreePose
 from .llm_context import build_planner_context, plan_to_slam_command, simulate_local_llm_plan
+from .mission_decision import build_gateway_decision_record, build_mission_decision
 from .perception_fusion import DepthCameraSummary, depth_summary_is_usable, fuse_local_obstacle_summary
 from .operator_display import build_operator_display_state
 from .perception_context import (
@@ -63,6 +64,8 @@ __all__ = [
     "build_planner_context",
     "build_operator_display_state",
     "build_live_perception_context",
+    "build_gateway_decision_record",
+    "build_mission_decision",
     "build_perception_context",
     "build_runtime_log_record",
     "build_world_state_v1",

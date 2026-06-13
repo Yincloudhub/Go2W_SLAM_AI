@@ -41,6 +41,9 @@
         "network_level": {"type": "string"},
         "safety_reason": {"type": "string"},
         "blocked_reason": {"type": "string"},
+        "mission_decision": {"type": "string"},
+        "decision_reason": {"type": "string"},
+        "motion_authority": {"type": "string"},
         "llm_reply": {"type": "string"},
         "operator_reply": {"type": "string"}
       }

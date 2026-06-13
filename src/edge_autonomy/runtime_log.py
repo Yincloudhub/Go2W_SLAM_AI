@@ -9,6 +9,7 @@ def build_runtime_log_record(
     world_state: dict[str, Any],
     operator_display: dict[str, Any] | None = None,
     task_queue: dict[str, Any] | None = None,
+    mission_decision: dict[str, Any] | None = None,
     queue_execution: dict[str, Any] | None = None,
     user_command: str = "",
     llm_result: dict[str, Any] | None = None,
@@ -26,6 +27,7 @@ def build_runtime_log_record(
         "world_state": world_state,
         "operator_display": operator_display,
         "task_queue": task_queue,
+        "mission_decision": mission_decision,
         "queue_execution": queue_execution,
         "llm_result": llm_result,
         "artifact_policy": {

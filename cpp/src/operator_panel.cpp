@@ -1045,6 +1045,7 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
 {
     CommandResult result;
     std::ostringstream out;
+    out << "execution_owner: python_persistent_supervisor; C++ semantic route is dry-run diagnostics only\n";
     out << "C++语义路由：" << route.reason << "\n";
     out << "目标队列：";
     for (std::size_t i = 0; i < route.targets.size(); ++i) {
@@ -1087,7 +1088,7 @@ CommandResult OperatorPanel::executeSemanticRoute(const SemanticRoute& route) co
     executor_config.feedback_policy.max_arrival_samples = config_.max_arrival_samples;
     executor_config.feedback_policy.max_feedback_events = config_.max_feedback_events;
     executor_config.feedback_policy.max_llm_feedback_events = config_.max_llm_feedback_events;
-    executor_config.execute_enabled = config_.execute_enabled;
+    executor_config.execute_enabled = false;
     const QueueExecutor executor(executor_config);
     const QueueExecutionResult execution = executor.execute(route);
     out << execution.stdout_text;
@@ -1128,6 +1129,7 @@ void OperatorPanel::setExecute(bool enabled)
 {
     config_.execute_enabled = enabled;
     std::cout << "真实执行: " << (enabled ? "on" : "off") << "\n";
+    std::cout << "competition execution owner: python_persistent_supervisor; Gateway remains final motion authority\n";
 }
 
 bool OperatorPanel::handleSlashCommand(const std::string& line)

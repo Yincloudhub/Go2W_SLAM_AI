@@ -28,6 +28,12 @@
         {"type": "null"}
       ]
     },
+    "mission_decision": {
+      "anyOf": [
+        {"$ref": "mission_decision_v1.schema.json"},
+        {"type": "null"}
+      ]
+    },
     "queue_execution": {
       "anyOf": [
         {"type": "object"},

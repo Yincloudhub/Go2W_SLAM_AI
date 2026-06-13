@@ -86,6 +86,11 @@ int main()
         require(result.exit_code == 6, "direct C++ navigation must remain disabled");
         require(!result.execution.value("executed", true), "blocked navigation must not be marked executed");
         require(
+            result.execution.value("competition_execution_owner", "") == "python_persistent_supervisor",
+            "C++ diagnostic executor must name the Python competition owner");
+        require(result.execution.value("gateway_final_authority", false), "Gateway must remain final authority");
+        require(!result.execution.value("llm_direct_motion", true), "LLM direct motion must remain disabled");
+        require(
             result.execution.value("blocked_reason", "").find("persistent Python supervised executor") !=
                 std::string::npos,
             "blocked navigation must name the supervised executor");

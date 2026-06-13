@@ -7,6 +7,7 @@ from edge_autonomy.local_llm_planner import (
     build_task_queue_from_context,
     deterministic_intent_from_context,
     extract_json_object,
+    plan_to_task_queue,
     task_queue_to_plan,
     validate_context_policy,
     validate_execution_contract,
@@ -70,6 +71,65 @@ class LocalLlmPlannerTests(unittest.TestCase):
 
         validate_local_llm_plan(plan)
         validate_execution_contract(plan)
+
+    def test_single_target_plan_is_normalized_to_task_queue(self) -> None:
+        context = {
+            "world_state_summary": {
+                "topology": {
+                    "available_nodes": [
+                        {
+                            "node_id": "nie_guoli_office_front",
+                            "name": "office",
+                            "tags": ["live_verified"],
+                        }
+                    ]
+                }
+            }
+        }
+
+        task_queue = plan_to_task_queue(make_plan(), context)
+
+        validate_task_queue(task_queue)
+        self.assertEqual(task_queue["targets"], ["nie_guoli_office_front"])
+        self.assertEqual(task_queue["steps"][0]["action"], "navigate")
+        self.assertEqual(task_queue["steps"][1]["action"], "wait_until")
+
+    def test_human_confirmation_plan_is_still_a_task_queue(self) -> None:
+        plan = make_plan()
+        plan["mode"] = "human_confirm"
+        plan["reason"] = "target is ambiguous"
+        plan["steps"] = [
+            {
+                "step_id": "ask_1",
+                "tool": "request_human_confirm",
+                "arguments": {"reason": "target is ambiguous"},
+            }
+        ]
+
+        task_queue = plan_to_task_queue(plan, {})
+
+        validate_task_queue(task_queue)
+        self.assertEqual(task_queue["targets"], [])
+        self.assertEqual(task_queue["steps"][0]["action"], "ask_confirm")
+
+    def test_policy_override_cannot_reuse_stale_navigation_queue(self) -> None:
+        existing_queue = plan_to_task_queue(make_plan(), {})
+        plan = make_plan()
+        plan["mode"] = "human_confirm"
+        plan["reason"] = "low battery requires confirmation"
+        plan["steps"] = [
+            {
+                "step_id": "ask_1",
+                "tool": "request_human_confirm",
+                "arguments": {"reason": "low battery requires confirmation"},
+            }
+        ]
+
+        task_queue = plan_to_task_queue(plan, {}, existing_queue=existing_queue)
+
+        validate_task_queue(task_queue)
+        self.assertEqual(task_queue["targets"], [])
+        self.assertEqual(task_queue["steps"][0]["action"], "ask_confirm")
 
     def test_execution_contract_rejects_target_node_id(self) -> None:
         plan = make_plan()

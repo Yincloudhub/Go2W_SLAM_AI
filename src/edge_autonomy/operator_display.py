@@ -40,6 +40,7 @@ def build_operator_display_state(
     world_state: dict[str, Any],
     *,
     task_queue: dict[str, Any] | None = None,
+    mission_decision: dict[str, Any] | None = None,
     queue_execution: dict[str, Any] | None = None,
     user_command: str = "",
 ) -> dict[str, Any]:
@@ -53,7 +54,11 @@ def build_operator_display_state(
     llm_feedback = _latest_llm_feedback(queue_execution)
     operator_feedback = _latest_operator_feedback(queue_execution)
     targets = _queue_targets(task_queue)
+    decision_name = str(mission_decision.get("decision") or "") if isinstance(mission_decision, dict) else ""
+    decision_reason = str(mission_decision.get("reason") or "") if isinstance(mission_decision, dict) else ""
     blocked_reason = queue_execution.get("blocked_reason", "") if isinstance(queue_execution, dict) else ""
+    if not blocked_reason and decision_name in {"hold", "await_confirmation", "reject"}:
+        blocked_reason = decision_reason
     completed = bool(queue_execution.get("completed")) if isinstance(queue_execution, dict) else False
     task_phase = str(world_state.get("task_phase") or "idle")
     if completed:
@@ -62,6 +67,12 @@ def build_operator_display_state(
         task_phase = "blocked"
 
     current_target = targets[0] if targets else str(world_state.get("current_node") or "")
+    source_health = world_state.get("source_health")
+    safety_reason = (
+        str(source_health.get("safety_reason") or "")
+        if isinstance(source_health, dict)
+        else ""
+    )
     return {
         "schema_version": 1,
         "timestamp_ms": world_state.get("timestamp_ms"),
@@ -77,10 +88,13 @@ def build_operator_display_state(
             "obstacle_status": world_state.get("obstacle_status"),
             "front_clearance_m": world_state.get("front_clearance_m"),
             "network_level": world_state.get("network_level"),
-            "safety_reason": world_state.get("source_health", {}).get("safety_reason", "")
-            if isinstance(world_state.get("source_health"), dict)
-            else "",
+            "safety_reason": safety_reason,
             "blocked_reason": blocked_reason,
+            "mission_decision": decision_name,
+            "decision_reason": decision_reason,
+            "motion_authority": "slam_gateway"
+            if isinstance(mission_decision, dict) and mission_decision.get("gateway_final_authority") is True
+            else "",
             "llm_reply": llm_feedback.get("text", "") if isinstance(llm_feedback, dict) else "",
             "operator_reply": operator_feedback.get("text", "") if isinstance(operator_feedback, dict) else "",
         },

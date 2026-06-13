@@ -89,6 +89,22 @@ P0-2 完成标记为
 `p0-2-perception-context-v1-accepted-20260613`。下一阶段唯一任务是 P0-3
 决定与执行路径收口。
 
+### 2026-06-13 P0-3 本地实现状态
+
+- 任意最终 Planner 计划都先归一化为 `TaskQueue IR`；单目标、保持和人工确认
+  不再绕过队列。
+- 新增 `MissionDecision v1` schema 和确定性决定层。
+- Python 闭环删除了单条 `slam_command` 直达 Gateway 的执行兜底。
+- 真实导航只由 Python persistent supervised executor 承接。
+- C++ 语义路由固定为 dry-run/诊断入口，真实导航转交 Python。
+- Gateway 拒绝中的 safety reason、模式、时间和传感器 age 进入统一
+  DecisionRecord。
+- 断定位、地图错配、传感器过期和 Gateway 断网均已增加 fail-closed 测试。
+- UI 和 runtime log 消费同一份 MissionDecision。
+
+本地全量 Python `298/298` 通过，未启动 SLAM、Gateway 或底盘运动。P0-3
+仍需机器人 fast-forward 后完成 C++ build/CTest 和无运动验收，之后才能打完成标记。
+
 ## 定位
 
 当前项目不建议继续用“伪 6G”作为主表述。更稳的定位是：

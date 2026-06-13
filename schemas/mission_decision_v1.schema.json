@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/mission_decision_v1.schema.json",
+  "title": "Go2wMissionDecisionV1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "schema_version",
+    "schema",
+    "decision_id",
+    "timestamp_ms",
+    "queue_id",
+    "queue_valid",
+    "decision",
+    "reason_code",
+    "reason",
+    "execute_requested",
+    "motion_allowed",
+    "execution_owner",
+    "execution_chain",
+    "llm_direct_motion",
+    "gateway_final_authority",
+    "preflight"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "schema": {"const": "go2w_mission_decision_v1"},
+    "decision_id": {"type": "string", "minLength": 1},
+    "timestamp_ms": {"type": "integer", "minimum": 0},
+    "queue_id": {
+      "anyOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "queue_valid": {"type": "boolean"},
+    "decision": {
+      "type": "string",
+      "enum": ["execute_queue", "dry_run_queue", "hold", "await_confirmation", "reject"]
+    },
+    "reason_code": {"type": "string", "minLength": 1},
+    "reason": {"type": "string"},
+    "execute_requested": {"type": "boolean"},
+    "motion_allowed": {"type": "boolean"},
+    "execution_owner": {"const": "python_persistent_supervisor"},
+    "execution_chain": {
+      "const": [
+        "task_queue",
+        "mission_decision_engine",
+        "slam_gateway",
+        "unitree_sdk"
+      ]
+    },
+    "llm_direct_motion": {"const": false},
+    "gateway_final_authority": {"const": true},
+    "preflight": {
+      "type": "object",
+      "required": ["registry", "topology", "gateway"],
+      "properties": {
+        "registry": {"$ref": "#/$defs/gate"},
+        "topology": {"$ref": "#/$defs/gate"},
+        "gateway": {"type": "object"}
+      }
+    }
+  },
+  "$defs": {
+    "gate": {
+      "type": "object",
+      "required": ["allowed", "reason"],
+      "properties": {
+        "allowed": {"type": "boolean"},
+        "reason": {"type": "string"}
+      }
+    }
+  }
+}

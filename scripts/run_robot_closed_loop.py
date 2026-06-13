@@ -33,9 +33,11 @@ from edge_autonomy.local_llm_planner import (  # noqa: E402
     DEFAULT_SYSTEM_PROMPT,
     LocalCommandBackend,
     build_lightweight_planner_context,
+    plan_to_task_queue,
     run_local_llm_planner,
 )
 from edge_autonomy.map_registry import MapProfile, MapRegistry  # noqa: E402
+from edge_autonomy.mission_decision import build_mission_decision  # noqa: E402
 from edge_autonomy.operator_display import build_operator_display_state  # noqa: E402
 from edge_autonomy.perception_context import load_perception_context_file  # noqa: E402
 from edge_autonomy.runtime_state import build_runtime_snapshot  # noqa: E402
@@ -121,6 +123,18 @@ def run_gateway_command(
     return objects[-1]
 
 
+def gateway_rejection_reason(result: dict[str, Any]) -> str:
+    top_reason = str(result.get("reason") or "gateway_rejected_navigation")
+    safety = result.get("safety")
+    if not isinstance(safety, dict):
+        world = result.get("world_state")
+        safety = world.get("safety") if isinstance(world, dict) and isinstance(world.get("safety"), dict) else {}
+    safety_reason = str(safety.get("reason") or "") if isinstance(safety, dict) else ""
+    if safety_reason and safety_reason != top_reason:
+        return f"{top_reason}:{safety_reason}"
+    return top_reason
+
+
 def registry_allows_execution(registry: MapRegistry, map_id: str) -> tuple[bool, str]:
     profile = registry.get_map(map_id)
     if profile.status.lower() in SIMULATION_MAP_STATUSES:
@@ -170,6 +184,7 @@ def build_semantic_trace(
     registry_allowed: bool,
     registry_reason: str,
     task_queue: dict[str, Any] | None = None,
+    mission_decision: dict[str, Any] | None = None,
     queue_execution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     summary = planner_context.get("world_state_summary", {})
@@ -238,6 +253,7 @@ def build_semantic_trace(
         }
         if isinstance(queue_execution, dict)
         else None,
+        "mission_decision": mission_decision,
         "policy_gates": {
             "registry_allowed": registry_allowed,
             "registry_reason": registry_reason,
@@ -971,15 +987,22 @@ def execute_task_queue(
         gateway_allowed = True
         gateway_reason = "gateway check skipped"
         if not args.skip_gateway_check:
-            preflight_state = run_gateway_command(
-                {"action": "get_world_state"},
-                client_path=args.gateway_client,
-                network_interface=args.network_interface,
-                timeout_s=args.timeout_s,
-                startup_wait_s=args.gateway_startup_wait_s,
-            )
+            try:
+                preflight_state = run_gateway_command(
+                    {"action": "get_world_state"},
+                    client_path=args.gateway_client,
+                    network_interface=args.network_interface,
+                    timeout_s=args.timeout_s,
+                    startup_wait_s=args.gateway_startup_wait_s,
+                )
+            except Exception as exc:
+                preflight_state = {
+                    "accepted": False,
+                    "reason": "gateway_preflight_error",
+                    "error": str(exc),
+                }
             gateway_allowed, gateway_reason = gateway_allows_navigation(preflight_state)
-        if not gateway_allowed:
+        if args.execute and not gateway_allowed:
             blocked_reason = gateway_reason
             failed_step = task_id
             blocked_feedback = [
@@ -1079,6 +1102,7 @@ def execute_task_queue(
                 "reason": "persistent navigation session returned no arrival result",
             }
         else:
+            rejected_reason = gateway_rejection_reason(result)
             rejected_feedback = [
                 operator_feedback_message(
                     "blocked",
@@ -1095,7 +1119,7 @@ def execute_task_queue(
                 target_node=target_node,
                 target_name=target_name,
                 distance_m=None,
-                reason="gateway did not accept navigation",
+                reason=rejected_reason,
                 args=args,
                 requests=rejected_llm_requests,
                 results=rejected_llm_results,
@@ -1103,7 +1127,7 @@ def execute_task_queue(
             )
             arrival = {
                 "arrived": False,
-                "reason": "gateway did not accept navigation",
+                "reason": rejected_reason,
                 "operator_feedback": rejected_feedback,
                 "llm_feedback_requests": rejected_llm_requests,
                 "llm_feedback_results": rejected_llm_results,
@@ -1282,61 +1306,75 @@ def main(argv: list[str] | None = None) -> int:
     )
     nav_speed = args.nav_speed_mps if args.nav_speed_mps > 0 else None
     slam_command = plan_to_slam_command(result.plan, registry, speed=nav_speed, mode=args.nav_mode)
-    task_queue = result.task_queue
+    task_queue = plan_to_task_queue(result.plan, planner_context, existing_queue=result.task_queue)
     queue_execution = None
 
     gateway_state = None
     gateway_allowed = False
     gateway_reason = "gateway check skipped"
     if not args.skip_gateway_check:
-        gateway_state = run_gateway_command(
-            {"action": "get_world_state"},
-            client_path=args.gateway_client,
-            network_interface=args.network_interface,
-            timeout_s=args.timeout_s,
-            startup_wait_s=args.gateway_startup_wait_s,
-        )
+        try:
+            gateway_state = run_gateway_command(
+                {"action": "get_world_state"},
+                client_path=args.gateway_client,
+                network_interface=args.network_interface,
+                timeout_s=args.timeout_s,
+                startup_wait_s=args.gateway_startup_wait_s,
+            )
+        except Exception as exc:
+            gateway_state = {
+                "accepted": False,
+                "reason": "gateway_preflight_error",
+                "error": str(exc),
+            }
         gateway_allowed, gateway_reason = gateway_allows_navigation(gateway_state)
 
     topology_allowed = True
     topology_reason = "topology target allows navigation"
-    if isinstance(slam_command, dict):
-        target_node = str(slam_command.get("target_node") or "")
-        command_map_id = str(slam_command.get("map_id") or args.map_id)
+    topology_failures: list[str] = []
+    for target_node in task_queue.get("targets", []):
         try:
-            topology_allowed, topology_reason = topology_target_allows_navigation(registry.get_map(command_map_id), target_node)
+            target_allowed, target_reason = topology_target_allows_navigation(
+                registry.get_map(args.map_id),
+                str(target_node),
+            )
         except Exception as exc:
-            topology_allowed = False
-            topology_reason = f"failed to validate topology target {target_node}: {exc}"
+            target_allowed = False
+            target_reason = f"failed to validate topology target {target_node}: {exc}"
+        if not target_allowed:
+            topology_failures.append(target_reason)
+    if topology_failures:
+        topology_allowed = False
+        topology_reason = "; ".join(topology_failures)
+
+    mission_decision = build_mission_decision(
+        task_queue,
+        execute_requested=args.execute,
+        registry_allowed=registry_allowed,
+        registry_reason=registry_reason,
+        topology_allowed=topology_allowed,
+        topology_reason=topology_reason,
+        gateway_checked=not args.skip_gateway_check,
+        gateway_allowed=gateway_allowed,
+        gateway_reason=gateway_reason,
+        gateway_state=gateway_state,
+    )
 
     executed = False
     execution_result = None
     blocked_reason = ""
-    if isinstance(task_queue, dict) and result.plan.get("mode") == "mapped_navigation":
+    if mission_decision["decision"] in {"execute_queue", "dry_run_queue"}:
         queue_execution = execute_task_queue(task_queue, registry=registry, args=args, nav_speed=nav_speed)
         executed = bool(args.execute and queue_execution.get("completed"))
         blocked_reason = str(queue_execution.get("blocked_reason") or ("dry run; pass --execute to send queued commands" if not args.execute else ""))
         execution_result = queue_execution
-    elif slam_command is None:
-        blocked_reason = "planner did not produce a slam command"
-    elif not args.execute:
-        blocked_reason = "dry run; pass --execute to send command"
-    elif not topology_allowed:
-        blocked_reason = topology_reason
-    elif not gateway_allowed and not args.skip_gateway_check:
-        blocked_reason = gateway_reason
     else:
-        execution_result = run_gateway_command(
-            slam_command,
-            client_path=args.gateway_client,
-            network_interface=args.network_interface,
-            timeout_s=args.timeout_s,
-            startup_wait_s=args.gateway_startup_wait_s,
-        )
-        executed = bool(execution_result.get("accepted", False))
+        blocked_reason = str(mission_decision.get("reason") or "MissionDecisionEngine blocked execution")
 
     if queue_execution and queue_execution.get("completed"):
         task_phase = "completed"
+    elif mission_decision["decision"] == "await_confirmation":
+        task_phase = "human_confirm_required"
     elif blocked_reason:
         task_phase = "blocked" if args.execute else "planning"
     elif executed:
@@ -1349,13 +1387,14 @@ def main(argv: list[str] | None = None) -> int:
         task_phase=task_phase,
         last_execution_result=blocked_reason or ("executed" if executed else ""),
         network_level="normal",
-        motion_allowed=bool(args.execute and registry_allowed and topology_allowed and (gateway_allowed or args.skip_gateway_check)),
+        motion_allowed=bool(mission_decision.get("motion_allowed")),
         perception_context=perception_context,
         timestamp_ms=int(time.time() * 1000),
     )
     operator_display = build_operator_display_state(
         world_state_v1,
         task_queue=task_queue,
+        mission_decision=mission_decision,
         queue_execution=queue_execution,
         user_command=args.command,
     )
@@ -1363,6 +1402,7 @@ def main(argv: list[str] | None = None) -> int:
         world_state=world_state_v1,
         operator_display=operator_display,
         task_queue=task_queue,
+        mission_decision=mission_decision,
         queue_execution=queue_execution,
         user_command=args.command,
         llm_result={"elapsed_s": result.elapsed_s, "plan": result.plan, "user_reply": result.user_reply},
@@ -1382,6 +1422,7 @@ def main(argv: list[str] | None = None) -> int:
         "world_state_v1": world_state_v1,
         "operator_display": operator_display,
         "runtime_log_record": runtime_log_record,
+        "mission_decision": mission_decision,
         "semantic_trace": build_semantic_trace(
             command=args.command,
             planner_context=planner_context,
@@ -1391,6 +1432,7 @@ def main(argv: list[str] | None = None) -> int:
             registry_allowed=registry_allowed,
             registry_reason=registry_reason,
             task_queue=task_queue,
+            mission_decision=mission_decision,
             queue_execution=queue_execution,
         ),
         "queue_execution": queue_execution,

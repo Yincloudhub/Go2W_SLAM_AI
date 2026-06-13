@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from edge_autonomy.map_registry import MapRegistry
 from scripts.run_robot_closed_loop import (
     PersistentNavigationSession,
+    gateway_rejection_reason,
     generate_llm_feedback_result,
     operator_feedback_message,
     run_supervised_navigation_session,
@@ -26,6 +27,17 @@ class FailingBackend:
 
 
 class QueueFeedbackTests(unittest.TestCase):
+    def test_gateway_rejection_preserves_safety_reason(self) -> None:
+        reason = gateway_rejection_reason(
+            {
+                "accepted": False,
+                "reason": "safety_blocked",
+                "safety": {"allow_navigation": False, "reason": "local_obstacle_not_fresh"},
+            }
+        )
+
+        self.assertEqual(reason, "safety_blocked:local_obstacle_not_fresh")
+
     def test_persistent_session_matches_responses_by_request_id(self) -> None:
         class FakeStdin:
             def __init__(self):
@@ -161,6 +173,61 @@ class QueueFeedbackTests(unittest.TestCase):
         self.assertFalse(result["completed"])
         self.assertIsNone(result["failed_step"])
         self.assertEqual(result["events"][0]["status"], "dry_run")
+
+    def test_gateway_network_loss_blocks_execution_but_not_dry_run_preview(self) -> None:
+        registry = MapRegistry.from_file(REGISTRY_PATH)
+        task_queue = {
+            "queue_id": "q-network-loss",
+            "mode": "sequential",
+            "status": "planned",
+            "source": "semantic_topology",
+            "targets": ["nie_guoli_office_front"],
+            "steps": [
+                {
+                    "task_id": "task_1",
+                    "action": "navigate",
+                    "status": "pending",
+                    "target_node": "nie_guoli_office_front",
+                    "target_name": "office",
+                }
+            ],
+            "communication_policy": {
+                "mode": "normal",
+                "send": ["task_state", "navigation_feedback", "world_state_summary"],
+                "drop": [],
+            },
+        }
+
+        for execute, expected_status in ((False, "dry_run"), (True, "blocked")):
+            with self.subTest(execute=execute):
+                args = SimpleNamespace(
+                    execute=execute,
+                    skip_gateway_check=False,
+                    map_id="test_current_main",
+                    nav_mode=None,
+                    arrival_monitor_interval_s=1.0,
+                    gateway_client="gateway",
+                    network_interface="eth0",
+                    timeout_s=1,
+                    gateway_startup_wait_s=0.0,
+                )
+                with patch(
+                    "scripts.run_robot_closed_loop.run_gateway_command",
+                    side_effect=RuntimeError("connection refused"),
+                ):
+                    result = execute_task_queue(
+                        task_queue,
+                        registry=registry,
+                        args=args,
+                        nav_speed=None,
+                    )
+
+                self.assertEqual(result["events"][0]["status"], expected_status)
+                if execute:
+                    self.assertIn("gateway_preflight_error", result["blocked_reason"])
+                    self.assertFalse(result["completed"])
+                else:
+                    self.assertEqual(result["blocked_reason"], "")
 
     def test_execute_queue_blocks_unverified_topology_target_before_gateway(self) -> None:
         registry_data = {

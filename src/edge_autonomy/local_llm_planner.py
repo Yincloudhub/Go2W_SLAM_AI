@@ -537,6 +537,137 @@ def build_task_queue_from_context(planner_context: dict[str, Any]) -> dict[str, 
     return queue
 
 
+def plan_to_task_queue(
+    plan: dict[str, Any],
+    planner_context: dict[str, Any],
+    *,
+    existing_queue: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if isinstance(existing_queue, dict):
+        validate_task_queue(existing_queue)
+        plan_targets = _nav_target_nodes(plan)
+        queue_targets = [str(target) for target in existing_queue.get("targets", [])]
+        if plan.get("mode") == "mapped_navigation" and plan_targets == queue_targets:
+            return existing_queue
+
+    communication_policy = plan.get("communication_policy")
+    if not isinstance(communication_policy, dict):
+        communication_policy = _normal_communication_policy()
+
+    candidates = {
+        str(candidate.get("node_id")): candidate
+        for candidate in build_lightweight_planner_context(planner_context).get("candidates", [])
+        if isinstance(candidate, dict) and candidate.get("node_id")
+    }
+    queue_steps: list[dict[str, Any]] = []
+    targets: list[str] = []
+    last_target = ""
+
+    for plan_step in plan.get("steps", []):
+        if not isinstance(plan_step, dict):
+            continue
+        tool = str(plan_step.get("tool") or "")
+        arguments = plan_step.get("arguments")
+        args = arguments if isinstance(arguments, dict) else {}
+        task_id = f"task_{len(queue_steps) + 1}"
+
+        if tool == "create_navigation_subgoal":
+            target_node = str(args.get("target_node") or "")
+            if not target_node:
+                continue
+            candidate = candidates.get(target_node, {})
+            target_name = str(candidate.get("name") or target_node)
+            queue_steps.append(
+                {
+                    "task_id": task_id,
+                    "action": "navigate",
+                    "target_node": target_node,
+                    "target_name": target_name,
+                    "status": "pending",
+                    "requires_preflight": True,
+                    "semantic_reason": str(plan.get("reason") or "planner navigation subgoal"),
+                }
+            )
+            if target_node not in targets:
+                targets.append(target_node)
+            last_target = target_node
+        elif tool == "wait_until":
+            queue_steps.append(
+                {
+                    "task_id": task_id,
+                    "action": "wait_until",
+                    "status": "pending",
+                    "condition": str(args.get("condition") or ""),
+                    "requires_preflight": False,
+                    "semantic_reason": "wait for supervised navigation completion",
+                }
+            )
+        elif tool == "capture_keyframe":
+            target_node = str(args.get("target_node") or last_target)
+            if not target_node:
+                continue
+            candidate = candidates.get(target_node, {})
+            queue_steps.append(
+                {
+                    "task_id": task_id,
+                    "action": "capture_keyframe",
+                    "target_node": target_node,
+                    "target_name": str(candidate.get("name") or target_node),
+                    "status": "pending",
+                    "requires_preflight": False,
+                    "semantic_reason": str(args.get("reason") or "planner requested keyframe"),
+                }
+            )
+        elif tool == "request_human_confirm":
+            queue_steps.append(
+                {
+                    "task_id": task_id,
+                    "action": "ask_confirm",
+                    "status": "pending",
+                    "message": str(args.get("message") or args.get("reason") or plan.get("reason") or "human confirmation required"),
+                    "requires_preflight": False,
+                    "semantic_reason": str(plan.get("reason") or "planner requires confirmation"),
+                }
+            )
+        elif tool == "hold_position":
+            queue_steps.append(
+                {
+                    "task_id": task_id,
+                    "action": "hold_position",
+                    "status": "pending",
+                    "requires_preflight": False,
+                    "semantic_reason": str(args.get("reason") or plan.get("reason") or "planner requested hold"),
+                }
+            )
+
+    if not queue_steps:
+        queue_steps.append(
+            {
+                "task_id": "task_1",
+                "action": "hold_position",
+                "status": "pending",
+                "requires_preflight": False,
+                "semantic_reason": str(plan.get("reason") or "no executable planner action"),
+            }
+        )
+
+    plan_id = str(plan.get("plan_id") or f"plan_{int(time.time() * 1000)}")
+    source = "semantic_topology" if plan_id.startswith(("intent_", "queue_")) else "llm_fallback"
+    queue = {
+        "queue_id": f"queue_{plan_id}",
+        "mode": "sequential",
+        "status": "planned",
+        "source": source,
+        "targets": targets,
+        "steps": queue_steps,
+        "communication_policy": communication_policy,
+        "user_reply": str(plan.get("reason") or ""),
+    }
+    queue["weak_link_payload"] = build_weak_link_payload(queue)
+    validate_task_queue(queue)
+    return queue
+
+
 def task_queue_to_plan(task_queue: dict[str, Any], planner_context: dict[str, Any]) -> dict[str, Any]:
     map_id = _dig_value(planner_context, "map_id") or "unknown"
     communication_policy = task_queue.get("communication_policy")

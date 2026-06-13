@@ -481,3 +481,34 @@ Deferred issues：
 - XT16 五场人工标定和真实低速运动验收。
 - TI/NX live transport、时间同步、认证和重放保护。
 - 弱网 journal、ack sequence 和补传执行器。
+
+## 14. P0-3 本地实现状态
+
+当前本地实现已完成：
+
+- 所有最终 Planner 计划归一化为 `TaskQueue IR`。
+- 新增 `MissionDecision v1` schema 和确定性决定层。
+- 删除 Python 单条 `slam_command` 直达 Gateway 的真实执行兜底。
+- Python persistent supervised executor 是唯一比赛上层监督器。
+- C++ 语义路由固定为 dry-run/诊断兼容入口，真实导航转交 Python。
+- Gateway 拒绝详情进入统一 DecisionRecord、UI 和 runtime log。
+- 断定位、地图错配、传感器过期和 Gateway 断网测试均 fail closed。
+- 策略覆盖后的 `human_confirm/safe_hold` 不会复用旧导航队列。
+
+本地验证：
+
+```text
+python_targeted: 76/76 passed
+python_full_unittest: 298/298 passed
+python_compile: passed
+git_diff_check: passed
+motion_commands_sent: false
+```
+
+当前 P0-3 尚未打完成标记。剩余唯一验收步骤是：提交推送后让机器人
+fast-forward 到该提交，执行 C++ build/CTest、Python 定向/全量无运动测试、
+三端 commit 核对和服务残留检查。
+
+P0-3 完成后下一步唯一任务是 P0-4：实现真实
+`CommunicationPolicyExecutor + append-only journal + ack sequence`，验证断网继续
+本地执行和重连补传不重放运动命令。

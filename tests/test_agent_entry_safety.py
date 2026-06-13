@@ -1,6 +1,7 @@
 import base64
 import contextlib
 import io
+import inspect
 import json
 import tempfile
 import unittest
@@ -15,6 +16,13 @@ REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w
 
 
 class AgentEntrySafetyTests(unittest.TestCase):
+    def test_closed_loop_has_no_direct_slam_command_execution_fallback(self) -> None:
+        source = inspect.getsource(run_robot_closed_loop.main)
+
+        self.assertNotIn("execution_result = run_gateway_command(", source)
+        self.assertIn("build_mission_decision(", source)
+        self.assertIn('{"execute_queue", "dry_run_queue"}', source)
+
     def test_closed_loop_rejects_execute_with_skipped_gateway_check(self) -> None:
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):

@@ -7,6 +7,7 @@ from referencing import Registry, Resource
 
 from edge_autonomy.llm_context import build_planner_context
 from edge_autonomy.map_registry import MapRegistry
+from edge_autonomy.mission_decision import build_mission_decision
 from edge_autonomy.operator_display import build_operator_display_state
 from edge_autonomy.perception_context import build_perception_context
 from edge_autonomy.runtime_log import build_runtime_log_record
@@ -18,12 +19,23 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SENSOR_SCHEMA = json.loads((REPO_ROOT / "schemas" / "sensor_envelope_v1.schema.json").read_text(encoding="utf-8"))
 CONTEXT_SCHEMA = json.loads((REPO_ROOT / "schemas" / "perception_context_v1.schema.json").read_text(encoding="utf-8"))
 WORLD_SCHEMA = json.loads((REPO_ROOT / "schemas" / "world_state_schema_v1.json").read_text(encoding="utf-8"))
+TASK_QUEUE_SCHEMA = json.loads((REPO_ROOT / "schemas" / "task_queue.schema.json").read_text(encoding="utf-8"))
+OPERATOR_SCHEMA = json.loads((REPO_ROOT / "schemas" / "operator_display_state.schema.json").read_text(encoding="utf-8"))
+MISSION_DECISION_SCHEMA = json.loads((REPO_ROOT / "schemas" / "mission_decision_v1.schema.json").read_text(encoding="utf-8"))
+RUNTIME_LOG_SCHEMA = json.loads((REPO_ROOT / "schemas" / "runtime_log_schema.json").read_text(encoding="utf-8"))
+LOCAL_PLAN_SCHEMA = json.loads((REPO_ROOT / "schemas" / "local_llm_plan.schema.json").read_text(encoding="utf-8"))
 SCHEMA_REGISTRY = (
     Registry()
     .with_resource(SENSOR_SCHEMA["$id"], Resource.from_contents(SENSOR_SCHEMA))
     .with_resource(CONTEXT_SCHEMA["$id"], Resource.from_contents(CONTEXT_SCHEMA))
+    .with_resource(WORLD_SCHEMA["$id"], Resource.from_contents(WORLD_SCHEMA))
+    .with_resource(TASK_QUEUE_SCHEMA["$id"], Resource.from_contents(TASK_QUEUE_SCHEMA))
+    .with_resource(OPERATOR_SCHEMA["$id"], Resource.from_contents(OPERATOR_SCHEMA))
+    .with_resource(MISSION_DECISION_SCHEMA["$id"], Resource.from_contents(MISSION_DECISION_SCHEMA))
+    .with_resource(LOCAL_PLAN_SCHEMA["$id"], Resource.from_contents(LOCAL_PLAN_SCHEMA))
 )
 WORLD_VALIDATOR = Draft202012Validator(WORLD_SCHEMA, registry=SCHEMA_REGISTRY)
+RUNTIME_LOG_VALIDATOR = Draft202012Validator(RUNTIME_LOG_SCHEMA, registry=SCHEMA_REGISTRY)
 
 
 def make_snapshot(ok: bool = True) -> dict:
@@ -145,17 +157,46 @@ class WorldStateV1Tests(unittest.TestCase):
             "source": "operator_panel",
             "targets": ["wp_1"],
             "steps": [{"task_id": "nav_1", "action": "navigate", "status": "running", "target_node": "wp_1"}],
-            "communication_policy": {"mode": "semantic_only", "send": [], "drop": []},
+            "communication_policy": {"mode": "semantic_only", "send": [], "drop": [], "reason": "test"},
         }
 
-        display = build_operator_display_state(world, task_queue=task_queue, queue_execution=queue_execution, user_command="go")
-        record = build_runtime_log_record(world_state=world, operator_display=display, task_queue=task_queue, queue_execution=queue_execution, user_command="go")
+        mission_decision = build_mission_decision(
+            task_queue,
+            execute_requested=True,
+            registry_allowed=True,
+            registry_reason="registry allows execution",
+            topology_allowed=True,
+            topology_reason="topology target allows navigation",
+            gateway_checked=True,
+            gateway_allowed=True,
+            gateway_reason="ok",
+            timestamp_ms=123,
+        )
+        display = build_operator_display_state(
+            world,
+            task_queue=task_queue,
+            mission_decision=mission_decision,
+            queue_execution=queue_execution,
+            user_command="go",
+        )
+        record = build_runtime_log_record(
+            world_state=world,
+            operator_display=display,
+            task_queue=task_queue,
+            mission_decision=mission_decision,
+            queue_execution=queue_execution,
+            user_command="go",
+        )
 
         self.assertEqual(display["screen"]["current_target"], "wp_1")
         self.assertEqual(display["screen"]["llm_reply"], "I am moving to the target.")
+        self.assertEqual(display["screen"]["mission_decision"], "execute_queue")
+        self.assertEqual(display["screen"]["motion_authority"], "slam_gateway")
+        self.assertIs(record["mission_decision"], mission_decision)
         self.assertFalse(record["artifact_policy"]["allow_raw_video"])
         self.assertFalse(record["artifact_policy"]["allow_dense_pointcloud"])
         self.assertEqual(json.loads(json.dumps(record))["schema_version"], 1)
+        self.assertEqual(list(RUNTIME_LOG_VALIDATOR.iter_errors(record)), [])
 
     def test_world_state_consumes_only_fresh_perception_context(self) -> None:
         context = make_perception_context()

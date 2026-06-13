@@ -251,6 +251,38 @@ SafetyGate 和 QueueExecutor 不依赖 YOLO 成功。
 不要循环重启侧车；先检查相机 USB、供电和线缆。此时 UI 会把视觉显示为离线，
 主链路仍按 XT16 LiDAR + SLAM 运行。
 
+## P0-3 唯一决定与执行链
+
+所有任务必须经过：
+
+```text
+TaskQueue -> MissionDecisionEngine -> Python supervisor -> SLAM Gateway -> Unitree SDK
+```
+
+操作员重点查看：
+
+```text
+mission_decision.decision
+mission_decision.reason
+mission_decision.execution_owner
+mission_decision.preflight.gateway
+operator_display.screen.mission_decision
+operator_display.screen.motion_authority
+```
+
+安全含义：
+
+- `dry_run_queue`：只预演，不运动。
+- `await_confirmation`：需要人工确认，不运动。
+- `hold`：Gateway 或任务要求保持，不运动。
+- `reject`：队列、地图或拓扑无效，不运动。
+- `execute_queue`：只表示可以进入 Python supervisor；Gateway 在下发前和运行中
+  仍有最终否决权。
+
+Gateway 断连时，真实执行 fail closed；dry-run 仍可输出队列和决定记录。
+C++ 面板打开 `/execute on` 后，真实导航会转交 Python supervisor，C++ 内部
+`QueueExecutor` 不拥有比赛导航租约。
+
 ## Dry-run 与真实执行
 
 UI 默认是“仅预演”。机器人趴卧、锚点未站立复核、人员密集或现场未清空时，不要打开“允许真实执行”。
@@ -270,6 +302,19 @@ python3 scripts/go2w_agent_entry.py \
 ```text
 --execute
 ```
+
+推荐先做不连接 Gateway 的纯预演：
+
+```bash
+python3 scripts/go2w_agent_entry.py \
+  --go-b64 "<UTF-8 base64>" \
+  --dry-run \
+  --skip-gateway-check \
+  --full-output
+```
+
+真实执行时禁止 `--skip-gateway-check`。只有操作者确认机器人站立、现场清空、
+地图/定位正确、XT16 主几何源可信并准备好遥控器急停后，才增加 `--execute`。
 
 中文从 Windows 或 SSH 发送时优先使用：
 
