@@ -30,6 +30,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
                 "docs/go2w_competition_edge_autonomy_handoff_20260612.md",
                 "docs/stereo_depth_camera_integration.md",
                 "docs/go2w_runtime_operations_runbook.md",
+                "docs/perception_context_v1.md",
             )
             for index, source in enumerate(sources):
                 path = repo / source
@@ -45,6 +46,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             self.assertIn("updated: 2026-06-13", index_text)
             self.assertIn("[[17-D435与DeepYOLO统一感知服务]]", index_text)
             self.assertIn("[[18-GO2W运行操作手册]]", index_text)
+            self.assertIn("[[19-PerceptionContext-v1统一感知契约]]", index_text)
             self.assertIn("P0-1 已完成", index_text)
             self.assertEqual(desktop.read_text(encoding="utf-8"), "source-0\n")
             self.assertEqual(
@@ -62,6 +64,10 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             self.assertEqual(
                 (overview / "18-GO2W运行操作手册.md").read_text(encoding="utf-8"),
                 "source-6\n",
+            )
+            self.assertEqual(
+                (overview / "19-PerceptionContext-v1统一感知契约.md").read_text(encoding="utf-8"),
+                "source-7\n",
             )
 
     def test_export_overview_only_copies_markdown_and_replaces_credentials(self):

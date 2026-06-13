@@ -36,6 +36,27 @@
 P0-1 完成标记为 `p0-1-unified-d435-accepted-20260613`。下一阶段唯一任务是
 `SensorEnvelope / PerceptionContext v1`，不得重新引入第二个 D435 owner。
 
+### 2026-06-13 P0-2 schema/loaders 完成状态
+
+P0-2 首个独立提交已建立统一感知输入契约：
+
+- 所有来源先归一化为 `SensorEnvelope v1`，状态只允许
+  `fresh/stale/offline/invalid/uncalibrated`。
+- XT16、D435 depth、D435 YOLO、TI/NX 使用同一 Python loader 模块。
+- 未来 XT16 IMU 和 Unitree 里程计先以明确 `offline` 的预留 envelope 出现，
+  不伪造数据。
+- 文件存在不能证明服务在线；必须结合 PID/bridge evidence、timestamp、
+  stale budget 和 sequence。
+- D435 depth 与 YOLO 保持独立 freshness，但共享单一 capture owner。
+- XT16 是唯一主四向几何源；D435 depth 只能进入前向补充，不能在 XT16
+  失效时自动晋升。
+- LLM 输入只允许有界语义摘要，不包含原始点云、连续视频或雷达 ADC。
+- `PerceptionContext` 固定 Gateway 为最终运动权威，且不新增第二套执行链。
+
+本提交不修改 WorldState、LLM、UI 或 Gateway。下一独立提交才把 Python/C++
+WorldState 的宽松 artifact normalization 替换为统一上下文，尤其禁止把缺失
+timestamp 补成当前时间。
+
 ## 定位
 
 当前项目不建议继续用“伪 6G”作为主表述。更稳的定位是：

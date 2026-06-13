@@ -39,6 +39,8 @@ node_id
 sensor_type
 source
 timestamp_ms
+sequence
+clock_domain = unix_epoch_ms
 health.status
 policy.mode
 ```
@@ -79,3 +81,29 @@ increase caution; it must never silently relax XT16 or D435 blocking decisions.
 - Keep each summary below 256 KiB.
 - Keep `observations` and `events` bounded; the C++ loader truncates each to 32.
 - Mark stale or unhealthy data explicitly instead of replaying old detections.
+
+## PerceptionContext v1 Adapter
+
+P0-2 normalizes this artifact as one `SensorEnvelope v1` source with:
+
+```text
+source_id = ti_nx:<node_id>
+source_kind = radar_semantics
+producer = nx_edge_bridge
+default stale budget = 3000 ms
+```
+
+The current repository does not contain a TI/NX bridge supervisor or PID
+contract. The adapter therefore defaults to `offline` unless the transport
+manager supplies explicit bridge-online evidence. Artifact existence, a stored
+`health.status=ok`, or a recent timestamp alone is insufficient.
+
+The v1 bridge must publish a native monotonically increasing sequence and
+declare `clock_domain=unix_epoch_ms`. The local transport manager must also
+supply a stable producer session identity. Missing sequence, unknown clock
+domain, or missing session evidence prevents a fresh envelope; the adapter
+must not invent any of them.
+
+TI/NX remains `semantic_only`. Tracks and events may enter the bounded
+PerceptionContext and LLM input when fresh, but `safety_wired` remains false
+and the source cannot authorize motion or relax XT16/D435 caution.

@@ -25,6 +25,35 @@ XT16 LiDAR
 DeepYOLO 是可选语义侧车，不参与运动许可。XT16 点云几何摘要是主安全
 源；D435 是前视保守补充。任一来源只能增加谨慎，不能放宽 XT16 阻断。
 
+## PerceptionContext v1 运行边界
+
+P0-2 的统一读取入口位于：
+
+```text
+src/edge_autonomy/perception_context.py
+```
+
+运行时判定必须遵守：
+
+- XT16：摘要 + `xt16_geometry_service/producer.pid` + 匹配进程。
+- D435：统一摘要 + 嵌入 owner PID/state + 匹配 capture 进程。
+- TI/NX：摘要 + transport manager 提供的 bridge-online evidence。
+- 缺少生产者证据时，即使 artifact 内写着 `fresh` 也必须输出 `offline`。
+- JSON/身份/类型/未来时间或 D435 序号回退异常输出 `invalid`。
+- `local_geometry.primary` 只接受 fresh 且已验证标定的 XT16；D435 只进入
+  `forward_supplements`。
+- context 生成时重新计算有效 age，避免缓存中的旧 envelope 保持 fresh。
+- P0-2 schema/loaders 提交不启动 SLAM、Gateway 或底盘运动。
+
+检查代码契约使用：
+
+```bash
+PYTHONPATH=src python3 -m unittest tests.test_perception_context
+```
+
+当前 WorldState、LLM 和 UI 尚未切换到该入口；在下一接线提交前，不得把
+PerceptionContext schema/loaders 的存在误报为完整消费链已经完成。
+
 ## 本地浏览器入口
 
 机器人侧启动 UI：

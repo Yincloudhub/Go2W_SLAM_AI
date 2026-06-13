@@ -401,3 +401,22 @@ blocking the real-time runtime work.
   wider center/front region still produced nearby valid depth around `0.24 m`.
   UI should display these values separately; safety fusion should use ROI
   confidence rather than the whole-image score alone.
+
+## 2026-06-13 P0-2 Adapter Contract
+
+`src/edge_autonomy/perception_context.py` converts the one unified D435
+artifact into two independent envelopes:
+
+- `d435_depth` with a default 1000 ms stale budget
+- `d435_yolo` with a default 3000 ms stale budget
+
+Both envelopes require the embedded owner PID/state and a matching live
+capture process. Therefore an old `d435_perception_summary.json` is `offline`
+even when its stored status says `fresh`.
+
+Each envelope keeps its own `captured_at_ms`, `frame_sequence`, confidence, and
+status. `SensorSequenceTracker` rejects a sequence rollback within the same
+owner instance, identified by boot ID, PID, and process start ticks. A capture
+process restart starts a new producer instance. The adapter publishes bounded
+depth geometry or object semantics only. It never exposes RGB frames, depth
+frames, or continuous video to the LLM.

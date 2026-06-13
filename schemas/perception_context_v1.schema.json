@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/perception_context_v1.schema.json",
+  "title": "Go2wPerceptionContextV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "schema",
+    "context_id",
+    "generated_at_ms",
+    "robot_motion",
+    "local_geometry",
+    "visual_objects",
+    "radar_tracks",
+    "risk_events",
+    "sources",
+    "degraded_capabilities",
+    "policy"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "schema": {"const": "go2w_perception_context_v1"},
+    "context_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "generated_at_ms": {"type": "integer", "minimum": 1},
+    "robot_motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sources"],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/attributed_item"}
+        }
+      }
+    },
+    "local_geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "forward_supplements"],
+      "properties": {
+        "primary": {
+          "anyOf": [
+            {"$ref": "#/$defs/attributed_item"},
+            {"type": "null"}
+          ]
+        },
+        "forward_supplements": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/attributed_item"}
+        }
+      }
+    },
+    "visual_objects": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/attributed_item"}
+    },
+    "radar_tracks": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/attributed_item"}
+    },
+    "risk_events": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/attributed_item"}
+    },
+    "sources": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "https://example.com/schemas/sensor_envelope_v1.schema.json"
+      }
+    },
+    "degraded_capabilities": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 64}
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motion_authority",
+        "llm_direct_motion",
+        "raw_sensor_streams_allowed",
+        "execution_chain"
+      ],
+      "properties": {
+        "motion_authority": {"const": "slam_gateway"},
+        "llm_direct_motion": {"const": false},
+        "raw_sensor_streams_allowed": {"const": false},
+        "execution_chain": {
+          "const": [
+            "task_queue",
+            "mission_decision_engine",
+            "slam_gateway",
+            "unitree_sdk"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "attributed_item": {
+      "type": "object",
+      "required": ["source_id", "timestamp_ms"],
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "timestamp_ms": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

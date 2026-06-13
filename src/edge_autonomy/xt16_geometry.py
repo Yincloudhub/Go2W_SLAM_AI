@@ -248,6 +248,7 @@ def build_xt16_geometry_summary(
     *,
     config: Xt16GeometryConfig | None = None,
     timestamp_ms: int | None = None,
+    sequence: int | None = None,
     frame_id: str = "rslidar",
     latency_ms: float | None = None,
 ) -> dict[str, Any]:
@@ -406,6 +407,7 @@ def build_xt16_geometry_summary(
         "schema_version": 2,
         "source": "lidar_pointcloud",
         "timestamp_ms": int(timestamp_ms if timestamp_ms is not None else now_ms()),
+        "sequence": sequence,
         "frame_id": frame_id,
         "range_m": cfg.range_m,
         "parameters": {

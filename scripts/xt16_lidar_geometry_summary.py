@@ -105,6 +105,7 @@ def run_offline(args: argparse.Namespace) -> int:
         sampled_points(points, max_points=args.max_points, sample_stride=args.sample_stride),
         config=config_from_args(args),
         timestamp_ms=now_ms(),
+        sequence=0,
         frame_id=frame_id,
         latency_ms=(time.time() - start) * 1000.0,
     )
@@ -152,12 +153,14 @@ def run_ros(args: argparse.Namespace) -> int:
         if min_interval_s and current_s - state["last_write_s"] < min_interval_s:
             return
         received_ms = now_ms()
+        sequence = state["count"] + 1
         start = time.time()
         raw_points = point_cloud2.read_points(msg, field_names=("x", "y", "z"), skip_nans=True)
         summary = build_xt16_geometry_summary(
             sampled_points(raw_points, max_points=args.max_points, sample_stride=args.sample_stride),
             config=cfg,
             timestamp_ms=received_ms,
+            sequence=sequence,
             frame_id=header_frame_id(msg),
             latency_ms=header_latency_ms(msg, received_ms),
         )

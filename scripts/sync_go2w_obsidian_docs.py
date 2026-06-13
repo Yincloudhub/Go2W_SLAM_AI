@@ -47,6 +47,10 @@ COPIES = (
         Path("docs/go2w_runtime_operations_runbook.md"),
         Path("18-GO2W运行操作手册.md"),
     ),
+    (
+        Path("docs/perception_context_v1.md"),
+        Path("19-PerceptionContext-v1统一感知契约.md"),
+    ),
 )
 
 
@@ -60,12 +64,14 @@ INDEX_BLOCK = f"""{START}
 - [[16-比赛边缘自治架构与新Session交接]]
 - [[17-D435与DeepYOLO统一感知服务]]
 - [[18-GO2W运行操作手册]]
+- [[19-PerceptionContext-v1统一感知契约]]
 
 当前操作边界：
 
 - 比赛唯一真实执行链为 `TaskQueue -> MissionDecisionEngine -> SLAM Gateway -> Unitree SDK`。
 - Gateway 是最终运动权威，LLM 不得生成底层速度、任意坐标或 Unitree API ID。
 - P0-1 已完成：D435 深度与 DeepYOLO 由单一采集 owner 驱动，旧入口只做兼容转发。
+- P0-2 schema/loaders 已完成：旧 artifact 无生产者证据时必须 offline。
 - TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
 - 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
 {END}

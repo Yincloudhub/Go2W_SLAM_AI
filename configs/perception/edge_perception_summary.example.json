@@ -4,6 +4,8 @@
   "sensor_type": "ti_millimeter_wave_radar",
   "source": "nx_ti_radar",
   "timestamp_ms": 0,
+  "sequence": 0,
+  "clock_domain": "unix_epoch_ms",
   "confidence": 0.85,
   "latency_ms": 40,
   "stale": false,
