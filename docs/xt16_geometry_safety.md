@@ -40,6 +40,29 @@ should be added. The next field action is to measure the distance from the XT16
 center to the front, rear, left, and right physical body edges, update the four
 footprint values, and then collect five stationary measured scenes.
 
+Earlier static work did include all four directions. The 2026-06-06 artifacts
+confirmed the axis mapping with front, left, right, and rear boxes. They used a
+`0.35 m` front/rear and `0.32 m` half-width footprint plus the earlier
+single-percentile algorithm. The current implementation uses a `0.30 m`
+symmetric footprint, a `0.02 m` filter margin, spatial cluster support, and a
+separate low-hazard band. The older artifacts remain valid axis evidence but
+cannot certify the current geometry implementation.
+
+When physical measurement is inconvenient, first collect a stationary corridor
+baseline with the read-only local viewer:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\visualize_xt16_over_ssh.py `
+  --host 192.168.123.18 `
+  --topic /utlidar/cloud `
+  --record-jsonl artifacts\xt16_visual\corridor_baseline.jsonl
+```
+
+This raw topic is available without starting SLAM or Gateway. It is useful for
+inspecting body self-returns. Final runtime comparison must later repeat against
+`/unitree/slam_lidar/points`, which is the processed topic consumed by the XT16
+geometry sidecar.
+
 ## Schema version 2
 
 Legacy directional fields remain authoritative and backward compatible:

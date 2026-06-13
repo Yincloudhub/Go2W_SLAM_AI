@@ -345,6 +345,32 @@ python3 scripts/go2w_agent_entry.py \
 python3 scripts/go2w_encode_command.py --mode go "去目标点拍照，然后返回" --pretty
 ```
 
+## XT16 走廊静止可视化
+
+不启动 SLAM、Gateway 或底盘运动时，可以直接读取底层 `/utlidar/cloud`。建议
+电脑通过有线地址连接：
+
+```powershell
+cd E:\GO2W_0
+.\.venv\Scripts\python.exe scripts\visualize_xt16_over_ssh.py `
+  --host 192.168.123.18 `
+  --topic /utlidar/cloud `
+  --record-jsonl artifacts\xt16_visual\corridor_baseline.jsonl
+```
+
+密码由终端交互输入，不使用命令行参数，也不写入 artifact。显示约定：
+
+```text
+red:    当前 footprint + margin 内被删除的点
+cyan:   footprint 外保留的机身高度点
+orange: footprint 外保留的低矮风险点
+gray:   高度带外诊断点
+```
+
+该工具同时显示当前算法的前、左、右、后净空和
+`points_excluded_footprint`。关闭窗口会关闭 SSH 订阅。它是诊断工具，不会把
+XT16 标记为 calibrated，也不会改变 Gateway 运动授权。
+
 ## 注意事项
 
 1. 真实执行前必须确认 `loc=true`、`map=true`、`motion=false`、`safety=ok`。

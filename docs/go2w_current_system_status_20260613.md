@@ -136,9 +136,26 @@ filter_margin=0.02 m
 后方仍由 360 度 XT16 负责。当前参数仍是临时估计，状态为
 `pending_field_measurement`，不能据此授权真实导航。
 
-下一项现场人工动作是以 XT16 中心为原点，测量到机身最前、最后、最左、最右边缘
-的四个距离。录入真实尺寸后，再做五个静止场景的点云/卷尺误差对比；在这一步完成
-前不启动底盘运动。
+2026-06-06 已完成前、左、右、后四方向静态箱体验证，证明坐标轴方向正确：
+前方箱体净空约 `0.50 m`，移除后约 `2.95 m`，后方箱体簇约 `0.67 m`。该批
+artifact 使用旧 footprint 和旧单百分位算法，只能作为方向证据，不能替当前
+空间簇/低矮风险算法签发最终标定。
+
+实测机身尺寸不方便时，下一步先把机器人静止放到走廊空旷处，通过本地只读
+可视化确认四方向自反射分布：
+
+```powershell
+cd E:\GO2W_0
+.\.venv\Scripts\python.exe scripts\visualize_xt16_over_ssh.py `
+  --host 192.168.123.18 `
+  --topic /utlidar/cloud `
+  --record-jsonl artifacts\xt16_visual\corridor_baseline.jsonl
+```
+
+脚本通过 SSH 在机器人侧临时订阅 PointCloud2，只向本地传输降采样点和当前算法
+摘要。它不启动 SLAM、Gateway、D435 或运动。红色点是 footprint 剔除点，青色是
+保留的机身高度点，橙色是低矮风险点。先用该图判断 `0.30 m + 0.02 m` 是否覆盖
+稳定机身回波，再决定是否必须补卷尺尺寸。
 
 ## 完成度
 
