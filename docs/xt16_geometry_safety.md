@@ -106,6 +106,32 @@ nominal footprint remains `0.30 m`; obstacle clearance is still reported from
 that nominal edge. The low-hazard band does not use the extra margin.
 Calibration remains `pending_field_measurement`.
 
+### Post-deployment no-motion verification
+
+Commit `28340c41fb6300865b19177301f34aaa6b47bb0a` was fast-forwarded to the
+robot and verified with another 34 processed frames:
+
+```text
+points_per_frame median: 62,027
+left_clearance_m median: 1.024
+right_clearance_m median: 1.003
+rear_body_clearance_m: 6.0 in 33/34 frames
+rear_low_hazard_clearance_m: no supported return
+points_excluded_footprint median: 913.5
+front_clearance_m: null
+```
+
+The rear body cluster was removed without converting a low-hazard return into
+clear space. The single rear frame without a confirmed value remained stale.
+The open forward direction had no supported ROI return in this capture, so it
+correctly remained `null` with `missing_required_roi:front`; no-return was not
+guessed as clear. This result accepts the body-boundary filter change but does
+not complete XT16 field calibration.
+
+The ignored local evidence file is
+`artifacts/xt16_visual/20260613_corridor_rslidar_margin05_20s.jsonl`, SHA-256
+`270A042800A7966B622C5BFF4C77C186008E88B172F51A81763E76EE05EFDAF8`.
+
 ## Schema version 2
 
 Legacy directional fields remain authoritative and backward compatible:
