@@ -360,6 +360,8 @@ sudo scripts/go2w_xt16_ptp.sh start
 `"PTPStatus":"Locked ..."`，然后再启动 `xt16_driver`。2026-06-13 重启后的
 故障样本中，雷达 UDP 包仍携带 `2020-05-20`，导致正式驱动以时间异常丢弃整帧；
 PTP 锁定后 UDP 时间恢复为当前 UTC，正式点云恢复到约 10 Hz、约 62k 点/帧。
+当前雷达首次/重复切换实测锁定约需 `32-57 s`，manager 默认最多等待 `90 s`；
+超时会恢复 GPS、停止 `ptp4l` 并拒绝继续。
 电脑建议通过有线地址连接：
 
 ```powershell
