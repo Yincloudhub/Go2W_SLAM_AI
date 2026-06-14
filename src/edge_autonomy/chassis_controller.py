@@ -182,7 +182,7 @@ class PersistentGatewaySession:
             ),
             timeout_s=self.timeout_s,
         )
-        if action == "navigate_to_pose" and result.get("accepted") is True:
+        if action in {"navigate_to_pose", "supervised_departure"} and result.get("accepted") is True:
             self.active = True
         elif (
             action in {"pause_navigation", "stop_slam"}

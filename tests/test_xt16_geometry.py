@@ -385,6 +385,30 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertIn("rear", summary["pending_low_hazard_directions"])
         self.assertTrue(summary["stale"])
 
+    def test_supervised_release_keeps_side_rear_pending_as_advisory(self) -> None:
+        points = clear_roi_points()
+        points.extend(
+            repeated_point(-0.36, 0.0, z=-0.2, count=4, spread_m=0.03)
+        )
+        points.extend(repeated_point(0.0, 0.53, z=0.2, count=3))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                supervised_release=True,
+                supervised_release_id="xt16-engineering-test",
+                supervised_max_speed_mps=0.1,
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertFalse(summary["stale"])
+        self.assertIn("right", summary["pending_low_hazard_directions"])
+        self.assertIn("rear", summary["pending_body_directions"])
+        self.assertIn("pending_low_hazard:right", summary["advisory_reasons"])
+        self.assertIn("pending_body_obstacle:rear", summary["advisory_reasons"])
+
     def test_nearest_supported_cluster_survives_far_low_background(self) -> None:
         points = clear_roi_points()
         points.extend(repeated_point(0.0, 0.53, z=-0.2, count=12))

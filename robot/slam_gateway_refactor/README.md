@@ -103,6 +103,7 @@ Allowed high-level actions:
 - `add_current_pose_waypoint`
 - `relocate`
 - `navigate_to_pose`
+- `supervised_departure`
 - `pause_navigation`
 - `resume_navigation`
 - `stop_slam`
@@ -151,6 +152,7 @@ The machine-readable path is intentionally stricter than the keyboard path:
 4. LLM commands are validated and routed through `SafetySupervisor` before navigation.
 5. Navigation obstacle mode follows Unitree SLAM API semantics: `mode=0` means obstacle avoidance, `mode=1` means stop for obstacle. LLM navigation and manually recorded waypoints default to `mode=0`.
 6. Short-lived command clients must not stop the SLAM backend when they exit. Use the explicit `stop_slam` action or the keyboard stop path when the backend should really stop.
-7. `navigate_to_pose` is rejected unless the near-field summary is sensor-backed, fresh, sufficiently confident, and complete in the front, left, and right ROIs. Formal mode keeps the strict all-direction clearance policy. Explicit supervised release uses `planner_mobility_v2`: Unitree obstacle-avoidance `mode=0` requires a front departure corridor of at least `0.80 m`; side/rear proximity is advisory and clamps speed to `0.10 m/s` instead of globally rejecting planner-controlled motion.
-8. `navigate_to_pose` requires `map_path`, and it must match the map path reported by the active SLAM localization stream.
-9. Stereo depth is forward-facing. Its image-left/image-right sectors may tighten the front view for diagnostics, but they never replace XT16 lateral or rear clearance. Stereo-only data cannot authorize navigation.
+7. `navigate_to_pose` is rejected unless the near-field summary is sensor-backed, fresh, sufficiently confident, and complete in the front, left, and right ROIs. Formal mode keeps the strict all-direction clearance policy. Explicit supervised release uses `planner_mobility_v3`: Unitree obstacle-avoidance `mode=0` requires a front departure corridor of at least `0.80 m`; side/rear proximity is advisory for aligned travel, while a material initial heading change additionally requires a clear turning envelope.
+8. `supervised_departure` is an internal deterministic recovery action, not general relative motion. It is forward-only, limited to `0.50 m` and `0.10 m/s`, requires operator acknowledgement and a supervised release, and requires front clearance equal to the requested distance plus `0.50 m`.
+9. `navigate_to_pose` requires `map_path`, and it must match the map path reported by the active SLAM localization stream.
+10. Stereo depth is forward-facing. Its image-left/image-right sectors may tighten the front view for diagnostics, but they never replace XT16 lateral or rear clearance. Stereo-only data cannot authorize navigation.

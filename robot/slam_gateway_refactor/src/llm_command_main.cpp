@@ -126,6 +126,11 @@ std::string runtimeSessionBlockReason(
     return "";
 }
 
+bool isNavigationMotionAction(const std::string& action)
+{
+    return action == "navigate_to_pose" || action == "supervised_departure";
+}
+
 void writeJsonLine(const nlohmann::json& value, std::mutex& output_mutex)
 {
     std::lock_guard<std::mutex> lock(output_mutex);
@@ -450,7 +455,7 @@ int main(int argc, const char** argv)
             }
 
             uint64_t navigation_generation = 0;
-            if (action == "navigate_to_pose") {
+            if (isNavigationMotionAction(action)) {
                 std::lock_guard<std::mutex> lock(lease.mutex);
                 if (lease.invalid) {
                     writeJsonLine(
@@ -475,7 +480,7 @@ int main(int argc, const char** argv)
             }
             result["action"] = action;
             result["request_id"] = request_id;
-            if (action == "navigate_to_pose") {
+            if (isNavigationMotionAction(action)) {
                 bool must_pause = false;
                 std::string invalid_reason;
                 {

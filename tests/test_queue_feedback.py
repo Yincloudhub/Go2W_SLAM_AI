@@ -13,6 +13,7 @@ from scripts.run_robot_closed_loop import (
     generate_llm_feedback_result,
     operator_feedback_message,
     run_supervised_navigation_session,
+    supervised_departure_decision,
     wait_for_arrival,
 )
 from scripts.run_robot_closed_loop import execute_task_queue
@@ -27,6 +28,51 @@ class FailingBackend:
 
 
 class QueueFeedbackTests(unittest.TestCase):
+    def test_constrained_initial_turn_requests_bounded_departure(self) -> None:
+        state = {
+            "world_state": {
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
+                "local_obstacle": {
+                    "front_clearance_m": 2.0,
+                    "left_clearance_m": 1.0,
+                    "right_clearance_m": 0.1,
+                    "rear_clearance_m": 0.1,
+                    "supervised_release": {"active": True},
+                },
+            }
+        }
+
+        decision = supervised_departure_decision(
+            state,
+            {"target_pose": {"x": 2.0, "y": 1.0}},
+        )
+
+        self.assertTrue(decision["required"])
+        self.assertTrue(decision["available"])
+        self.assertEqual(decision["distance_m"], 0.5)
+        self.assertEqual(decision["speed_mps"], 0.1)
+
+    def test_aligned_target_does_not_request_departure(self) -> None:
+        state = {
+            "world_state": {
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
+                "local_obstacle": {
+                    "front_clearance_m": 2.0,
+                    "left_clearance_m": 1.0,
+                    "right_clearance_m": 0.1,
+                    "rear_clearance_m": 0.1,
+                    "supervised_release": {"active": True},
+                },
+            }
+        }
+
+        decision = supervised_departure_decision(
+            state,
+            {"target_pose": {"x": 2.0, "y": 0.0}},
+        )
+
+        self.assertFalse(decision["required"])
+
     def test_gateway_rejection_preserves_safety_reason(self) -> None:
         reason = gateway_rejection_reason(
             {

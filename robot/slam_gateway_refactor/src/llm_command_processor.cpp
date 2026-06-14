@@ -265,6 +265,30 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
                 {"world_state", gateway_.buildWorldStateJson()}
             };
         }
+        const auto obstacle = gateway_.getLocalObstacleSummary();
+        const double bearing_error_rad = obstacle_policy::targetBearingError(
+            current_pose.pose.x,
+            current_pose.pose.y,
+            current_pose.pose.yaw,
+            authorization.authorized_pose.x,
+            authorization.authorized_pose.y);
+        if (obstacle.supervised_release_active &&
+            obstacle_policy::requiresInitialTurn(bearing_error_rad) &&
+            !obstacle_policy::turningEnvelopeClear(
+                obstacle.left_clearance_m,
+                obstacle.right_clearance_m,
+                obstacle.rear_clearance_m)) {
+            return {
+                {"accepted", false},
+                {"reason", "initial_turning_envelope_constrained"},
+                {"bearing_error_rad", bearing_error_rad},
+                {"required_clearance_m", {
+                    {"side", obstacle_policy::kTurningSideClearanceM},
+                    {"rear", obstacle_policy::kTurningRearClearanceM}
+                }},
+                {"world_state", gateway_.buildWorldStateJson()}
+            };
+        }
         if (navigation_execution_guard_) {
             const std::string guard_reason = navigation_execution_guard_();
             if (!guard_reason.empty()) {
@@ -281,6 +305,72 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
                         : obstacle_policy::kConservativeSpeedMps));
         }
         return ok(action, gateway_.submitNavigationGoal(goal));
+    }
+
+    if (action == "supervised_departure") {
+        if (!hasNavigationSessionAuthority(cmd, navigation_session_token_)) {
+            return reject("persistent_navigation_session_required");
+        }
+        if (!hasOperatorAck(cmd)) {
+            return reject("operator_ack_required_for_supervised_departure");
+        }
+        if (!hasFiniteNumber(cmd, "distance_m")) {
+            return reject("supervised_departure_distance_required");
+        }
+        const double distance_m = cmd.at("distance_m").get<double>();
+        const double requested_speed_mps = cmd.value(
+            "speed_mps",
+            obstacle_policy::kDepartureMaxSpeedMps);
+        if (distance_m <= 0.0 ||
+            distance_m > obstacle_policy::kDepartureMaxDistanceM) {
+            return reject("supervised_departure_distance_out_of_range");
+        }
+        if (!std::isfinite(requested_speed_mps) ||
+            requested_speed_mps <= 0.0 ||
+            requested_speed_mps > obstacle_policy::kDepartureMaxSpeedMps) {
+            return reject("supervised_departure_speed_out_of_range");
+        }
+        const auto obstacle = gateway_.getLocalObstacleSummary();
+        if (!obstacle.supervised_release_active) {
+            return reject("supervised_departure_requires_engineering_release");
+        }
+        const auto safety = gateway_.getSafetyDecision();
+        if (!safety.allow_navigation) {
+            return {
+                {"accepted", false},
+                {"reason", "safety_blocked"},
+                {"safety", safety.toJson()},
+                {"world_state", gateway_.buildWorldStateJson()}
+            };
+        }
+        const double required_front_m =
+            distance_m + obstacle_policy::kDepartureFrontReserveM;
+        if (obstacle.front_clearance_m < required_front_m) {
+            return {
+                {"accepted", false},
+                {"reason", "supervised_departure_front_clearance_insufficient"},
+                {"required_front_clearance_m", required_front_m},
+                {"observed_front_clearance_m", obstacle.front_clearance_m},
+                {"world_state", gateway_.buildWorldStateJson()}
+            };
+        }
+        if (navigation_execution_guard_) {
+            const std::string guard_reason = navigation_execution_guard_();
+            if (!guard_reason.empty()) {
+                return reject("navigation_session_guard_blocked:" + guard_reason);
+            }
+        }
+        const auto current = gateway_.getCurrentPose();
+        PoseData goal = current.pose;
+        goal.name = "__supervised_departure__";
+        goal.x += static_cast<float>(std::cos(current.pose.yaw) * distance_m);
+        goal.y += static_cast<float>(std::sin(current.pose.yaw) * distance_m);
+        goal.mode = 0;
+        goal.speed = static_cast<float>(requested_speed_mps);
+        auto result = ok(action, gateway_.submitNavigationGoal(goal));
+        result["distance_m"] = distance_m;
+        result["departure_target_pose"] = goal.toJson();
+        return result;
     }
 
     if (action == "pause_navigation") {

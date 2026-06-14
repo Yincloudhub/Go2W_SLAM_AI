@@ -105,7 +105,7 @@ INDEX_BLOCK = f"""{START}
   是唯一决定层，Python supervisor 是唯一比赛上层执行 owner。
 - P0-3 完成标记为 `p0-3-mission-decision-chain-accepted-20260613`。
 - `corridor_clearance_v1` 保留为 XT16 四向几何摘要分级；显式工程放行使用
-  `planner_mobility_v2` 判断 Unitree `mode=0` 的前向出发能力。侧/后近物体
+  `planner_mobility_v3` 判断 Unitree `mode=0` 的前向出发能力。侧/后近物体
   保留告警并限速 `0.10 m/s`，不再对静止机器人做全局运动否决。
 - XT16 名义 footprint 为前后/半宽 `0.30 m`；静止成对场景确认只保留前后
   `0.05 m` 自回波余量，左右余量为 `0.00 m`。轴向和当前算法静态工程验证

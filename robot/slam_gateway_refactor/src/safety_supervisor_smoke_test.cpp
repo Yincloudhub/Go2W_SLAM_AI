@@ -1,4 +1,5 @@
 #include "slam_gateway/safety_supervisor.hpp"
+#include "slam_gateway/obstacle_policy.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -48,6 +49,19 @@ slam_gateway::LocalObstacleSummary lidarObstacle()
 
 int main()
 {
+    require(
+        slam_gateway::obstacle_policy::requiresInitialTurn(0.35),
+        "material target bearing change must require an initial turn");
+    require(
+        !slam_gateway::obstacle_policy::requiresInitialTurn(0.05),
+        "aligned target must not require an initial turn");
+    require(
+        !slam_gateway::obstacle_policy::turningEnvelopeClear(0.8, 0.1, 0.1),
+        "close side or rear clearance must constrain an initial turn");
+    require(
+        slam_gateway::obstacle_policy::turningEnvelopeClear(0.8, 0.6, 0.4),
+        "supported side and rear clearance should allow an initial turn");
+
     slam_gateway::SafetySupervisor supervisor;
     const auto health = healthySlam();
     const auto localization = localized();
@@ -98,7 +112,7 @@ int main()
     require(corridor_decision.speed_limit_mps == 0.2,
             "conservative corridor mode must expose a real speed limit");
     const auto corridor_json = corridor_decision.toJson();
-    require(corridor_json.value("policy_version", std::string{}) == "planner_mobility_v2",
+    require(corridor_json.value("policy_version", std::string{}) == "planner_mobility_v3",
             "safety JSON must identify the active clearance policy");
     require(corridor_json.value("motion_direction", std::string{}) == "planner_controlled",
             "safety JSON must keep direction under planner control");

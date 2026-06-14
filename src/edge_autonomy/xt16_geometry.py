@@ -397,10 +397,36 @@ def build_xt16_geometry_summary(
         stale_reasons.append("invalid_xt16_supervised_speed_limit")
     if missing_required:
         stale_reasons.append("missing_required_roi:" + ",".join(missing_required))
-    if pending_body_directions:
-        stale_reasons.append("pending_body_obstacle:" + ",".join(pending_body_directions))
-    if pending_low_hazard_directions:
-        stale_reasons.append("pending_low_hazard:" + ",".join(pending_low_hazard_directions))
+    advisory_reasons: list[str] = []
+    pending_body_hard = list(pending_body_directions)
+    pending_low_hazard_hard = list(pending_low_hazard_directions)
+    if supervised_release_active:
+        pending_body_hard = [
+            direction for direction in pending_body_directions if direction == "front"
+        ]
+        pending_low_hazard_hard = [
+            direction for direction in pending_low_hazard_directions if direction == "front"
+        ]
+        pending_body_advisory = [
+            direction for direction in pending_body_directions if direction != "front"
+        ]
+        pending_low_hazard_advisory = [
+            direction for direction in pending_low_hazard_directions if direction != "front"
+        ]
+        if pending_body_advisory:
+            advisory_reasons.append(
+                "pending_body_obstacle:" + ",".join(pending_body_advisory)
+            )
+        if pending_low_hazard_advisory:
+            advisory_reasons.append(
+                "pending_low_hazard:" + ",".join(pending_low_hazard_advisory)
+            )
+    if pending_body_hard:
+        stale_reasons.append("pending_body_obstacle:" + ",".join(pending_body_hard))
+    if pending_low_hazard_hard:
+        stale_reasons.append(
+            "pending_low_hazard:" + ",".join(pending_low_hazard_hard)
+        )
     if total_points == 0 or finite_points == 0:
         stale_reasons.append("empty_or_invalid_pointcloud")
 
@@ -443,6 +469,7 @@ def build_xt16_geometry_summary(
         "latency_ms": latency_ms,
         "stale": bool(stale_reasons),
         "stale_reasons": stale_reasons,
+        "advisory_reasons": advisory_reasons,
         "blocked_directions": [],
         "narrow_passage": False,
         "recommended_action": "normal",

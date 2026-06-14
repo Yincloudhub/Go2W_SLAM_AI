@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import getpass
 import json
 import math
@@ -798,8 +799,17 @@ def run_supervised_navigation_session(
             result = session.command(command)
             if result.get("accepted") is not True:
                 return result, None
+            monitor_command = command
+            if command.get("action") == "supervised_departure":
+                target_pose = result.get("departure_target_pose")
+                if isinstance(target_pose, dict):
+                    monitor_command = {
+                        **command,
+                        "target_node": "__supervised_departure__",
+                        "target_pose": target_pose,
+                    }
             arrival = wait_for_arrival(
-                command,
+                monitor_command,
                 args,
                 target_name=target_name,
                 session=session,
@@ -814,6 +824,67 @@ def run_supervised_navigation_session(
             },
             None,
         )
+
+
+def supervised_departure_decision(
+    preflight_state: dict[str, Any] | None,
+    slam_command: dict[str, Any],
+) -> dict[str, Any]:
+    world = (
+        preflight_state.get("world_state", {})
+        if isinstance(preflight_state, dict)
+        else {}
+    )
+    obstacle = world.get("local_obstacle", {})
+    pose = world.get("current_pose", {}).get("pose", {})
+    target = slam_command.get("target_pose", {})
+    supervised = obstacle.get("supervised_release", {})
+    if not isinstance(supervised, dict) or supervised.get("active") is not True:
+        return {
+            "required": False,
+            "available": False,
+            "reason": "supervised release is not active",
+        }
+    try:
+        dx = float(target["x"]) - float(pose["x"])
+        dy = float(target["y"]) - float(pose["y"])
+        yaw = float(pose["yaw"])
+        bearing_error = math.atan2(dy, dx) - yaw
+        bearing_error = math.atan2(math.sin(bearing_error), math.cos(bearing_error))
+        front = float(obstacle["front_clearance_m"])
+        left = float(obstacle["left_clearance_m"])
+        right = float(obstacle["right_clearance_m"])
+        rear = float(obstacle["rear_clearance_m"])
+    except (KeyError, TypeError, ValueError):
+        return {
+            "required": False,
+            "available": False,
+            "reason": "mobility geometry is incomplete",
+        }
+    requires_turn = abs(bearing_error) > 0.20
+    turning_clear = left >= 0.35 and right >= 0.35 and rear >= 0.30
+    required = requires_turn and not turning_clear
+    distance_m = min(0.50, max(0.0, front - 0.50))
+    return {
+        "required": required,
+        "available": required and distance_m >= 0.20,
+        "reason": (
+            "initial turn is constrained and a bounded forward departure is available"
+            if required and distance_m >= 0.20
+            else "initial turn is constrained but forward departure clearance is insufficient"
+            if required
+            else "initial turning envelope is clear or no initial turn is required"
+        ),
+        "bearing_error_rad": bearing_error,
+        "clearance_m": {
+            "front": front,
+            "left": left,
+            "right": right,
+            "rear": rear,
+        },
+        "distance_m": distance_m,
+        "speed_mps": 0.10,
+    }
 
 
 def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
@@ -1097,6 +1168,67 @@ def execute_task_queue(
                 }
             )
             continue
+
+        departure = supervised_departure_decision(preflight_state, slam_command)
+        if departure.get("required"):
+            if not departure.get("available"):
+                blocked_reason = str(departure.get("reason"))
+                failed_step = task_id
+                append_queue_event(
+                    {
+                        "task_id": f"{task_id}_departure",
+                        "action": "supervised_departure",
+                        "status": "blocked",
+                        "target_node": target_node,
+                        "mobility_semantics": departure,
+                        "blocked_reason": blocked_reason,
+                    }
+                )
+                break
+            departure_command = {
+                "action": "supervised_departure",
+                "distance_m": departure["distance_m"],
+                "speed_mps": departure["speed_mps"],
+                "operator_ack": True,
+            }
+            departure_args = copy.copy(args)
+            departure_args.arrival_distance_m = min(
+                0.10,
+                max(0.05, float(departure["distance_m"]) * 0.20),
+            )
+            departure_args.arrival_monitor_s = max(
+                15.0,
+                float(departure["distance_m"]) / float(departure["speed_mps"]) + 10.0,
+            )
+            departure_result, departure_arrival = run_supervised_navigation_session(
+                departure_command,
+                departure_args,
+                target_name="受监督前移脱困",
+            )
+            departure_ok = bool(
+                departure_result.get("accepted")
+                and isinstance(departure_arrival, dict)
+                and departure_arrival.get("arrived")
+                and departure_arrival.get("paused")
+            )
+            append_queue_event(
+                {
+                    "task_id": f"{task_id}_departure",
+                    "action": "supervised_departure",
+                    "status": "ok" if departure_ok else "failed",
+                    "target_node": target_node,
+                    "mobility_semantics": departure,
+                    "send_result": departure_result,
+                    "arrival": departure_arrival,
+                }
+            )
+            if not departure_ok:
+                blocked_reason = str(
+                    (departure_arrival or {}).get("reason")
+                    or gateway_rejection_reason(departure_result)
+                )
+                failed_step = task_id
+                break
 
         departing_feedback = operator_feedback_message(
             "departing",

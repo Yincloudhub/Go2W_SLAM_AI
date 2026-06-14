@@ -67,13 +67,20 @@ An uncalibrated or stale trusted XT16 summary fails closed for navigation
 unless the explicit supervised engineering release is active. Manual
 relocation remains available so localization can be recovered.
 
-The supervised release uses `planner_mobility_v2`. It does not ask whether
+The supervised release uses `planner_mobility_v3`. It does not ask whether
 every side of a stationary robot is empty. It asks whether fresh localization
 and perception show a usable forward departure corridor for Unitree
 `mode=0` pose navigation. Front clearance below `0.80 m` remains a hard pause.
 Side and rear proximity remain visible advisories and force the `0.1 m/s`
 speed cap, but do not globally deny planner-controlled movement. Formal
 calibrated mode keeps the stricter all-direction policy.
+
+For a material initial heading change, v3 also checks the supported side/rear
+turning envelope. When turning is constrained but forward clearance is
+sufficient, the deterministic executor may issue one forward-only
+`supervised_departure` capped at 0.50 m and 0.10 m/s, pause, refresh world
+state, and then resubmit the registered topology target. This is not a general
+LLM relative-motion interface.
 
 Build-map origin, relocation, and navigation use separate registry roles:
 

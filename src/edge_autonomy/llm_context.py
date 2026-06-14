@@ -236,6 +236,24 @@ def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> d
                 "status": "ready" if capture_configured else "semantic_event_only",
                 "fallback": "record_semantic_keyframe_event",
             },
+            {
+                "name": "bounded_supervised_departure",
+                "tools": [],
+                "available": localized,
+                "status": "internal_deterministic_executor_only",
+                "requires": [
+                    "operator_present",
+                    "supervised_release",
+                    "initial_turn_constrained",
+                    "front_escape_clearance",
+                ],
+                "limits": {
+                    "direction": "forward_only",
+                    "max_distance_m": 0.5,
+                    "max_speed_mps": 0.1,
+                },
+                "fallback": "pause_and_request_human",
+            },
         ],
         "not_wired": [
             {
@@ -373,6 +391,7 @@ def build_planner_context(
             "Use /slam_info ctrl_info is_arrived or stateMachine FINISHED as the arrival condition.",
             "Do not request dense pointcloud or raw video for weak-bandwidth planning.",
             "relative_motion_preview is dry-run only and must never produce a SLAM or raw base-control command.",
+            "A bounded supervised departure may be reported semantically, but only the deterministic executor may authorize and execute it.",
         ],
     }
 
