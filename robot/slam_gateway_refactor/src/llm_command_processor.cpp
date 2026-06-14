@@ -266,10 +266,15 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
             };
         }
         const auto obstacle = gateway_.getLocalObstacleSummary();
+        const double current_yaw = quaternionToYaw(
+            current_pose.pose.q_x,
+            current_pose.pose.q_y,
+            current_pose.pose.q_z,
+            current_pose.pose.q_w);
         const double bearing_error_rad = obstacle_policy::targetBearingError(
             current_pose.pose.x,
             current_pose.pose.y,
-            current_pose.pose.yaw,
+            current_yaw,
             authorization.authorized_pose.x,
             authorization.authorized_pose.y);
         if (obstacle.supervised_release_active &&
@@ -361,10 +366,15 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
             }
         }
         const auto current = gateway_.getCurrentPose();
+        const double current_yaw = quaternionToYaw(
+            current.pose.q_x,
+            current.pose.q_y,
+            current.pose.q_z,
+            current.pose.q_w);
         PoseData goal = current.pose;
         goal.name = "__supervised_departure__";
-        goal.x += static_cast<float>(std::cos(current.pose.yaw) * distance_m);
-        goal.y += static_cast<float>(std::sin(current.pose.yaw) * distance_m);
+        goal.x += static_cast<float>(std::cos(current_yaw) * distance_m);
+        goal.y += static_cast<float>(std::sin(current_yaw) * distance_m);
         goal.mode = 0;
         goal.speed = static_cast<float>(requested_speed_mps);
         auto result = ok(action, gateway_.submitNavigationGoal(goal));
