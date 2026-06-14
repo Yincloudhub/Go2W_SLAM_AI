@@ -863,19 +863,41 @@ def supervised_departure_decision(
         }
     requires_turn = abs(bearing_error) > 0.20
     turning_clear = left >= 0.35 and right >= 0.35 and rear >= 0.30
-    required = requires_turn and not turning_clear
+    target_distance_m = math.hypot(dx, dy)
+    side_rear_advisory = left < 0.60 or right < 0.60 or rear < 0.50
+    constrained_turn = requires_turn and not turning_clear
+    required = (
+        target_distance_m > 0.75
+        and (constrained_turn or side_rear_advisory)
+    )
     distance_m = min(0.50, max(0.0, front - 0.50))
+    trigger = "not_required"
+    if required:
+        trigger = (
+            "initial_turn_constrained"
+            if constrained_turn
+            else "side_rear_advisory_before_planner_control"
+        )
+    available = required and distance_m >= 0.20
+    if available:
+        reason = (
+            "initial turn is constrained and a bounded forward departure is available"
+            if trigger == "initial_turn_constrained"
+            else "side or rear clearance is advisory and a bounded forward buffer is available"
+        )
+    elif required:
+        reason = "bounded forward departure clearance is insufficient"
+    elif target_distance_m <= 0.75:
+        reason = "target is too close to justify a departure maneuver"
+    else:
+        reason = "turning envelope and side or rear clearance are clear"
     return {
         "required": required,
-        "available": required and distance_m >= 0.20,
-        "reason": (
-            "initial turn is constrained and a bounded forward departure is available"
-            if required and distance_m >= 0.20
-            else "initial turn is constrained but forward departure clearance is insufficient"
-            if required
-            else "initial turning envelope is clear or no initial turn is required"
-        ),
+        "available": available,
+        "reason": reason,
+        "trigger": trigger,
         "bearing_error_rad": bearing_error,
+        "target_distance_m": target_distance_m,
         "clearance_m": {
             "front": front,
             "left": left,

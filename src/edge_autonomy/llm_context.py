@@ -244,8 +244,13 @@ def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> d
                 "requires": [
                     "operator_present",
                     "supervised_release",
-                    "initial_turn_constrained",
+                    "initial_turn_constrained_or_side_rear_advisory",
                     "front_escape_clearance",
+                ],
+                "semantic_inputs": [
+                    "initial_turn_constrained",
+                    "side_rear_advisory_before_planner_control",
+                    "front_escape_available",
                 ],
                 "limits": {
                     "direction": "forward_only",
@@ -391,7 +396,7 @@ def build_planner_context(
             "Use /slam_info ctrl_info is_arrived or stateMachine FINISHED as the arrival condition.",
             "Do not request dense pointcloud or raw video for weak-bandwidth planning.",
             "relative_motion_preview is dry-run only and must never produce a SLAM or raw base-control command.",
-            "A bounded supervised departure may be reported semantically, but only the deterministic executor may authorize and execute it.",
+            "The LLM may report that initial turning is constrained or side/rear clearance is advisory, but only the deterministic executor may authorize and execute a bounded supervised departure.",
         ],
     }
 

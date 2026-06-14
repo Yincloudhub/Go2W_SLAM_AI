@@ -59,8 +59,8 @@ class QueueFeedbackTests(unittest.TestCase):
                 "local_obstacle": {
                     "front_clearance_m": 2.0,
                     "left_clearance_m": 1.0,
-                    "right_clearance_m": 0.1,
-                    "rear_clearance_m": 0.1,
+                    "right_clearance_m": 1.0,
+                    "rear_clearance_m": 1.0,
                     "supervised_release": {"active": True},
                 },
             }
@@ -72,6 +72,54 @@ class QueueFeedbackTests(unittest.TestCase):
         )
 
         self.assertFalse(decision["required"])
+
+    def test_side_rear_advisory_requests_departure_even_when_aligned(self) -> None:
+        state = {
+            "world_state": {
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
+                "local_obstacle": {
+                    "front_clearance_m": 2.0,
+                    "left_clearance_m": 1.0,
+                    "right_clearance_m": 0.61,
+                    "rear_clearance_m": 0.37,
+                    "supervised_release": {"active": True},
+                },
+            }
+        }
+
+        decision = supervised_departure_decision(
+            state,
+            {"target_pose": {"x": 2.0, "y": 0.0}},
+        )
+
+        self.assertTrue(decision["required"])
+        self.assertEqual(
+            decision["trigger"],
+            "side_rear_advisory_before_planner_control",
+        )
+
+    def test_side_rear_advisory_does_not_depart_when_target_is_close(self) -> None:
+        state = {
+            "world_state": {
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
+                "local_obstacle": {
+                    "front_clearance_m": 2.0,
+                    "left_clearance_m": 1.0,
+                    "right_clearance_m": 0.40,
+                    "rear_clearance_m": 0.40,
+                    "supervised_release": {"active": True},
+                },
+            }
+        }
+
+        decision = supervised_departure_decision(
+            state,
+            {"target_pose": {"x": 0.70, "y": 0.0}},
+        )
+
+        self.assertFalse(decision["required"])
+        self.assertFalse(decision["available"])
+        self.assertEqual(decision["trigger"], "not_required")
 
     def test_gateway_rejection_preserves_safety_reason(self) -> None:
         reason = gateway_rejection_reason(

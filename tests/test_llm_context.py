@@ -61,6 +61,16 @@ class LlmContextTests(unittest.TestCase):
         self.assertIn("navigate_to_verified_node", context["world_state_summary"]["allowed_actions"])
         self.assertEqual(context["capability_contract"]["planning_style"], "capability_bounded_task_planning")
         self.assertIn("relative_motion", {item["name"] for item in context["capability_contract"]["not_wired"]})
+        departure = next(
+            item
+            for item in context["capability_contract"]["conditional"]
+            if item["name"] == "bounded_supervised_departure"
+        )
+        self.assertIn(
+            "side_rear_advisory_before_planner_control",
+            departure["semantic_inputs"],
+        )
+        self.assertEqual(departure["status"], "internal_deterministic_executor_only")
         for edge in context["world_state_summary"]["topology"]["edges"]:
             self.assertFalse(edge["distance_verified"])
             self.assertIsNone(edge["expected_distance_m"])

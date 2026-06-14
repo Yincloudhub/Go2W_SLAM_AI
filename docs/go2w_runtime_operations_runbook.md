@@ -442,11 +442,13 @@ rear:  <0.50 m conservative, <0.30 m pause
 缺失 ROI、定位失效或非 `mode=0` 目标仍直接阻断。
 
 v3 进一步区分直行出发与起步转向。目标方位相对当前朝向超过 `0.20 rad` 时，
-Gateway 要求左右至少 `0.35 m`、后方至少 `0.30 m` 的受支持转向空间。若转向
-空间不足但前方清晰，确定性执行器可插入一次 `supervised_departure`：仅前进、
+Gateway 要求左右至少 `0.35 m`、后方至少 `0.30 m` 的受支持转向空间。由于
+Unitree 内部路径可能在目标方位已对齐时仍先转向，只要目标仍较远且侧/后处于
+保守告警，确定性执行器也会优先插入一次 `supervised_departure`：仅前进、
 最多 `0.50 m`、最多 `0.10 m/s`，完成并暂停后重新提交原拓扑目标。LLM 只消费
-和解释 `initial_turn_constrained/front_escape_available` 语义，不直接生成
-相对位姿或底盘速度。
+和解释 `initial_turn_constrained`、
+`side_rear_advisory_before_planner_control`、`front_escape_available` 语义，
+不直接生成相对位姿或底盘速度。
 
 Unitree 绕障调用位于 `robot/slam_gateway_refactor/src/slam_gateway.cpp` 的
 `ROBOT_API_ID_POSE_NAV_PL (1102)`；目标 `mode=0` 表示避障模式。
