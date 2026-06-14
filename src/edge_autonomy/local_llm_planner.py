@@ -26,7 +26,16 @@ PLAN_TOOLS = {
     "hold_position",
 }
 COMMUNICATION_MODES = {"normal", "semantic_only", "keyframe_low_rate", "hold_remote"}
-SEND_ITEMS = {"task_state", "risk_events", "keyframe", "semantic_topology", "navigation_feedback", "world_state_summary"}
+SEND_ITEMS = {
+    "task_state",
+    "mission_decision",
+    "execution_state",
+    "risk_events",
+    "keyframe",
+    "semantic_topology",
+    "navigation_feedback",
+    "world_state_summary",
+}
 DROP_ITEMS = {"raw_video", "dense_pointcloud", "full_log", "high_rate_images"}
 
 
@@ -47,7 +56,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "If distance_to_requested_target_m is within arrival_distance_m, use hold_position and never create_navigation_subgoal. "
     "If battery_percent is below low_battery_percent and the task is not charging or emergency, ask for human confirmation or return to charging_point before any other navigation. "
     "If bandwidth_kbps is below weak_bandwidth_kbps, the first step must be set_communication_policy with semantic_only mode and drop raw_video, dense_pointcloud, and high_rate_images. "
-    "Allowed communication send values are task_state, risk_events, keyframe, semantic_topology, navigation_feedback, world_state_summary. "
+    "Allowed communication send values are task_state, mission_decision, execution_state, risk_events, keyframe, semantic_topology, navigation_feedback, world_state_summary. "
     "Allowed communication drop values are raw_video, dense_pointcloud, full_log, high_rate_images. "
     "Never put navigation_feedback or world_state_summary in drop."
 )

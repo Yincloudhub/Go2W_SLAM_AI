@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/communication_journal_v1.schema.json",
+  "title": "Go2wCommunicationJournalRecordV1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "schema",
+    "record_type",
+    "source_id",
+    "timestamp_ms"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "schema": {"const": "go2w_communication_journal_v1"},
+    "record_type": {"type": "string", "enum": ["event", "ack"]},
+    "source_id": {"type": "string", "minLength": 1},
+    "timestamp_ms": {"type": "integer", "minimum": 0},
+    "event_id": {"type": "string", "minLength": 1},
+    "sequence": {"type": "integer", "minimum": 1},
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "task_state",
+        "mission_decision",
+        "execution_claim",
+        "execution_state",
+        "navigation_feedback",
+        "risk_event",
+        "keyframe_index",
+        "world_state_summary",
+        "remote_task_proposal"
+      ]
+    },
+    "queue_id": {
+      "anyOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "message_id": {
+      "anyOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "replay_safe": {"const": true},
+    "execution_directive": {"const": false},
+    "payload": {"type": "object"},
+    "ack_sequence": {"type": "integer", "minimum": 0}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"record_type": {"const": "event"}}
+      },
+      "then": {
+        "required": [
+          "event_id",
+          "sequence",
+          "event_type",
+          "queue_id",
+          "message_id",
+          "replay_safe",
+          "execution_directive",
+          "payload"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {"record_type": {"const": "ack"}}
+      },
+      "then": {
+        "required": ["ack_sequence"]
+      }
+    }
+  ]
+}

@@ -101,6 +101,10 @@ artifact 台账，要求测量值、哈希、地图和 Git 记录齐全。
 XT16 正式标定 promotion、低速运动验收、TI/NX live transport 和 IMU/里程计
 摘要继续作为 deferred issues，不与 P0-4 混成一个巨型提交。
 
+2026-06-14 后续执行状态：P0-4 已完成本地实现与无运动验收；当前只剩 Git
+提交/推送、机器人 fast-forward 和机器人纯 journal/dry-run 无运动验收。不得把
+这段收尾扩大为 XT16 复测、SLAM/Gateway 启动或真实运动。
+
 ## 7. 新 Session 可直接使用的提示词
 
 ```text

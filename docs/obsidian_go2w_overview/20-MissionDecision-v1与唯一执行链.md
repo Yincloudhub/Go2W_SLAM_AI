@@ -133,5 +133,7 @@ P0-3 完成标记：
 p0-3-mission-decision-chain-accepted-20260613
 ```
 
-下一步唯一软件任务是 P0-4：
-`CommunicationPolicyExecutor + append-only journal + ack sequence`。
+P0-4 已在本地接入：
+`CommunicationPolicyExecutor + append-only journal + ack sequence + reconnect replay`。
+同一 queue 的真实执行先取得持久 `execution_claim`；恢复和补传都不得自动重放
+Gateway 命令。机器人无运动验收待 Git fast-forward 部署后执行。

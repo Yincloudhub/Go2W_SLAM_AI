@@ -22,6 +22,8 @@ class AgentEntrySafetyTests(unittest.TestCase):
         self.assertNotIn("execution_result = run_gateway_command(", source)
         self.assertIn("build_mission_decision(", source)
         self.assertIn('{"execute_queue", "dry_run_queue"}', source)
+        self.assertIn("communication.reserve_execution(", source)
+        self.assertIn("event_sink=journal_queue_event", source)
 
     def test_closed_loop_rejects_execute_with_skipped_gateway_check(self) -> None:
         stdout = io.StringIO()

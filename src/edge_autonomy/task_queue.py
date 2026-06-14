@@ -20,6 +20,8 @@ STEP_STATUSES = {"pending", "running", "ok", "failed", "blocked", "dry_run", "sk
 COMMUNICATION_MODES = {"normal", "semantic_only", "keyframe_low_rate", "hold_remote"}
 COMMUNICATION_SEND = {
     "task_state",
+    "mission_decision",
+    "execution_state",
     "risk_events",
     "keyframe",
     "semantic_topology",

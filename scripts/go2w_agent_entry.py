@@ -516,7 +516,17 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
         str(args.gateway_startup_wait_s),
         "--timeout-s",
         str(args.timeout_s),
+        "--communication-journal",
+        args.communication_journal,
+        "--communication-source-id",
+        args.communication_source_id,
+        "--link-state",
+        args.link_state,
+        "--replay-limit",
+        str(args.replay_limit),
     ]
+    if args.ack_sequence is not None:
+        argv.extend(["--ack-sequence", str(args.ack_sequence)])
     if args.nav_speed_mps > 0:
         argv.extend(["--nav-speed-mps", str(args.nav_speed_mps)])
     if args.nav_mode is not None and args.nav_mode >= 0:
@@ -706,6 +716,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for queued capture_keyframe steps.")
+    parser.add_argument(
+        "--communication-journal",
+        default=os.environ.get(
+            "GO2W_COMMUNICATION_JOURNAL",
+            str(REPO_ROOT / "artifacts" / "communication" / "communication_journal_v1.jsonl"),
+        ),
+    )
+    parser.add_argument(
+        "--communication-source-id",
+        default=os.environ.get("GO2W_COMMUNICATION_SOURCE_ID", "go2w_robot"),
+    )
+    parser.add_argument(
+        "--link-state",
+        choices=["normal", "weak", "disconnected", "recovered"],
+        default=os.environ.get("GO2W_LINK_STATE", "normal"),
+    )
+    parser.add_argument("--ack-sequence", type=int, default=None)
+    parser.add_argument("--replay-limit", type=int, default=100)
     parser.add_argument("--start-slam", action="store_true", help="Start xt16_driver and unitree_slam before other steps.")
     parser.add_argument("--relocate", action="store_true", help="Run explicit relocation against a verified registry anchor.")
     parser.add_argument("--relocation-anchor", default="")

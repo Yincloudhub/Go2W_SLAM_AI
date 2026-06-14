@@ -447,3 +447,26 @@ rear:  <0.50 m conservative, <0.30 m pause
 4. 建图、写拓扑点、打开 RViz2 和真实执行都应由操作者显式确认，不应跟随 UI 启动自动触发。
 5. 机器人重启、系统升级或雷达序列号变化后，先重新检查 XT16、SLAM 和重定位，再录点或执行任务。
 6. 中文拓扑点写入注册表时遵守 UTF-8 校验流程，避免 PowerShell here-string 直接写中文 JSON。
+## P0-4 通信 journal 无运动检查
+
+以下命令只操作本地追加写 journal，不启动 SLAM、Gateway、传感器或底盘：
+
+```bash
+cd /home/unitree/Go2W_SLAM_AI
+PYTHONPATH=src python3 scripts/go2w_communication_journal.py status --pretty
+PYTHONPATH=src python3 scripts/go2w_communication_journal.py replay \
+  --link-state disconnected --pretty
+PYTHONPATH=src python3 scripts/go2w_communication_journal.py replay \
+  --link-state recovered --pretty
+```
+
+默认文件为
+`artifacts/communication/communication_journal_v1.jsonl`。远端累计 ack 通过：
+
+```bash
+PYTHONPATH=src python3 scripts/go2w_communication_journal.py ack \
+  --ack-sequence <remote_ack_sequence> --pretty
+```
+
+验收必须确认 `execution_directive=false`，且补传 payload 不包含
+`slam_command`、`target_pose`、`operator_ack`、原始视频或稠密点云。

@@ -6,8 +6,9 @@
 
 P0-1 单一 D435、P0-2 统一 PerceptionContext、P0-3 唯一决定与执行链已经完成
 代码部署和机器人无运动验收。当前机器人是“代码已部署、全部测试服务已停止”的
-安全停机状态，不是正在运行 SLAM 或自治导航。完整比赛闭环仍缺 P0-4 弱网
-journal/ack/补传执行器、XT16 正式 measured ledger 签发和最终低速运动验收。
+安全停机状态，不是正在运行 SLAM 或自治导航。P0-4 弱网 journal/ack/补传执行器
+已完成本地实现和无运动验收，待机器人 Git fast-forward 后做同样的无运动验收。
+完整比赛闭环仍缺 XT16 正式 measured ledger 签发和最终低速运动验收。
 
 ## 版本与分支
 
@@ -234,7 +235,7 @@ conservative navigation speed cap: 0.20 m/s
 | P0-1 单一 D435 owner | 完成并验收 |
 | P0-2 PerceptionContext / WorldState | 完成并验收 |
 | P0-3 MissionDecision / 唯一执行链 | 完成并验收 |
-| P0-4 弱网 journal / ack / 补传 | 未实现 |
+| P0-4 弱网 journal / ack / 补传 | 本地实现与无运动验收完成，机器人待验收 |
 | XT16 轴向/有效 footprint 静态工程验证 | 完成，不重复采集 |
 | XT16 正式 measured ledger / verified 标定 | 未签发 |
 | TI/NX live transport | 预留接口，未接实流 |
@@ -243,3 +244,16 @@ conservative navigation speed cap: 0.20 m/s
 
 所以当前是“软件主链已收口、现场完整闭环未最终验收”，不能表述为比赛闭环已经
 百分之百完善。
+
+## P0-4 弱网 journal
+
+实现和契约见 `docs/communication_policy_v1.md`。当前本地验收确认：
+
+- 断网不阻塞 TaskQueue、MissionDecision 和 dry-run 执行状态推进；
+- journal 重启后恢复 queue 快照、sequence、ack 和 pending outbox；
+- ack 前事件保持待补传，重连只补发缺失 sequence；
+- 同一 queue 的真实执行占用不可重复获取；
+- replay 不包含 Gateway/SLAM 命令、任意 target pose 或原始传感器载荷；
+- 远端 TaskQueue 只能路由到 MissionDecisionEngine。
+
+机器人只允许 Git fast-forward 后运行纯 journal/dry-run 验收，不启动任何运动链。

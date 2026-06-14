@@ -63,6 +63,10 @@ COPIES = (
         Path("docs/go2w_session_handoff_20260614.md"),
         Path("22-上下文归档与新Session交接.md"),
     ),
+    (
+        Path("docs/communication_policy_v1.md"),
+        Path("23-CommunicationPolicyExecutor-v1弱网Journal.md"),
+    ),
 )
 
 LOG_COPIES = (
@@ -87,6 +91,7 @@ INDEX_BLOCK = f"""{START}
 - [[20-MissionDecision-v1与唯一执行链]]
 - [[21-GO2W当前系统状态与实操]]
 - [[22-上下文归档与新Session交接]]
+- [[23-CommunicationPolicyExecutor-v1弱网Journal]]
 
 当前操作边界：
 
@@ -107,7 +112,9 @@ INDEX_BLOCK = f"""{START}
   仍未签发。
 - D435 只补前向深度，不能覆盖机腹、左右或后方；XT16 可见低矮带之外仍有
   机腹/遮挡盲区，真实运动需另行有界验收。
-- 下一步唯一软件任务是 P0-4 弱网 journal、ack sequence 和补传执行器。
+- P0-4 已完成本地实现与无运动验收：任务、决定和执行状态进入 append-only
+  journal，sequence/ack/reconnect replay 已接入，机器人仅待 Git fast-forward
+  后做纯 journal/dry-run 无运动验收。
 - TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
 - 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
 {END}

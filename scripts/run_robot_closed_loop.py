@@ -28,6 +28,10 @@ except (AttributeError, ValueError):
 
 from edge_autonomy.llm_context import build_planner_context, plan_to_slam_command  # noqa: E402
 from edge_autonomy.chassis_controller import PersistentGatewaySession  # noqa: E402
+from edge_autonomy.communication_policy import (  # noqa: E402
+    AppendOnlyJournal,
+    CommunicationPolicyExecutor,
+)
 from edge_autonomy.gateway_safety import gateway_allows_navigation  # noqa: E402
 from edge_autonomy.local_llm_planner import (  # noqa: E402
     DEFAULT_SYSTEM_PROMPT,
@@ -56,6 +60,9 @@ DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
 SIMULATION_MAP_STATUSES = {"simulation", "simulated", "demo", "synthetic"}
 DEFAULT_MODEL = "/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 DEFAULT_ASK_SCRIPT = "/home/unitree/llm_runtime/scripts/ask_qwen.sh"
+DEFAULT_COMMUNICATION_JOURNAL = (
+    REPO_ROOT / "artifacts" / "communication" / "communication_journal_v1.jsonl"
+)
 BLOCKING_NAVIGATION_TARGET_TAGS = frozenset(
     {
         "disabled",
@@ -863,6 +870,7 @@ def execute_task_queue(
     registry: MapRegistry,
     args: argparse.Namespace,
     nav_speed: float | None,
+    event_sink: Any = None,
 ) -> dict[str, Any]:
     validate_task_queue(task_queue)
     events: list[dict[str, Any]] = []
@@ -883,6 +891,17 @@ def execute_task_queue(
         "runtime_safety_check": True,
     }
 
+    def append_queue_event(event: dict[str, Any]) -> None:
+        events.append(event)
+        if event_sink is not None:
+            event_sink(
+                {
+                    "queue_id": task_queue.get("queue_id"),
+                    "status": "running",
+                    "event": event,
+                }
+            )
+
     for task in task_queue.get("steps", []):
         if not isinstance(task, dict):
             continue
@@ -890,7 +909,7 @@ def execute_task_queue(
         task_id = task_step_id(task)
         target_name = str(task.get("target_name") or task.get("target_node") or "")
         if action == "report":
-            events.append(
+            append_queue_event(
                 {
                     "task_id": task_id,
                     "action": action,
@@ -905,7 +924,7 @@ def execute_task_queue(
         if action == "capture_keyframe":
             result = run_capture_keyframe(task, args) if args.execute else {"captured": False, "reason": "dry run; capture not executed", "target_node": task.get("target_node")}
             capture_failed = bool(args.execute and args.capture_command and not result.get("captured"))
-            events.append(
+            append_queue_event(
                 {
                     "task_id": task_id,
                     "action": action,
@@ -927,7 +946,7 @@ def execute_task_queue(
                 break
             continue
         if action != "navigate":
-            events.append({"task_id": task_id, "action": action, "status": "skipped", "reason": "unsupported task action"})
+            append_queue_event({"task_id": task_id, "action": action, "status": "skipped", "reason": "unsupported task action"})
             continue
 
         target_node = str(task.get("target_node") or "")
@@ -962,7 +981,7 @@ def execute_task_queue(
                     results=blocked_llm_results,
                     operator_feedback=blocked_feedback,
                 )
-                events.append(
+                append_queue_event(
                     {
                         "task_id": task_id,
                         "action": action,
@@ -980,7 +999,7 @@ def execute_task_queue(
         except Exception as exc:
             blocked_reason = f"failed to build navigation command for {target_node}: {exc}"
             failed_step = task_id
-            events.append({"task_id": task_id, "action": action, "status": "failed", "target_node": target_node, "blocked_reason": blocked_reason})
+            append_queue_event({"task_id": task_id, "action": action, "status": "failed", "target_node": target_node, "blocked_reason": blocked_reason})
             break
 
         preflight_state = None
@@ -1027,7 +1046,7 @@ def execute_task_queue(
                 results=blocked_llm_results,
                 operator_feedback=blocked_feedback,
             )
-            events.append(
+            append_queue_event(
                 {
                     "task_id": task_id,
                     "action": action,
@@ -1064,7 +1083,7 @@ def execute_task_queue(
                 results=queued_llm_results,
                 operator_feedback=queued_feedback,
             )
-            events.append(
+            append_queue_event(
                 {
                     "task_id": task_id,
                     "action": action,
@@ -1133,7 +1152,7 @@ def execute_task_queue(
                 "llm_feedback_results": rejected_llm_results,
             }
         status = "ok" if accepted and arrival.get("arrived") and arrival.get("paused") else "failed"
-        events.append(
+        append_queue_event(
             {
                 "task_id": task_id,
                 "action": action,
@@ -1239,6 +1258,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
+    parser.add_argument(
+        "--communication-journal",
+        default=os.environ.get(
+            "GO2W_COMMUNICATION_JOURNAL",
+            str(DEFAULT_COMMUNICATION_JOURNAL),
+        ),
+    )
+    parser.add_argument(
+        "--communication-source-id",
+        default=os.environ.get("GO2W_COMMUNICATION_SOURCE_ID", "go2w_robot"),
+    )
+    parser.add_argument(
+        "--link-state",
+        choices=["normal", "weak", "disconnected", "recovered"],
+        default=os.environ.get("GO2W_LINK_STATE", "normal"),
+    )
+    parser.add_argument("--ack-sequence", type=int, default=None)
+    parser.add_argument("--replay-limit", type=int, default=100)
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")
     return parser
@@ -1308,6 +1345,27 @@ def main(argv: list[str] | None = None) -> int:
     slam_command = plan_to_slam_command(result.plan, registry, speed=nav_speed, mode=args.nav_mode)
     task_queue = plan_to_task_queue(result.plan, planner_context, existing_queue=result.task_queue)
     queue_execution = None
+    queue_id = str(task_queue.get("queue_id") or "")
+    communication = CommunicationPolicyExecutor(
+        AppendOnlyJournal(
+            args.communication_journal,
+            source_id=args.communication_source_id,
+        ),
+        communication_policy=task_queue["communication_policy"],
+        link_state=args.link_state,
+    )
+    communication_recovery = communication.status()
+    communication_ack = None
+    if args.ack_sequence is not None:
+        communication_ack = communication.acknowledge(args.ack_sequence)
+    task_journal_event = communication.record_event(
+        "task_state",
+        {
+            "status": str(task_queue.get("status") or "planned"),
+            "task_queue": task_queue,
+        },
+        queue_id=queue_id,
+    )
 
     gateway_state = None
     gateway_allowed = False
@@ -1359,17 +1417,72 @@ def main(argv: list[str] | None = None) -> int:
         gateway_reason=gateway_reason,
         gateway_state=gateway_state,
     )
+    decision_journal_event = communication.record_event(
+        "mission_decision",
+        mission_decision,
+        queue_id=queue_id,
+    )
 
     executed = False
     execution_result = None
     blocked_reason = ""
+    execution_claim = None
+    communication_errors: list[str] = []
+
+    def journal_queue_event(event: dict[str, Any]) -> None:
+        try:
+            communication.record_event(
+                "navigation_feedback",
+                event,
+                queue_id=queue_id,
+            )
+        except Exception as exc:
+            communication_errors.append(str(exc))
+
     if mission_decision["decision"] in {"execute_queue", "dry_run_queue"}:
-        queue_execution = execute_task_queue(task_queue, registry=registry, args=args, nav_speed=nav_speed)
-        executed = bool(args.execute and queue_execution.get("completed"))
-        blocked_reason = str(queue_execution.get("blocked_reason") or ("dry run; pass --execute to send queued commands" if not args.execute else ""))
-        execution_result = queue_execution
+        if args.execute:
+            execution_claim = communication.reserve_execution(
+                queue_id=queue_id,
+                decision_id=str(mission_decision.get("decision_id") or ""),
+            )
+        if args.execute and not execution_claim.get("claimed"):
+            blocked_reason = str(
+                execution_claim.get("reason")
+                or "queue execution is already claimed; automatic replay is blocked"
+            )
+        else:
+            queue_execution = execute_task_queue(
+                task_queue,
+                registry=registry,
+                args=args,
+                nav_speed=nav_speed,
+                event_sink=journal_queue_event,
+            )
+            executed = bool(args.execute and queue_execution.get("completed"))
+            blocked_reason = str(queue_execution.get("blocked_reason") or ("dry run; pass --execute to send queued commands" if not args.execute else ""))
+            execution_result = queue_execution
     else:
         blocked_reason = str(mission_decision.get("reason") or "MissionDecisionEngine blocked execution")
+
+    if queue_execution and queue_execution.get("completed"):
+        execution_status = "completed"
+    elif not args.execute and mission_decision["decision"] == "dry_run_queue":
+        execution_status = "dry_run"
+    elif blocked_reason:
+        execution_status = "blocked"
+    else:
+        execution_status = "not_started"
+    execution_journal_event = communication.record_event(
+        "execution_state",
+        {
+            "status": execution_status,
+            "dry_run": not args.execute,
+            "executed": executed,
+            "blocked_reason": blocked_reason,
+            "queue_execution": queue_execution,
+        },
+        queue_id=queue_id,
+    )
 
     if queue_execution and queue_execution.get("completed"):
         task_phase = "completed"
@@ -1386,7 +1499,7 @@ def main(argv: list[str] | None = None) -> int:
         planner_context=planner_context,
         task_phase=task_phase,
         last_execution_result=blocked_reason or ("executed" if executed else ""),
-        network_level="normal",
+        network_level=args.link_state,
         motion_allowed=bool(mission_decision.get("motion_allowed")),
         perception_context=perception_context,
         timestamp_ms=int(time.time() * 1000),
@@ -1456,6 +1569,34 @@ def main(argv: list[str] | None = None) -> int:
             "executed": executed,
             "blocked_reason": blocked_reason,
             "result": execution_result,
+        },
+        "communication": {
+            "recovered_before_run": communication_recovery,
+            "ack": communication_ack,
+            "task_event": {
+                "event_id": task_journal_event["event_id"],
+                "sequence": task_journal_event["sequence"],
+            },
+            "decision_event": {
+                "event_id": decision_journal_event["event_id"],
+                "sequence": decision_journal_event["sequence"],
+            },
+            "execution_claim": execution_claim,
+            "execution_event": {
+                "event_id": execution_journal_event["event_id"],
+                "sequence": execution_journal_event["sequence"],
+            },
+            "status": communication.status(),
+            "replay_batch": [
+                {
+                    "event_id": event["event_id"],
+                    "sequence": event["sequence"],
+                    "event_type": event["event_type"],
+                    "execution_directive": event["execution_directive"],
+                }
+                for event in communication.replay_batch(limit=args.replay_limit)
+            ],
+            "errors": communication_errors,
         },
     }
     if args.pretty:

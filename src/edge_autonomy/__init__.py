@@ -1,6 +1,11 @@
 from .models import MapReference, NavigationGoal, Pose2D, RiskEvent, RobotState, SemanticObject, WorldState
 from .map_registry import MapProfile, MapRegistry, RelocalizationAnchor, TopologyEdge, TopologyNode, UnitreePose
 from .llm_context import build_planner_context, plan_to_slam_command, simulate_local_llm_plan
+from .communication_policy import (
+    AppendOnlyJournal,
+    CommunicationPolicyExecutor,
+    JournalCorruptionError,
+)
 from .mission_decision import build_gateway_decision_record, build_mission_decision
 from .perception_fusion import DepthCameraSummary, depth_summary_is_usable, fuse_local_obstacle_summary
 from .operator_display import build_operator_display_state
@@ -27,9 +32,12 @@ from .xt16_geometry import Xt16GeometryConfig, build_xt16_geometry_summary
 
 __all__ = [
     "CurrentPose",
+    "AppendOnlyJournal",
+    "CommunicationPolicyExecutor",
     "DepthCameraSummary",
     "InMemorySlamAdapter",
     "LinkQuality",
+    "JournalCorruptionError",
     "LidarStateSummary",
     "LocalObstacleSummary",
     "LocalizationState",
