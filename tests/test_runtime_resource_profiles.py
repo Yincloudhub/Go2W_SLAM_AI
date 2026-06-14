@@ -19,6 +19,8 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("d435_perception_summary.py", text)
         self.assertIn("restart-if-stale)", text)
         self.assertIn("refuse_competing_owner", text)
+        self.assertIn("GO2W_D435_SUPERVISOR_FAILURE_THRESHOLD", text)
+        self.assertIn("GO2W_D435_SUPERVISOR_COOLDOWN_S", text)
 
     def test_deepyolo_headless_skips_overlay_by_default(self):
         text = (REPO_ROOT / "scripts" / "build_deepyolo_headless.sh").read_text(encoding="utf-8")

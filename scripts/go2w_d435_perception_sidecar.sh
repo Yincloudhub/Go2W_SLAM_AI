@@ -15,13 +15,20 @@ DEPTH_COMPAT_PATH="${GO2W_STEREO_SUMMARY_PATH:-${REPO_ROOT}/artifacts/stereo_dep
 YOLO_COMPAT_PATH="${GO2W_DEEPYOLO_SUMMARY_PATH:-${REPO_ROOT}/artifacts/vision_semantic_summary.json}"
 CAPTURE_PID_FILE="${SERVICE_DIR}/capture_owner.pid"
 REDUCER_PID_FILE="${SERVICE_DIR}/summary_reducer.pid"
+SUPERVISOR_PID_FILE="${SERVICE_DIR}/supervisor.pid"
 LOCK_FILE="${SERVICE_DIR}/manager.lock"
 CAPTURE_LOG="${SERVICE_DIR}/capture_owner.log"
 REDUCER_LOG="${SERVICE_DIR}/summary_reducer.log"
+SUPERVISOR_LOG="${SERVICE_DIR}/supervisor.jsonl"
+SUPERVISOR_SCRIPT="${SCRIPT_DIR}/go2w_d435_supervisor.py"
+MANAGER_SCRIPT="${SCRIPT_DIR}/go2w_d435_perception_sidecar.sh"
 PROFILE="${GO2W_D435_PROFILE:-${GO2W_DEEPYOLO_PROFILE:-resident}}"
 INPUT_FPS="${GO2W_D435_INPUT_FPS:-15}"
 DEPTH_EVERY_N="${GO2W_D435_DEPTH_EVERY_N:-2}"
 STARTUP_WAIT_S="${GO2W_D435_STARTUP_WAIT_S:-8}"
+SUPERVISOR_INTERVAL_S="${GO2W_D435_SUPERVISOR_INTERVAL_S:-2}"
+SUPERVISOR_FAILURE_THRESHOLD="${GO2W_D435_SUPERVISOR_FAILURE_THRESHOLD:-3}"
+SUPERVISOR_COOLDOWN_S="${GO2W_D435_SUPERVISOR_COOLDOWN_S:-30}"
 
 case "${PROFILE}" in
   resident) CAPTURE_EVERY_N=5; INFERENCE_INTERVAL_MS=333; NICE_LEVEL=8 ;;
@@ -134,6 +141,39 @@ health_sidecar() {
   summary_health
 }
 
+supervisor_running() {
+  is_running "${SUPERVISOR_PID_FILE}" "${SUPERVISOR_SCRIPT}"
+}
+
+start_supervisor() {
+  local pid
+  if supervisor_running; then
+    echo "d435_supervisor=already_running pid=$(read_pid "${SUPERVISOR_PID_FILE}")"
+    return 0
+  fi
+  rm -f "${SUPERVISOR_PID_FILE}"
+  nohup python3 "${SUPERVISOR_SCRIPT}" \
+    --manager "${MANAGER_SCRIPT}" \
+    --summary-path "${SUMMARY_PATH}" \
+    --interval-s "${SUPERVISOR_INTERVAL_S}" \
+    --failure-threshold "${SUPERVISOR_FAILURE_THRESHOLD}" \
+    --cooldown-s "${SUPERVISOR_COOLDOWN_S}" \
+    >> "${SUPERVISOR_LOG}" 2>&1 < /dev/null 9>&- &
+  pid=$!
+  echo "${pid}" > "${SUPERVISOR_PID_FILE}"
+  sleep 0.2
+  if ! supervisor_running; then
+    echo "d435_supervisor=start_failed pid=${pid}" >&2
+    rm -f "${SUPERVISOR_PID_FILE}"
+    return 1
+  fi
+  echo "d435_supervisor=started pid=${pid}"
+}
+
+stop_supervisor() {
+  stop_one "d435_supervisor" "${SUPERVISOR_PID_FILE}" "${SUPERVISOR_SCRIPT}"
+}
+
 stop_one() {
   local label="$1" path="$2" expected="$3" pid
   pid="$(read_pid "${path}" 2>/dev/null || true)"
@@ -171,15 +211,19 @@ stop_sidecar() {
 }
 
 print_status() {
-  local capture_pid reducer_pid
+  local capture_pid reducer_pid supervisor_pid
   capture_pid="$(read_pid "${CAPTURE_PID_FILE}" 2>/dev/null || true)"
   reducer_pid="$(read_pid "${REDUCER_PID_FILE}" 2>/dev/null || true)"
+  supervisor_pid="$(read_pid "${SUPERVISOR_PID_FILE}" 2>/dev/null || true)"
   is_running "${CAPTURE_PID_FILE}" "${HEADLESS_BIN}" \
     && echo "d435_capture_owner=running pid=${capture_pid}" \
     || echo "d435_capture_owner=stopped"
   is_running "${REDUCER_PID_FILE}" "d435_perception_summary.py" \
     && echo "d435_summary_reducer=running pid=${reducer_pid}" \
     || echo "d435_summary_reducer=stopped"
+  supervisor_running \
+    && echo "d435_supervisor=running pid=${supervisor_pid}" \
+    || echo "d435_supervisor=stopped"
   echo "summary_path=${SUMMARY_PATH}"
 }
 
@@ -230,14 +274,17 @@ start_sidecar() {
 
 case "${1:-status}" in
   build) exec bash "${SCRIPT_DIR}/build_deepyolo_headless.sh" ;;
-  start) acquire_operation_lock; start_sidecar ;;
-  stop) acquire_operation_lock; stop_sidecar ;;
-  restart) acquire_operation_lock; stop_sidecar; start_sidecar ;;
+  start) acquire_operation_lock; start_sidecar; start_supervisor ;;
+  stop) acquire_operation_lock; stop_supervisor; stop_sidecar ;;
+  restart) acquire_operation_lock; stop_supervisor; stop_sidecar; start_sidecar; start_supervisor ;;
   status) print_status ;;
   health) health_sidecar ;;
+  supervisor-start) acquire_operation_lock; start_supervisor ;;
+  supervisor-stop) acquire_operation_lock; stop_supervisor ;;
   restart-if-stale)
     health_sidecar >/dev/null 2>&1 && {
       echo "restart=not_needed"
+      start_supervisor
       print_status
       exit 0
     }
@@ -249,6 +296,7 @@ case "${1:-status}" in
     }
     stop_sidecar
     start_sidecar
+    start_supervisor
     ;;
-  *) echo "usage: $0 {build|start|stop|restart|status|health|restart-if-stale}" >&2; exit 2 ;;
+  *) echo "usage: $0 {build|start|stop|restart|status|health|restart-if-stale|supervisor-start|supervisor-stop}" >&2; exit 2 ;;
 esac

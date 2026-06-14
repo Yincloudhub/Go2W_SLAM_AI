@@ -31,6 +31,16 @@ class D435SidecarContractTests(unittest.TestCase):
         self.assertIn("if ! health_sidecar; then", text)
         self.assertIn('owner.get("pid") == int(sys.argv[2])', text)
 
+    def test_manager_runs_one_bounded_health_supervisor(self):
+        text = (REPO_ROOT / "scripts" / "go2w_d435_perception_sidecar.sh").read_text(encoding="utf-8")
+        self.assertIn('SUPERVISOR_SCRIPT="${SCRIPT_DIR}/go2w_d435_supervisor.py"', text)
+        self.assertIn("start_supervisor()", text)
+        self.assertIn("stop_supervisor()", text)
+        self.assertIn("--failure-threshold", text)
+        self.assertIn("--cooldown-s", text)
+        self.assertIn("restart-if-stale)", text)
+        self.assertEqual(text.count('nohup python3 "${SUPERVISOR_SCRIPT}"'), 1)
+
     def test_stop_attempts_reducer_and_capture_owner(self):
         text = (REPO_ROOT / "scripts" / "go2w_d435_perception_sidecar.sh").read_text(encoding="utf-8")
         stop_start = text.index("stop_sidecar()")
