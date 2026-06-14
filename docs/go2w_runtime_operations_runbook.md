@@ -360,6 +360,8 @@ sudo scripts/go2w_xt16_ptp.sh start
 `"PTPStatus":"Tracking ..."` 或 `"PTPStatus":"Locked ..."`，然后才能启动
 `xt16_driver`。`start_go2w_slam_stack.sh` 默认在启动 driver 前执行同一健康检查；
 PTP 未运行或已回到 `Free Run` 时直接失败，不允许带着异常时间启动 SLAM。
+driver 初始化可能使雷达短暂显示 `Free Run` 后重新捕获 PTP，因此运行时检查最多
+等待 `20 s` 重新取得连续 5 个健康样本；持续失锁仍然失败。
 
 2026-06-13 重启后的故障样本中，雷达 UDP 包仍携带 `2020-05-20`，导致正式驱动
 以时间异常丢弃整帧。XT16 是独立设备，不会自动读取机器人 Linux 系统时钟；
@@ -371,8 +373,10 @@ PTP 未运行或已回到 `Free Run` 时直接失败，不允许带着异常时�
 2026-06-14 复验还发现默认 `ptp4l` 的 10 ms 发送时间戳等待会在该软件时间戳
 网卡上周期性超时，进程仍在但雷达会退回 `Free Run`。manager 现显式设置
 `--tx_timestamp_timeout 1000`，并接受正常运行时交替出现的 `Tracking/Locked`。
-实机连续 120 秒检查中只有一个 PTP 进程，偏差保持纳秒级。manager 默认最多
-等待 `90 s`；超时会恢复 GPS、停止 `ptp4l` 并拒绝继续。
+实机空载连续 120 秒检查中只有一个 PTP 进程，偏差保持纳秒级；driver 初始化
+期间出现过一次短暂 `Free Run`，随后在没有重启 PTP 的情况下自行恢复
+`Tracking`，且正式点云持续发布。manager 默认启动最多等待 `90 s`，运行时
+健康检查最多等待 `20 s`；启动超时会恢复 GPS、停止 `ptp4l` 并拒绝继续。
 电脑建议通过有线地址连接：
 
 ```powershell

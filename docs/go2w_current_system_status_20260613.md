@@ -164,7 +164,9 @@ UDP 时间仍停留在 `2020-05-20`，PTP 恢复后正式 `rslidar` 点云恢复
 10/10 通过；地图为 `/home/unitree/test.pcd`，距锚点约 `0.365-0.385 m`，航向
 误差约 `1.3-2.2 deg`，没有发送运动命令。同期发现旧 PTP 参数会因发送时间戳
 超时而在进程仍存活时失锁；将等待调整为 `1000 ms` 后连续 120 秒保持
-`Tracking/Locked`。SLAM 启动入口现默认 fail-closed 检查 PTP。
+`Tracking/Locked`。driver 初始化期间雷达可能短暂切到 `Free Run` 后自行重新
+捕获，因此检查会在 `20 s` 有界窗口内等待连续 5 个健康样本；持续失锁仍然
+fail-closed。SLAM 启动入口现默认执行该检查。
 脚本拒绝把另一条 `frame_id=utlidar_lidar` 的 `/utlidar/cloud` 当作 XT16，并
 对收到的每帧再次校验 `frame_id=rslidar`。
 红色点是 footprint 剔除点，青色是保留的机身高度点，橙色是低矮风险点。

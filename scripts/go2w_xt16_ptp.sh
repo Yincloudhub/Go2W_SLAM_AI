@@ -11,6 +11,7 @@ PID_FILE="${SERVICE_DIR}/ptp4l.pid"
 LOG_FILE="${SERVICE_DIR}/ptp4l.log"
 LOCK_TIMEOUT_S="${GO2W_XT16_PTP_LOCK_TIMEOUT_S:-90}"
 HEALTH_SAMPLES="${GO2W_XT16_PTP_HEALTH_SAMPLES:-5}"
+HEALTH_TIMEOUT_S="${GO2W_XT16_PTP_HEALTH_TIMEOUT_S:-20}"
 TX_TIMESTAMP_TIMEOUT_MS="${GO2W_XT16_PTP_TX_TIMESTAMP_TIMEOUT_MS:-1000}"
 CONFIG_URL="http://${LIDAR_IP}/pandar.cgi?action=get&object=lidar_config"
 PTP_URL="http://${LIDAR_IP}/pandar.cgi?action=set&object=lidar&key=clock_source&value=1"
@@ -67,6 +68,18 @@ ptp_stably_healthy() {
       sleep 1
     fi
   done
+}
+
+wait_for_stable_health() {
+  local timeout_s="$1"
+  local deadline=$((SECONDS + timeout_s))
+  while (( SECONDS <= deadline )); do
+    if ptp_stably_healthy; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
 }
 
 print_status() {
@@ -127,7 +140,7 @@ check_ptp() {
     echo "xt16_ptp=unhealthy reason=process_not_running pid=${pid:-none}" >&2
     return 1
   fi
-  if ! ptp_stably_healthy; then
+  if ! wait_for_stable_health "${HEALTH_TIMEOUT_S}"; then
     echo "xt16_ptp=unhealthy reason=lidar_not_tracking pid=${pid}" >&2
     lidar_config >&2 || true
     return 1

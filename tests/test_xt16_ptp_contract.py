@@ -16,6 +16,8 @@ class Xt16PtpContractTests(unittest.TestCase):
         self.assertIn("clock_source&value=1", text)
         self.assertIn('"PTPStatus":"(Locked|Tracking)', text)
         self.assertIn("ptp_stably_healthy", text)
+        self.assertIn('HEALTH_TIMEOUT_S="${GO2W_XT16_PTP_HEALTH_TIMEOUT_S:-20}"', text)
+        self.assertIn('wait_for_stable_health "${HEALTH_TIMEOUT_S}"', text)
         self.assertIn("stop_existing_process", text)
         self.assertIn("xt16_ptp=healthy", text)
         self.assertIn("running_unverified", text)
