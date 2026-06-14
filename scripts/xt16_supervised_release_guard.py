@@ -40,6 +40,10 @@ def validate_record(
         return False, "supervised release must require operator presence", "", 0.0
     if record.get("requires_emergency_stop") is not True:
         return False, "supervised release must require an emergency stop", "", 0.0
+    if record.get("navigation_mode") != 0:
+        return False, "supervised release must require Unitree navigation mode 0", "", 0.0
+    if str(record.get("motion_policy") or "") != "unitree_pose_navigation_front_departure":
+        return False, "supervised release motion policy is invalid", "", 0.0
     try:
         max_speed_mps = float(record.get("max_speed_mps"))
     except (TypeError, ValueError):
@@ -63,10 +67,10 @@ def validate_record(
         if not path or len(digest) != 64 or not purpose:
             return False, "supervised release evidence metadata is incomplete", "", 0.0
 
-    hard_stops = record.get("retained_hard_stops_m")
+    hard_stops = record.get("hard_stop_m")
     if not isinstance(hard_stops, Mapping):
         return False, "supervised release hard stops are missing", "", 0.0
-    expected_hard_stops = {"front": 0.8, "side": 0.2, "rear": 0.3}
+    expected_hard_stops = {"front_departure": 0.8}
     for key, expected in expected_hard_stops.items():
         try:
             actual = float(hard_stops.get(key))
@@ -74,6 +78,16 @@ def validate_record(
             return False, f"supervised release hard stop is invalid: {key}", "", 0.0
         if not math.isclose(actual, expected, rel_tol=0.0, abs_tol=1e-9):
             return False, f"supervised release changes hard stop: {key}", "", 0.0
+    advisory = record.get("advisory_clearance_m")
+    if not isinstance(advisory, Mapping):
+        return False, "supervised release advisory clearances are missing", "", 0.0
+    for key, expected in {"side": 0.2, "rear": 0.3}.items():
+        try:
+            actual = float(advisory.get(key))
+        except (TypeError, ValueError):
+            return False, f"supervised release advisory clearance is invalid: {key}", "", 0.0
+        if not math.isclose(actual, expected, rel_tol=0.0, abs_tol=1e-9):
+            return False, f"supervised release changes advisory clearance: {key}", "", 0.0
 
     parameters = record.get("parameters")
     if not isinstance(parameters, Mapping):

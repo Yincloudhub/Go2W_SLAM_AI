@@ -2,7 +2,7 @@
 
 namespace slam_gateway::obstacle_policy {
 
-inline constexpr const char* kPolicyVersion = "corridor_clearance_v1";
+inline constexpr const char* kPolicyVersion = "planner_mobility_v2";
 inline constexpr double kFrontPauseM = 0.80;
 inline constexpr double kFrontSlowM = 1.50;
 inline constexpr double kSidePauseM = 0.20;

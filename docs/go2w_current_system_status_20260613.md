@@ -228,6 +228,11 @@ conservative navigation speed cap: 0.20 m/s
 实际钳制导航速度，而不是只显示提示。stale、未标定、低置信度或缺少方向值仍
 失败关闭；因此这项策略修正本身不代表当前已允许真实运动。
 
+2026-06-14 后续修正：上述 `corridor_clearance_v1` 是几何摘要分级，不应直接
+作为静止机器人的全向运动否决。显式工程放行改由 `planner_mobility_v2` 判断
+Unitree `mode=0` pose navigation 是否存在前向出发走廊；侧/后近物体变为
+`0.1 m/s` 限速告警，前向 `<0.80 m`、定位/感知失效仍硬暂停。
+
 ## 完成度
 
 | 阶段 | 状态 |

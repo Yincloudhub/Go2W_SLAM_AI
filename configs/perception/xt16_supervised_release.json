@@ -10,6 +10,8 @@
   "requires_operator_presence": true,
   "requires_emergency_stop": true,
   "max_speed_mps": 0.1,
+  "navigation_mode": 0,
+  "motion_policy": "unitree_pose_navigation_front_departure",
   "parameters": {
     "range_m": 6.0,
     "percentile": 10.0,
@@ -60,10 +62,12 @@
       "purpose": "paired open-scene summary"
     }
   ],
-  "retained_hard_stops_m": {
-    "front": 0.8,
+  "hard_stop_m": {
+    "front_departure": 0.8
+  },
+  "advisory_clearance_m": {
     "side": 0.2,
     "rear": 0.3
   },
-  "notes": "This is an explicit supervised engineering release, not a verified measured calibration. It reuses completed static engineering evidence, requires an on-site operator and emergency stop, caps commanded navigation speed at 0.1 m/s, and does not relax stale, confidence, missing-ROI, or close-obstacle hard stops."
+  "notes": "This is an explicit supervised engineering release, not a verified measured calibration. It reuses completed static engineering evidence, requires an on-site operator and emergency stop, and caps Unitree mode-0 pose navigation at 0.1 m/s. Navigation admission is based on a clear forward departure corridor and fresh localization/perception. Side and rear proximity remain visible advisories and force conservative speed, but do not globally deny planner-controlled movement. Front blockage, stale data, low confidence, or missing ROI remain hard stops."
 }

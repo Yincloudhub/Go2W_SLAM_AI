@@ -98,7 +98,7 @@ int main()
     require(corridor_decision.speed_limit_mps == 0.2,
             "conservative corridor mode must expose a real speed limit");
     const auto corridor_json = corridor_decision.toJson();
-    require(corridor_json.value("policy_version", std::string{}) == "corridor_clearance_v1",
+    require(corridor_json.value("policy_version", std::string{}) == "planner_mobility_v2",
             "safety JSON must identify the active clearance policy");
     require(corridor_json.value("motion_direction", std::string{}) == "planner_controlled",
             "safety JSON must keep direction under planner control");
@@ -134,9 +134,28 @@ int main()
             "invalid supervised engineering release reason mismatch");
 
     supervised_release.right_clearance_m = 0.1;
+    supervised_release.rear_clearance_m = 0.1;
     supervised_release.recommended_action = "pause";
-    require(!supervisor.evaluate(health, localization, supervised_release).allow_navigation,
-            "supervised engineering release must retain close-side hard stop");
+    const auto supervised_side_advisory =
+        supervisor.evaluate(health, localization, supervised_release);
+    require(supervised_side_advisory.allow_navigation,
+            "supervised pose navigation should remain movable with side/rear advisory");
+    require(
+        supervised_side_advisory.reason ==
+            "supervised_planner_mobility_available_with_lateral_rear_advisory",
+        "side/rear proximity should be reported as a supervised advisory");
+    require(supervised_side_advisory.motion_direction == "unitree_pose_navigation_mode_0",
+            "supervised mobility must identify the Unitree planner mode");
+    require(supervised_side_advisory.speed_limit_mps == 0.1,
+            "side/rear advisory must retain the supervised speed cap");
+
+    supervised_release.front_clearance_m = 0.6;
+    const auto supervised_front_block =
+        supervisor.evaluate(health, localization, supervised_release);
+    require(!supervised_front_block.allow_navigation,
+            "supervised pose navigation must still stop for a blocked departure corridor");
+    require(supervised_front_block.reason == "front_obstacle_too_close",
+            "front departure block reason mismatch");
 
     auto stub = clear;
     stub.source = "manual_stub";

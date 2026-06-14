@@ -64,13 +64,6 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             d.reason = "local_obstacle_recommends_stop";
             return d;
         }
-        if (obstacle.recommended_action == "pause") {
-            d.allow_navigation = false;
-            d.should_pause = true;
-            d.recommended_mode = "pause";
-            d.reason = "local_obstacle_recommends_pause";
-            return d;
-        }
 
         if (!(obstacle.front_confidence >= kMinimumObstacleConfidence)) {
             d.allow_navigation = false;
@@ -100,6 +93,40 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             d.should_pause = true;
             d.recommended_mode = "pause";
             d.reason = "front_obstacle_too_close";
+            return d;
+        }
+
+        if (obstacle.supervised_release_active) {
+            if (health.status == "degraded") {
+                d.allow_navigation = false;
+                d.should_pause = true;
+                d.recommended_mode = "stop";
+                d.reason = "slam_health_degraded";
+                return d;
+            }
+            const bool lateral_or_rear_advisory =
+                (obstacle.left_clearance_m >= 0.0 &&
+                 obstacle.left_clearance_m < obstacle_policy::kSideSlowM) ||
+                (obstacle.right_clearance_m >= 0.0 &&
+                 obstacle.right_clearance_m < obstacle_policy::kSideSlowM) ||
+                (obstacle.rear_clearance_m >= 0.0 &&
+                 obstacle.rear_clearance_m < obstacle_policy::kRearSlowM);
+            d.allow_navigation = true;
+            d.should_pause = false;
+            d.recommended_mode = "conservative";
+            d.motion_direction = "unitree_pose_navigation_mode_0";
+            d.reason = lateral_or_rear_advisory
+                ? "supervised_planner_mobility_available_with_lateral_rear_advisory"
+                : "supervised_planner_mobility_available";
+            d.speed_limit_mps = obstacle.supervised_max_speed_mps;
+            return d;
+        }
+
+        if (obstacle.recommended_action == "pause") {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "pause";
+            d.reason = "local_obstacle_recommends_pause";
             return d;
         }
 
@@ -153,15 +180,6 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
                 : obstacle_policy::kConservativeSpeedMps;
         return d;
     }
-    if (fresh_obstacle && obstacle.supervised_release_active) {
-        d.allow_navigation = true;
-        d.should_pause = false;
-        d.recommended_mode = "conservative";
-        d.reason = "supervised_engineering_release";
-        d.speed_limit_mps = obstacle.supervised_max_speed_mps;
-        return d;
-    }
-
     d.allow_navigation = true;
     d.should_pause = false;
     d.recommended_mode = "normal";

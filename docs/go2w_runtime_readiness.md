@@ -67,11 +67,13 @@ An uncalibrated or stale trusted XT16 summary fails closed for navigation
 unless the explicit supervised engineering release is active. Manual
 relocation remains available so localization can be recovered.
 
-The supervised release is not an obstacle bypass. Normal corridor operation
-does not require an empty room: side clearance from `0.20 m` to `0.60 m`
-remains navigable at conservative speed. Side clearance below `0.20 m`, rear
-clearance below `0.30 m`, or front clearance below `0.80 m` remains a hard
-pause in every mode.
+The supervised release uses `planner_mobility_v2`. It does not ask whether
+every side of a stationary robot is empty. It asks whether fresh localization
+and perception show a usable forward departure corridor for Unitree
+`mode=0` pose navigation. Front clearance below `0.80 m` remains a hard pause.
+Side and rear proximity remain visible advisories and force the `0.1 m/s`
+speed cap, but do not globally deny planner-controlled movement. Formal
+calibrated mode keeps the stricter all-direction policy.
 
 Build-map origin, relocation, and navigation use separate registry roles:
 
@@ -245,7 +247,8 @@ configs/perception/xt16_supervised_release.json
 `GO2W_XT16_SUPERVISED_RELEASE=1` is insufficient by itself. The release guard
 requires exact runtime geometry parameters, operator-presence and emergency
 stop declarations, a maximum speed no greater than `0.1 m/s`, immutable
-engineering evidence hashes, and the unchanged front/side/rear hard stops.
+engineering evidence hashes, Unitree obstacle-avoidance mode `0`, and the
+unchanged `0.80 m` forward-departure hard stop.
 
 ## Live no-motion acceptance - 2026-06-11
 

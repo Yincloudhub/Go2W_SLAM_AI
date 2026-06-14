@@ -46,14 +46,23 @@ class Xt16SupervisedReleaseGuardTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("exceeds 0.1", reason)
 
-    def test_release_cannot_relax_close_obstacle_hard_stops(self) -> None:
+    def test_release_cannot_relax_front_departure_hard_stop(self) -> None:
         record = copy.deepcopy(self.record)
-        record["retained_hard_stops_m"]["side"] = 0.1
+        record["hard_stop_m"]["front_departure"] = 0.5
 
         ok, reason, _, _ = validate_record(record, self.environment)
 
         self.assertFalse(ok)
-        self.assertIn("changes hard stop: side", reason)
+        self.assertIn("changes hard stop: front_departure", reason)
+
+    def test_release_cannot_change_side_advisory_contract(self) -> None:
+        record = copy.deepcopy(self.record)
+        record["advisory_clearance_m"]["side"] = 0.1
+
+        ok, reason, _, _ = validate_record(record, self.environment)
+
+        self.assertFalse(ok)
+        self.assertIn("changes advisory clearance: side", reason)
 
     def test_release_requires_exact_runtime_parameters(self) -> None:
         environment = dict(self.environment)
