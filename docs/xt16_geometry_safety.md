@@ -20,18 +20,20 @@ centrally mounted XT16:
 - front: `0.30 m`
 - rear: `0.30 m`
 - half-width: `0.30 m`
-- filter-only margin: `0.05 m`
+- longitudinal filter-only margin: `0.05 m`
+- lateral filter-only margin: `0.00 m`
 
 The same nominal offset is used in all four directions. It is not evidence that
 the complete moving envelope fits inside a `0.60 x 0.60 m` square. Expanding the
 mask to suppress an unexplained return can hide a real obstacle and is
 prohibited; shrinking the footprint can overstate reported clearance.
 
-The margin applies only when rejecting self-returns at the body boundary and at
-or above `body_min_z_m`. Low hazards below that height are rejected only inside
-the nominal footprint, so cables or floor-level obstacles immediately outside
-the body remain visible. Reported obstacle clearance remains measured from the
-nominal footprint, not from the expanded filter boundary.
+The `0.05 m` margin applies only to the front/rear boundaries when rejecting
+self-returns at or above `body_min_z_m`. The lateral filter stops at the nominal
+`0.30 m` half-width. Low hazards below that height are rejected only inside the
+nominal footprint, so cables or floor-level obstacles immediately outside the
+body remain visible. Reported obstacle clearance remains measured from the
+nominal footprint, not from the expanded longitudinal filter boundary.
 The values remain `pending_field_measurement`, and navigation remains blocked,
 until five stationary measured scenes confirm the physical body-edge
 relationship and the safety thresholds.
@@ -46,9 +48,10 @@ Earlier static work did include all four directions. The 2026-06-06 artifacts
 confirmed the axis mapping with front, left, right, and rear boxes. They used a
 `0.35 m` front/rear and `0.32 m` half-width footprint plus the earlier
 single-percentile algorithm. The current implementation uses a `0.30 m`
-symmetric footprint, a `0.05 m` filter margin, spatial cluster support, and a
-separate low-hazard band. The older artifacts remain valid axis evidence but
-cannot certify the current geometry implementation.
+symmetric nominal footprint, a `0.05 m` longitudinal filter margin, no lateral
+margin, spatial cluster support, and a separate low-hazard band. The older
+artifacts remain valid axis evidence but cannot certify the current geometry
+implementation.
 
 When physical measurement is inconvenient, first collect a stationary corridor
 baseline with the read-only local viewer:
@@ -150,6 +153,47 @@ not complete XT16 field calibration.
 The ignored local evidence file is
 `artifacts/xt16_visual/20260613_corridor_rslidar_margin05_20s.jsonl`, SHA-256
 `270A042800A7966B622C5BFF4C77C186008E88B172F51A81763E76EE05EFDAF8`.
+
+### 2026-06-14 paired lateral-boundary comparison
+
+The robot was kept stationary in each scene. In the first scene, an equipment
+case was immediately to the robot's right and cables were near the right/rear.
+The user then moved the robot forward about `0.5 m` into a more open position
+while keeping posture and cable layout as similar as practical. Codex sent no
+motion command, and SLAM, Gateway, and D435 were not started.
+
+```text
+scene                         frames  right median  rear median  excluded median
+right case close              13      0.093 m       0.057 m      7262
+open after forward 0.5 m      12      0.464 m       0.819 m       913
+```
+
+The right lateral `0.30-0.35 m` band contained `245-345` rejected points per
+frame with the case present. It contained zero points in all 12 open-scene
+frames. Those returns were external case/cable geometry, not a persistent robot
+self-return. The lateral filter margin is therefore `0.00 m`; retaining the old
+`0.05 m` lateral expansion would hide a real close obstacle. The open scene
+still contained central front/rear self-returns near the nominal edge, so the
+`0.05 m` longitudinal margin remains justified.
+
+Recomputing the sampled clouds with the axis-specific margins produced:
+
+```text
+right case close: right 0.020 m, rear 0.057 m, blocked right/rear
+open scene:       right 0.464 m, rear 0.823 m, no blocked direction
+```
+
+Evidence files are local ignored artifacts:
+
+```text
+scene_right_case_close_20260614.jsonl
+  SHA-256 BD1311118364A205B52FC21DA8967095E5650F9C293A18968DAE90E1B5B78098
+scene_open_after_forward_50cm_20260614.jsonl
+  SHA-256 494B1D76BB67D844699689C2F663C3C2D7F710455EEB896F32BE1FB385FBC0FF
+```
+
+This accepts the lateral self-return boundary only. The calibration remains
+`pending_field_measurement`; it does not authorize navigation or motion.
 
 ## Schema version 2
 

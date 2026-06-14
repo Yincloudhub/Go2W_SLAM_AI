@@ -390,7 +390,7 @@ cd E:\GO2W_0
 密码由终端交互输入，不使用命令行参数，也不写入 artifact。显示约定：
 
 ```text
-red:    当前 footprint + margin 内被删除的点
+red:    当前 footprint 及前后纵向 margin 内被删除的点
 cyan:   footprint 外保留的机身高度点
 orange: footprint 外保留的低矮风险点
 gray:   高度带外诊断点
@@ -414,12 +414,15 @@ pipeline/frame，不得套用 XT16 轴向、footprint 或安全阈值。即使 t
 切换；地面高度拒绝点和红色机身回波默认隐藏，按 `R` 切换。该显示过滤不参与
 Gateway 运动授权。
 
-2026-06-13 走廊静止基线确认默认 filter-only margin 为 `0.05 m`。该 margin
-只用于删除名义 `0.30 m` footprint 边界上、`body_min_z_m` 以上的对称机身
-回波；低矮风险仅删除名义 footprint 内部点，机身外的线缆仍保留。净空仍从名义
-机身边缘计算，XT16 标定状态仍为 `pending_field_measurement`。正式比较应短时
-只启 `xt16_driver`，读取运行时使用的 `/unitree/slam_lidar/points`，采样后立即
-停止 driver；不得因此启动 Unitree SLAM、Gateway 或底盘运动。
+2026-06-13 走廊静止基线确认前后纵向 filter-only margin 为 `0.05 m`。
+2026-06-14 的成对场景进一步确认横向 margin 必须为 `0.00 m`：右侧紧邻设备箱
+时，横向 `0.30-0.35 m` 带每帧有 `245-345` 个点；机器人由用户前移约 `0.5 m`
+后，开放场景 12/12 帧该带为零点。说明这些点来自设备箱/线缆，不是自回波，
+不能用横向 5 cm 遮罩吞掉。前后中央仍有稳定自回波，因此只保留纵向 5 cm。
+低矮风险仅删除名义 footprint 内部点，机身外的线缆仍保留。净空仍从名义机身
+边缘计算，XT16 标定状态仍为 `pending_field_measurement`。正式比较应短时只启
+`xt16_driver`，读取运行时使用的 `/unitree/slam_lidar/points`，采样后立即停止
+driver；不得因此启动 Unitree SLAM、Gateway 或底盘运动。
 
 ## 走廊净空与导航限速
 

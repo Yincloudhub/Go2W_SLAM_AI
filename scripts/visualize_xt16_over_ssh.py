@@ -61,6 +61,9 @@ geometry = Xt16GeometryConfig(
     footprint_rear_m=float(config["footprint_rear_m"]),
     footprint_half_width_m=float(config["footprint_half_width_m"]),
     footprint_filter_margin_m=float(config["footprint_filter_margin_m"]),
+    footprint_lateral_filter_margin_m=float(
+        config["footprint_lateral_filter_margin_m"]
+    ),
     min_z_m=float(config["min_z_m"]),
     body_min_z_m=float(config["body_min_z_m"]),
     max_z_m=float(config["max_z_m"]),
@@ -115,12 +118,20 @@ def on_cloud(msg):
         if vertical < geometry.min_z_m or vertical > geometry.max_z_m:
             point_class = "height_rejected"
         else:
-            point_margin = margin if vertical >= geometry.body_min_z_m else 0.0
+            longitudinal_margin = (
+                margin if vertical >= geometry.body_min_z_m else 0.0
+            )
+            lateral_margin = (
+                geometry.footprint_lateral_filter_margin_m
+                if vertical >= geometry.body_min_z_m
+                else 0.0
+            )
             if (
-                -(geometry.footprint_rear_m + point_margin)
+                -(geometry.footprint_rear_m + longitudinal_margin)
                 <= forward
-                <= geometry.footprint_front_m + point_margin
-                and abs(lateral) <= geometry.footprint_half_width_m + point_margin
+                <= geometry.footprint_front_m + longitudinal_margin
+                and abs(lateral)
+                <= geometry.footprint_half_width_m + lateral_margin
             ):
                 point_class = "footprint_rejected"
             elif vertical < geometry.body_min_z_m:
@@ -156,6 +167,7 @@ def on_cloud(msg):
             "low_hazard_directions": summary.get("low_hazard_directions"),
             "pending_low_hazard_directions": summary.get("pending_low_hazard_directions"),
             "blocked_directions": summary.get("blocked_directions"),
+            "footprint_m": detail.get("footprint_m"),
             "points_excluded_footprint": detail.get("points_excluded_footprint"),
             "points_in_height_band": detail.get("points_in_height_band"),
             "stale": summary.get("stale"),
@@ -290,18 +302,24 @@ def classify_body_point(
     footprint_rear_m: float,
     footprint_half_width_m: float,
     footprint_filter_margin_m: float,
+    footprint_lateral_filter_margin_m: float,
     min_z_m: float,
     body_min_z_m: float,
     max_z_m: float,
 ) -> str:
     if vertical < min_z_m or vertical > max_z_m:
         return "height_rejected"
-    point_margin = footprint_filter_margin_m if vertical >= body_min_z_m else 0.0
+    longitudinal_margin = (
+        footprint_filter_margin_m if vertical >= body_min_z_m else 0.0
+    )
+    lateral_margin = (
+        footprint_lateral_filter_margin_m if vertical >= body_min_z_m else 0.0
+    )
     if (
-        -(footprint_rear_m + point_margin)
+        -(footprint_rear_m + longitudinal_margin)
         <= forward
-        <= footprint_front_m + point_margin
-        and abs(lateral) <= footprint_half_width_m + point_margin
+        <= footprint_front_m + longitudinal_margin
+        and abs(lateral) <= footprint_half_width_m + lateral_margin
     ):
         return "footprint_rejected"
     return "low_hazard" if vertical < body_min_z_m else "body_height"
@@ -627,7 +645,7 @@ class Xt16Viewer:
         expanded = (
             nominal[0] + margin,
             nominal[1] + margin,
-            nominal[2] + margin,
+            nominal[2] + self.args.footprint_lateral_filter_margin_m,
         )
         for front, rear, half_width, color, dash in (
             (*expanded, "#ef4444", (4, 3)),
@@ -680,6 +698,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--footprint-rear-m", type=float, default=0.30)
     parser.add_argument("--footprint-half-width-m", type=float, default=0.30)
     parser.add_argument("--footprint-filter-margin-m", type=float, default=0.05)
+    parser.add_argument(
+        "--footprint-lateral-filter-margin-m",
+        type=float,
+        default=0.0,
+    )
     parser.add_argument("--min-z-m", type=float, default=-0.25)
     parser.add_argument("--body-min-z-m", type=float, default=-0.10)
     parser.add_argument("--max-z-m", type=float, default=1.20)
@@ -715,6 +738,9 @@ def main(argv: list[str] | None = None) -> int:
         "footprint_rear_m": args.footprint_rear_m,
         "footprint_half_width_m": args.footprint_half_width_m,
         "footprint_filter_margin_m": args.footprint_filter_margin_m,
+        "footprint_lateral_filter_margin_m": (
+            args.footprint_lateral_filter_margin_m
+        ),
         "min_z_m": args.min_z_m,
         "body_min_z_m": args.body_min_z_m,
         "max_z_m": args.max_z_m,

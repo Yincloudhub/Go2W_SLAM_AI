@@ -48,6 +48,7 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertEqual(config.footprint_rear_m, 0.30)
         self.assertEqual(config.footprint_half_width_m, 0.30)
         self.assertEqual(config.footprint_filter_margin_m, 0.05)
+        self.assertEqual(config.footprint_lateral_filter_margin_m, 0.0)
 
     def test_corridor_rear_self_return_is_removed_by_default_margin(self) -> None:
         points = clear_roi_points()
@@ -68,8 +69,34 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertGreaterEqual(summary["summary"]["points_excluded_footprint"], 60)
         self.assertEqual(
             summary["summary"]["footprint_m"]["filter_margin_applies_to"],
-            "body_height_only",
+            "body_height_only_per_axis",
         )
+        self.assertEqual(summary["summary"]["footprint_m"]["filter_margin"], 0.05)
+        self.assertEqual(
+            summary["summary"]["footprint_m"]["longitudinal_filter_margin"],
+            0.05,
+        )
+        self.assertEqual(
+            summary["summary"]["footprint_m"]["lateral_filter_margin"],
+            0.0,
+        )
+
+    def test_lateral_margin_does_not_hide_close_side_obstacle(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.33, 0.0, z=0.05, count=30, spread_m=0.01))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="side-obstacle-regression",
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertLess(summary["left_clearance_m"], 0.05)
+        self.assertIn("left", summary["blocked_directions"])
 
     def test_body_margin_does_not_hide_low_hazard_outside_nominal_footprint(self) -> None:
         points = clear_roi_points()
@@ -177,7 +204,14 @@ class Xt16GeometryTests(unittest.TestCase):
 
         self.assertAlmostEqual(summary["right_clearance_m"], 0.18, delta=0.08)
         self.assertEqual(summary["summary"]["footprint_m"]["half_width"], 0.30)
-        self.assertEqual(summary["summary"]["footprint_m"]["filter_margin"], 0.02)
+        self.assertEqual(
+            summary["summary"]["footprint_m"]["longitudinal_filter_margin"],
+            0.02,
+        )
+        self.assertEqual(
+            summary["summary"]["footprint_m"]["lateral_filter_margin"],
+            0.0,
+        )
 
     def test_uncalibrated_output_is_stale_even_with_good_roi(self) -> None:
         summary = build_xt16_geometry_summary(

@@ -96,6 +96,8 @@ INDEX_BLOCK = f"""{START}
 - P0-3 完成标记为 `p0-3-mission-decision-chain-accepted-20260613`。
 - `corridor_clearance_v1` 已统一走廊策略：侧向 `0.20-0.60 m` 允许保守导航，
   Gateway 将真实速度限制为 `0.20 m/s`；侧向 `<0.20 m` 才硬暂停。
+- XT16 名义 footprint 为前后/半宽 `0.30 m`；静止成对场景确认只保留前后
+  `0.05 m` 自回波余量，左右余量为 `0.00 m`，正式标定和运动验收仍未完成。
 - 下一步唯一软件任务是 P0-4 弱网 journal、ack sequence 和补传执行器。
 - TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
 - 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
@@ -111,7 +113,7 @@ def upsert_block(text: str, block: str = INDEX_BLOCK) -> str:
     return text.rstrip() + "\n\n" + block.rstrip() + "\n"
 
 
-def update_frontmatter_date(text: str, updated: str = "2026-06-13") -> str:
+def update_frontmatter_date(text: str, updated: str = "2026-06-14") -> str:
     lines = text.splitlines()
     if not lines or lines[0] != "---":
         return text

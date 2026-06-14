@@ -66,6 +66,7 @@ def config_from_args(args: argparse.Namespace) -> Xt16GeometryConfig:
         footprint_rear_m=args.footprint_rear_m,
         footprint_half_width_m=args.footprint_half_width_m,
         footprint_filter_margin_m=args.footprint_filter_margin_m,
+        footprint_lateral_filter_margin_m=args.footprint_lateral_filter_margin_m,
         min_z_m=args.min_z_m,
         body_min_z_m=args.body_min_z_m,
         max_z_m=args.max_z_m,
@@ -214,6 +215,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--footprint-rear-m", type=float, default=0.30)
     parser.add_argument("--footprint-half-width-m", type=float, default=0.30)
     parser.add_argument("--footprint-filter-margin-m", type=float, default=0.05)
+    parser.add_argument(
+        "--footprint-lateral-filter-margin-m",
+        type=float,
+        default=0.0,
+    )
     parser.add_argument("--min-z-m", type=float, default=-0.25)
     parser.add_argument("--body-min-z-m", type=float, default=-0.10)
     parser.add_argument("--max-z-m", type=float, default=1.20)
