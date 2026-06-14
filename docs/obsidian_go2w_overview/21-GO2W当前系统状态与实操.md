@@ -154,9 +154,17 @@ cd E:\GO2W_0
 
 脚本通过 SSH 在机器人侧临时订阅 PointCloud2，只向本地传输降采样点和当前算法
 摘要。机器人或雷达重启后，先执行 `sudo scripts/go2w_xt16_ptp.sh start` 并确认
-`PTPStatus=Locked`，再只启动 `xt16_driver`；不启动 Unitree SLAM、Gateway、
-D435 或运动。2026-06-13 重启故障已定位为 XT16 UDP 时间仍停留在
-`2020-05-20`，PTP 锁定后正式 `rslidar` 点云恢复约 10 Hz、约 62k 点/帧。
+返回 `xt16_ptp=healthy`，再启动 `xt16_driver`。健康状态允许雷达在正常的
+`PTPStatus=Tracking/Locked` 间切换，但不允许 `Free Run`。该授时链路是机器人
+`eth0` 到 XT16 的本地 PTP，不需要互联网。2026-06-13 重启故障已定位为 XT16
+UDP 时间仍停留在 `2020-05-20`，PTP 恢复后正式 `rslidar` 点云恢复约 10 Hz、
+约 62k 点/帧。
+
+2026-06-14 无运动重定位复验中，`mapping_origin` 重定位 8/8 通过，随后连续性
+10/10 通过；地图为 `/home/unitree/test.pcd`，距锚点约 `0.365-0.385 m`，航向
+误差约 `1.3-2.2 deg`，没有发送运动命令。同期发现旧 PTP 参数会因发送时间戳
+超时而在进程仍存活时失锁；将等待调整为 `1000 ms` 后连续 120 秒保持
+`Tracking/Locked`。SLAM 启动入口现默认 fail-closed 检查 PTP。
 脚本拒绝把另一条 `frame_id=utlidar_lidar` 的 `/utlidar/cloud` 当作 XT16，并
 对收到的每帧再次校验 `frame_id=rslidar`。
 红色点是 footprint 剔除点，青色是保留的机身高度点，橙色是低矮风险点。

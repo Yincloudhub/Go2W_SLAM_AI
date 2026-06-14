@@ -10,6 +10,8 @@ SERVICE_DIR="${GO2W_XT16_PTP_SERVICE_DIR:-/tmp/go2w_xt16_ptp}"
 PID_FILE="${SERVICE_DIR}/ptp4l.pid"
 LOG_FILE="${SERVICE_DIR}/ptp4l.log"
 LOCK_TIMEOUT_S="${GO2W_XT16_PTP_LOCK_TIMEOUT_S:-90}"
+HEALTH_SAMPLES="${GO2W_XT16_PTP_HEALTH_SAMPLES:-5}"
+TX_TIMESTAMP_TIMEOUT_MS="${GO2W_XT16_PTP_TX_TIMESTAMP_TIMEOUT_MS:-1000}"
 CONFIG_URL="http://${LIDAR_IP}/pandar.cgi?action=get&object=lidar_config"
 PTP_URL="http://${LIDAR_IP}/pandar.cgi?action=set&object=lidar&key=clock_source&value=1"
 GPS_URL="http://${LIDAR_IP}/pandar.cgi?action=set&object=lidar&key=clock_source&value=0"
@@ -28,23 +30,43 @@ read_pid() {
 
 pid_matches() {
   local pid="$1"
-  [[ -n "${pid}" && -r "/proc/${pid}/cmdline" ]] || return 1
-  tr '\0' ' ' < "/proc/${pid}/cmdline" |
-    grep -F -- "ptp4l -i ${PTP_IFACE}" >/dev/null
+  [[ -n "${pid}" && -d "/proc/${pid}" ]] || return 1
+  if [[ -r "/proc/${pid}/cmdline" ]]; then
+    tr '\0' ' ' < "/proc/${pid}/cmdline" |
+      grep -F -- "ptp4l -i ${PTP_IFACE}" >/dev/null
+    return
+  fi
+  ps -p "${pid}" -o comm= 2>/dev/null | grep -Fx "ptp4l" >/dev/null
+}
+
+pid_exists() {
+  local pid="$1"
+  [[ -n "${pid}" ]] || return 1
+  kill -0 "${pid}" 2>/dev/null || [[ -d "/proc/${pid}" ]]
 }
 
 is_running() {
   local pid
   pid="$(read_pid 2>/dev/null || true)"
-  [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null && pid_matches "${pid}"
+  pid_exists "${pid}" && pid_matches "${pid}"
 }
 
 lidar_config() {
   curl --fail --silent --show-error --max-time 3 "${CONFIG_URL}"
 }
 
-ptp_locked() {
-  lidar_config | grep -F '"PTPStatus":"Locked' >/dev/null
+ptp_healthy() {
+  lidar_config | grep -E '"PTPStatus":"(Locked|Tracking)' >/dev/null
+}
+
+ptp_stably_healthy() {
+  local sample
+  for sample in $(seq 1 "${HEALTH_SAMPLES}"); do
+    ptp_healthy || return 1
+    if [[ "${sample}" -lt "${HEALTH_SAMPLES}" ]]; then
+      sleep 1
+    fi
+  done
 }
 
 print_status() {
@@ -79,6 +101,41 @@ stop_ptp() {
   echo "xt16_ptp=stopped clock_source=gps"
 }
 
+stop_existing_process() {
+  local pid
+  pid="$(read_pid 2>/dev/null || true)"
+  if [[ -z "${pid}" ]] || ! kill -0 "${pid}" 2>/dev/null; then
+    rm -f "${PID_FILE}"
+    return 0
+  fi
+  if ! pid_matches "${pid}"; then
+    echo "xt16_ptp=pid_mismatch pid=${pid}; refusing to signal" >&2
+    return 1
+  fi
+  kill "${pid}"
+  for _ in $(seq 1 30); do
+    kill -0 "${pid}" 2>/dev/null || break
+    sleep 0.1
+  done
+  rm -f "${PID_FILE}"
+}
+
+check_ptp() {
+  local pid
+  pid="$(read_pid 2>/dev/null || true)"
+  if ! is_running; then
+    echo "xt16_ptp=unhealthy reason=process_not_running pid=${pid:-none}" >&2
+    return 1
+  fi
+  if ! ptp_stably_healthy; then
+    echo "xt16_ptp=unhealthy reason=lidar_not_tracking pid=${pid}" >&2
+    lidar_config >&2 || true
+    return 1
+  fi
+  echo "xt16_ptp=healthy pid=${pid} samples=${HEALTH_SAMPLES}"
+  lidar_config
+}
+
 start_ptp() {
   command -v ptp4l >/dev/null || {
     echo "xt16_ptp=error reason=linuxptp_missing install='sudo apt-get install linuxptp'" >&2
@@ -88,24 +145,28 @@ start_ptp() {
     echo "xt16_ptp=error reason=curl_missing" >&2
     return 1
   }
-  if is_running && ptp_locked; then
-    echo "xt16_ptp=already_locked"
-    print_status
+  if is_running && ptp_stably_healthy; then
+    echo "xt16_ptp=already_healthy"
+    check_ptp
     return 0
   fi
+  stop_existing_process
 
   mkdir -p "${SERVICE_DIR}"
   : > "${LOG_FILE}"
-  nohup ptp4l -i "${PTP_IFACE}" -S -4 -E -m -q >"${LOG_FILE}" 2>&1 &
+  nohup ptp4l -i "${PTP_IFACE}" -S -4 -E -m -q \
+    --tx_timestamp_timeout "${TX_TIMESTAMP_TIMEOUT_MS}" >"${LOG_FILE}" 2>&1 &
   echo "$!" > "${PID_FILE}"
   curl --fail --silent --show-error --max-time 3 "${PTP_URL}" >/dev/null
 
   local elapsed
   for elapsed in $(seq 1 "${LOCK_TIMEOUT_S}"); do
-    if ptp_locked; then
-      echo "xt16_ptp=locked elapsed_s=${elapsed}"
-      print_status
-      return 0
+    if ptp_healthy; then
+      if ptp_stably_healthy; then
+        echo "xt16_ptp=healthy elapsed_s=${elapsed} samples=${HEALTH_SAMPLES}"
+        print_status
+        return 0
+      fi
     fi
     sleep 1
   done
@@ -132,8 +193,11 @@ case "${1:-status}" in
   status)
     print_status
     ;;
+  check)
+    check_ptp
+    ;;
   *)
-    echo "usage: $0 {start|stop|restart|status}" >&2
+    echo "usage: $0 {start|stop|restart|status|check}" >&2
     exit 2
     ;;
 esac

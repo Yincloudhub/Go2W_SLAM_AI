@@ -13,6 +13,7 @@ LOG_DIR="${GO2W_SLAM_LOG_DIR:-${REPO_ROOT}/artifacts/slam_stack}"
 STARTUP_WAIT_S="${GO2W_SLAM_STARTUP_WAIT_S:-8}"
 STABILITY_WAIT_S="${GO2W_SLAM_STABILITY_WAIT_S:-4}"
 RESTART_STALE_PROCESSES="${GO2W_RESTART_STALE_PROCESSES:-1}"
+REQUIRE_XT16_PTP="${GO2W_REQUIRE_XT16_PTP:-1}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -349,6 +350,13 @@ if [[ "${GO2W_SLAM_CONFIG_ONLY:-0}" == "1" ]]; then
 fi
 
 ensure_unitree_slam_log_dirs
+
+if [[ "${REQUIRE_XT16_PTP}" == "1" ]]; then
+  if ! bash "${SCRIPT_DIR}/go2w_xt16_ptp.sh" check; then
+    echo "error: XT16 PTP is not stably tracking; run 'sudo scripts/go2w_xt16_ptp.sh start' before SLAM startup" >&2
+    exit 1
+  fi
+fi
 
 run_unitree_binary xt16_driver
 wait_for_process xt16_driver

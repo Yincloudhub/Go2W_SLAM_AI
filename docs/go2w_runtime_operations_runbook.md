@@ -356,12 +356,23 @@ cd /home/unitree/Go2W_SLAM_AI
 sudo scripts/go2w_xt16_ptp.sh start
 ```
 
-`status` 必须显示 `xt16_ptp=running` 且雷达配置包含
-`"PTPStatus":"Locked ..."`，然后再启动 `xt16_driver`。2026-06-13 重启后的
-故障样本中，雷达 UDP 包仍携带 `2020-05-20`，导致正式驱动以时间异常丢弃整帧；
-PTP 锁定后 UDP 时间恢复为当前 UTC，正式点云恢复到约 10 Hz、约 62k 点/帧。
-当前雷达首次/重复切换实测锁定约需 `32-57 s`，manager 默认最多等待 `90 s`；
-超时会恢复 GPS、停止 `ptp4l` 并拒绝继续。
+`start` 必须返回 `xt16_ptp=healthy`，且雷达配置连续 5 次包含
+`"PTPStatus":"Tracking ..."` 或 `"PTPStatus":"Locked ..."`，然后才能启动
+`xt16_driver`。`start_go2w_slam_stack.sh` 默认在启动 driver 前执行同一健康检查；
+PTP 未运行或已回到 `Free Run` 时直接失败，不允许带着异常时间启动 SLAM。
+
+2026-06-13 重启后的故障样本中，雷达 UDP 包仍携带 `2020-05-20`，导致正式驱动
+以时间异常丢弃整帧。XT16 是独立设备，不会自动读取机器人 Linux 系统时钟；
+当雷达配置为 GPS、但没有 GPS/PPS/NMEA 锁定时，会进入 `Free Run` 并使用其
+内部旧历元。恢复链路为
+`机器人系统时钟 -> eth0 本地 PTP master -> XT16`，只在局域网内运行，不要求
+互联网；但机器人系统时钟本身必须正确。
+
+2026-06-14 复验还发现默认 `ptp4l` 的 10 ms 发送时间戳等待会在该软件时间戳
+网卡上周期性超时，进程仍在但雷达会退回 `Free Run`。manager 现显式设置
+`--tx_timestamp_timeout 1000`，并接受正常运行时交替出现的 `Tracking/Locked`。
+实机连续 120 秒检查中只有一个 PTP 进程，偏差保持纳秒级。manager 默认最多
+等待 `90 s`；超时会恢复 GPS、停止 `ptp4l` 并拒绝继续。
 电脑建议通过有线地址连接：
 
 ```powershell

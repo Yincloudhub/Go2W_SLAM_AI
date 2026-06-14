@@ -473,8 +473,10 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 
 - XT16 仍是 `pending_field_measurement`，不在 P0-1 中扩展处理。
 - XT16 当前旧摘要归一化为非 fresh，正式标定和低速运动验收仍 deferred。
-- PandarXT-16 重启后必须先由 `go2w_xt16_ptp.sh` 锁定 PTP，再启动
-  `xt16_driver`。未锁定时雷达可能恢复出厂旧 UTC，正式驱动会丢弃时间异常帧。
+- PandarXT-16 重启后必须先由 `go2w_xt16_ptp.sh` 连续确认
+  `PTPStatus=Tracking/Locked`，再启动 `xt16_driver`。该 PTP 是机器人与雷达
+  之间的离线局域网授时，不依赖互联网。未同步时雷达可能回到内部旧 UTC，
+  正式驱动会丢弃时间异常帧；SLAM 启动入口已默认 fail-closed。
 - `/utlidar/cloud` 的 `frame_id=utlidar_lidar` 属于不同 Unitree LiDAR
   pipeline/frame，不得套用 XT16 `rslidar` 坐标、footprint 或安全阈值。
 - 当前 TI/NX 没有仓库内 bridge supervisor；未提供明确在线证据时 loader
