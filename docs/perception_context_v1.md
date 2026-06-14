@@ -54,6 +54,12 @@ status_reasons
 payload
 ```
 
+`calibration_status=engineering_released` is reserved for an explicit,
+guard-validated supervised XT16 release. It is not equivalent to
+`calibration_status=verified`: the formal calibration ID remains null, the
+release identity and `0.1 m/s` cap stay in the XT16 payload, and deterministic
+Gateway hard stops remain authoritative.
+
 The only source statuses are:
 
 ```text

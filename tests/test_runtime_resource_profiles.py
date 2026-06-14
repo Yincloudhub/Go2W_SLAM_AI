@@ -62,7 +62,9 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("xt16_calibration_guard.py", text)
         self.assertIn("calibration_rejected", text)
         self.assertIn('CALIBRATION_REQUESTED="${GO2W_XT16_GEOMETRY_CALIBRATED:-auto}"', text)
-        self.assertIn('xt16_geometry=uncalibrated reason=${calibration_id}', text)
+        self.assertIn('xt16_geometry=uncalibrated reason=${calibration_reason}', text)
+        self.assertIn("xt16_supervised_release_guard.py", text)
+        self.assertIn("supervised_release_rejected", text)
         self.assertIn("extra_args_not_allowed", text)
         self.assertIn("--calibration-id", text)
         self.assertIn('SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-1000}"', text)
@@ -87,6 +89,15 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("require_driver_topic xt16_driver /unitree/slam_lidar/points 6", text)
         self.assertIn("--qos-reliability best_effort", text)
         self.assertIn("/slam_info may remain silent until a relocation request", text)
+
+    def test_runtime_startup_is_one_command_and_complete_by_default(self):
+        text = (REPO_ROOT / "scripts" / "start_go2w_runtime_stack.sh").read_text(encoding="utf-8")
+        self.assertIn('GO2W_START_STEREO_DEPTH="${GO2W_START_STEREO_DEPTH:-1}"', text)
+        self.assertIn("--supervised-engineering-release", text)
+        self.assertIn("GO2W_XT16_SUPERVISED_RELEASE=1", text)
+        self.assertIn("go2w_xt16_ptp.sh\" check", text)
+        self.assertIn("go2w_xt16_ptp.sh\" start", text)
+        self.assertIn('include_slam_stack=0', text)
 
     def test_gateway_retries_pending_pause_until_accepted(self):
         text = (

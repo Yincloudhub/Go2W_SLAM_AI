@@ -106,6 +106,20 @@ XT16 正式标定 promotion、低速运动验收、TI/NX live transport 和 IMU/
 Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不授权继续 XT16
 复测、SLAM/Gateway 启动或真实运动。
 
+### 2026-06-14 启动与受监督闭环整理
+
+- P0-4 已完成，不再回退重做；当前主线是降低重启后的操作复杂度并准备受监督
+  低速闭环。
+- `start_go2w_runtime_stack.sh` 作为单一启动入口，负责 PTP、XT16、SLAM、
+  统一 D435、PerceptionContext 和 Gateway 只读探测；它不自动重定位或运动。
+- 正式 `xt16_geometry_calibration.json` 继续保持 `pending_field_measurement`。
+  独立的 `xt16_supervised_release.json` 仅表示工程验证放行，不冒充正式标定。
+- 工程放行必须显式启用、现场有人且可急停，速度上限为 `0.1 m/s`。侧向
+  `<0.20 m`、后向 `<0.30 m`、前向 `<0.80 m` 的硬暂停保持不变。
+- 功能不要求空旷房间；侧向 `0.20-0.60 m` 的走廊属于允许保守导航的范围。
+  当前若实时净空低于硬暂停阈值，必须先查明实际障碍或感知原因，不能用工程模式
+  绕过。
+
 ## 7. 新 Session 可直接使用的提示词
 
 ```text

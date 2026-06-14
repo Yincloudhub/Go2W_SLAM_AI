@@ -119,6 +119,19 @@ def _perception_readiness(
     producer_summary = obstacle.get("summary") if isinstance(obstacle.get("summary"), dict) else {}
     calibration_id = str(producer_summary.get("calibration_id") or "").strip()
     calibrated = producer_summary.get("calibrated") is True and bool(calibration_id)
+    release = producer_summary.get("supervised_release")
+    if not isinstance(release, dict):
+        parameters = obstacle.get("parameters")
+        release = parameters.get("supervised_release") if isinstance(parameters, dict) else {}
+    release_id = str(release.get("release_id") or "").strip() if isinstance(release, dict) else ""
+    release_speed = _finite_number(release.get("max_speed_mps")) if isinstance(release, dict) else None
+    supervised_release = bool(
+        isinstance(release, dict)
+        and release.get("active") is True
+        and release_id
+        and release_speed is not None
+        and 0.0 < release_speed <= 0.1
+    )
     details = {
         "source": source,
         "stale": stale,
@@ -127,6 +140,9 @@ def _perception_readiness(
         "sensor_latency_ms": sensor_latency_ms,
         "calibrated": calibrated,
         "calibration_id": calibration_id or None,
+        "supervised_release": supervised_release,
+        "supervised_release_id": release_id or None,
+        "supervised_max_speed_mps": release_speed if supervised_release else None,
         "recommended_action": obstacle.get("recommended_action"),
         "blocked_directions": obstacle.get("blocked_directions", []),
         "front_clearance_m": obstacle.get("front_clearance_m"),
@@ -136,7 +152,7 @@ def _perception_readiness(
     }
     if source not in TRUSTED_OBSTACLE_SOURCES:
         return False, f"local obstacle source is {source or 'missing'}", details
-    if "lidar_pointcloud" in source and calibrated is not True:
+    if "lidar_pointcloud" in source and not (calibrated or supervised_release):
         return False, "XT16 geometry is not calibrated", details
     if stale:
         reasons = obstacle.get("stale_reasons")
@@ -197,7 +213,7 @@ def assess_runtime_readiness(
     elif not localization_ready:
         next_action = "request relocalization from a verified anchor"
     elif not perception_ready:
-        next_action = "calibrate or restore XT16 geometry before navigation"
+        next_action = "restore XT16 geometry or explicitly enable the supervised engineering release"
     elif not navigation_ready:
         next_action = "clear the reported navigation safety blocker"
     else:

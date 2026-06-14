@@ -212,6 +212,9 @@ struct LocalObstacleSummary {
     std::string source{"manual_stub"};
     bool calibration_verified{false};
     std::string calibration_id{""};
+    bool supervised_release_active{false};
+    std::string supervised_release_id{""};
+    double supervised_max_speed_mps{-1.0};
     double range_m{6.0};
     double front_clearance_m{6.0};
     double left_clearance_m{6.0};
@@ -258,6 +261,11 @@ struct LocalObstacleSummary {
             {"source", source},
             {"calibration_verified", calibration_verified},
             {"calibration_id", calibration_id.empty() ? nlohmann::json(nullptr) : nlohmann::json(calibration_id)},
+            {"supervised_release", {
+                {"active", supervised_release_active},
+                {"release_id", supervised_release_id.empty() ? nlohmann::json(nullptr) : nlohmann::json(supervised_release_id)},
+                {"max_speed_mps", supervised_max_speed_mps > 0.0 ? nlohmann::json(supervised_max_speed_mps) : nlohmann::json(nullptr)}
+            }},
             {"range_m", range_m},
             {"front_clearance_m", front_clearance_m},
             {"left_clearance_m", left_clearance_m},

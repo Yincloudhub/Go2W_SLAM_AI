@@ -51,6 +51,9 @@ class Xt16GeometryConfig:
     vertical_sign: float = 1.0
     calibrated: bool = False
     calibration_id: str = ""
+    supervised_release: bool = False
+    supervised_release_id: str = ""
+    supervised_max_speed_mps: float = 0.0
 
 
 def _point_value(point: Any, key: str) -> float | None:
@@ -230,6 +233,13 @@ def build_xt16_geometry_summary(
     cfg = config or Xt16GeometryConfig()
     calibration_id = cfg.calibration_id.strip()
     calibration_verified = bool(cfg.calibrated and calibration_id)
+    supervised_release_id = cfg.supervised_release_id.strip()
+    supervised_release_active = bool(
+        cfg.supervised_release
+        and supervised_release_id
+        and 0.0 < float(cfg.supervised_max_speed_mps) <= 0.1
+    )
+    operationally_released = calibration_verified or supervised_release_active
     body_values: dict[str, list[DirectionalSample]] = {
         direction: [] for direction in ("front", "left", "right", "rear")
     }
@@ -377,10 +387,14 @@ def build_xt16_geometry_summary(
         if value is None
     ]
     stale_reasons: list[str] = []
-    if not calibration_verified:
+    if not operationally_released:
         stale_reasons.append("uncalibrated_xt16_geometry")
     if cfg.calibrated and not calibration_id:
         stale_reasons.append("missing_xt16_calibration_id")
+    if cfg.supervised_release and not supervised_release_id:
+        stale_reasons.append("missing_xt16_supervised_release_id")
+    if cfg.supervised_release and not (0.0 < float(cfg.supervised_max_speed_mps) <= 0.1):
+        stale_reasons.append("invalid_xt16_supervised_speed_limit")
     if missing_required:
         stale_reasons.append("missing_required_roi:" + ",".join(missing_required))
     if pending_body_directions:
@@ -401,6 +415,15 @@ def build_xt16_geometry_summary(
         "parameters": {
             "calibrated": calibration_verified,
             "calibration_id": calibration_id or None,
+            "supervised_release": {
+                "active": supervised_release_active,
+                "release_id": supervised_release_id or None,
+                "max_speed_mps": (
+                    float(cfg.supervised_max_speed_mps)
+                    if supervised_release_active
+                    else None
+                ),
+            },
         },
         "front_clearance_m": front,
         "left_clearance_m": left,
@@ -474,6 +497,15 @@ def build_xt16_geometry_summary(
             "no_return_confidence": cfg.no_return_confidence,
             "calibrated": calibration_verified,
             "calibration_id": calibration_id or None,
+            "supervised_release": {
+                "active": supervised_release_active,
+                "release_id": supervised_release_id or None,
+                "max_speed_mps": (
+                    float(cfg.supervised_max_speed_mps)
+                    if supervised_release_active
+                    else None
+                ),
+            },
             "height_bands_m": {
                 "low_hazard": [cfg.min_z_m, body_min_z_m],
                 "body": [body_min_z_m, cfg.max_z_m],

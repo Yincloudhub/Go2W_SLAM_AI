@@ -41,6 +41,7 @@ class StartupStep:
     command: list[str]
     required: bool = True
     timeout_s: int = 30
+    startup_wait_s: float = 0.0
     starts_motion: bool = False
 
 
@@ -59,7 +60,7 @@ def build_startup_plan(
                 name="slam_stack",
                 command=["bash", start_slam_script],
                 required=True,
-                timeout_s=45,
+                timeout_s=120,
                 starts_motion=False,
             )
         )
@@ -69,7 +70,8 @@ def build_startup_plan(
                 name="gateway_world_state_probe",
                 command=[gateway_client, network_interface],
                 required=True,
-                timeout_s=15,
+                timeout_s=30,
+                startup_wait_s=2.0,
                 starts_motion=False,
             )
         )
@@ -82,6 +84,7 @@ def run_step(step: StartupStep, *, dry_run: bool) -> dict[str, Any]:
         "command": step.command,
         "required": step.required,
         "timeout_s": step.timeout_s,
+        "startup_wait_s": step.startup_wait_s,
         "starts_motion": step.starts_motion,
         "dry_run": dry_run,
     }
@@ -94,16 +97,36 @@ def run_step(step: StartupStep, *, dry_run: bool) -> dict[str, Any]:
         payload = json.dumps({"action": "get_world_state"}, separators=(",", ":")) + "\n"
 
     start = time.time()
+    process: subprocess.Popen[str] | None = None
     try:
-        completed = subprocess.run(
-            step.command,
-            input=payload,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            timeout=step.timeout_s,
-        )
+        if step.startup_wait_s > 0:
+            process = subprocess.Popen(
+                step.command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            time.sleep(step.startup_wait_s)
+            stdout, stderr = process.communicate(payload, timeout=step.timeout_s)
+            completed = subprocess.CompletedProcess(
+                step.command,
+                process.returncode,
+                stdout,
+                stderr,
+            )
+        else:
+            completed = subprocess.run(
+                step.command,
+                input=payload,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=step.timeout_s,
+            )
         gateway_response = (
             gateway_response_from_output(completed.stdout)
             if step.name == "gateway_world_state_probe"
@@ -121,11 +144,17 @@ def run_step(step: StartupStep, *, dry_run: bool) -> dict[str, Any]:
         if gateway_response is not None:
             record["response"] = gateway_response
     except subprocess.TimeoutExpired as exc:
+        if process is not None and process.poll() is None:
+            process.kill()
+            stdout, stderr = process.communicate()
+        else:
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
         record.update(
             {
                 "returncode": None,
-                "stdout": (exc.stdout or "")[-4000:] if isinstance(exc.stdout, str) else "",
-                "stderr": (exc.stderr or "")[-4000:] if isinstance(exc.stderr, str) else "",
+                "stdout": stdout[-4000:] if isinstance(stdout, str) else "",
+                "stderr": stderr[-4000:] if isinstance(stderr, str) else "",
                 "elapsed_s": round(time.time() - start, 3),
                 "ok": False,
                 "timed_out": True,

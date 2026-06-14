@@ -39,7 +39,8 @@ void writeSummary(
     double right_confidence,
     bool calibrated = true,
     const char* calibration_id = "xt16-smoke-verified",
-    double latency_ms = -1.0)
+    double latency_ms = -1.0,
+    bool supervised_release = false)
 {
     nlohmann::json summary;
     summary["timestamp_ms"] = slam_gateway::wallClockNowMs();
@@ -47,7 +48,12 @@ void writeSummary(
     if (std::string(source) == "lidar_pointcloud") {
         summary["parameters"] = {
             {"calibrated", calibrated},
-            {"calibration_id", calibration_id}
+            {"calibration_id", calibration_id},
+            {"supervised_release", {
+                {"active", supervised_release},
+                {"release_id", supervised_release ? "xt16-engineering-smoke" : ""},
+                {"max_speed_mps", supervised_release ? 0.1 : 0.0}
+            }}
         };
     }
     summary["stale"] = stale;
@@ -99,6 +105,30 @@ int main()
     require(
         missing_calibration_id.stale,
         "XT16 summary without a verified calibration ID must fail closed");
+
+    writeSummary(
+        lidar_path,
+        "lidar_pointcloud",
+        false,
+        2.0,
+        2.0,
+        2.0,
+        0.8,
+        0.7,
+        0.6,
+        false,
+        "",
+        -1.0,
+        true);
+    const auto supervised_release = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(!supervised_release.stale, "guarded supervised XT16 release should be fresh");
+    require(
+        supervised_release.supervised_release_id == "xt16-engineering-smoke",
+        "supervised XT16 release ID must be preserved");
 
     writeSummary(
         lidar_path,

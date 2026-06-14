@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "sensor": "XT16",
+  "sensor_serial": "AW4EFF24934EFF50",
+  "release_id": "xt16-engineering-20260614",
+  "status": "engineering_validated",
+  "issued_at": "2026-06-14T00:00:00+08:00",
+  "issued_by": "go2w-field-engineering",
+  "formal_calibration": false,
+  "requires_operator_presence": true,
+  "requires_emergency_stop": true,
+  "max_speed_mps": 0.1,
+  "parameters": {
+    "range_m": 6.0,
+    "percentile": 10.0,
+    "min_points_per_roi": 8,
+    "front_half_width_m": 0.45,
+    "side_forward_m": 0.75,
+    "rear_half_width_m": 0.45,
+    "footprint_front_m": 0.3,
+    "footprint_rear_m": 0.3,
+    "footprint_half_width_m": 0.3,
+    "footprint_filter_margin_m": 0.05,
+    "footprint_lateral_filter_margin_m": 0.0,
+    "min_z_m": -0.25,
+    "body_min_z_m": -0.1,
+    "max_z_m": 1.2,
+    "clearance_cluster_gap_m": 0.15,
+    "support_bin_m": 0.05,
+    "min_spatial_bins": 2,
+    "pending_min_points": 3,
+    "min_cloud_points_for_no_return": 1000,
+    "no_return_confidence": 0.5,
+    "forward_axis": "y",
+    "lateral_axis": "x",
+    "vertical_axis": "z",
+    "forward_sign": -1.0,
+    "lateral_sign": 1.0,
+    "vertical_sign": 1.0
+  },
+  "evidence": [
+    {
+      "path": "artifacts/xt16_calibration/2026-06-06_static_axes/calibration_summary.md",
+      "sha256": "110C2CAF1D6C9617EF105237C4B7FC7732A5F950921EE1A92FC8BA8231415AE6",
+      "purpose": "four-direction axis mapping"
+    },
+    {
+      "path": "artifacts/xt16_visual/20260613_corridor_rslidar_margin05_20s.jsonl",
+      "sha256": "270A042800A7966B622C5BFF4C77C186008E88B172F51A81763E76EE05EFDAF8",
+      "purpose": "current-algorithm corridor baseline"
+    },
+    {
+      "path": "artifacts/xt16_visual/scene_right_case_close_20260614.summary.json",
+      "sha256": "E2AD701AD31043DAFC35033EDDB80587E2039BCCEAEEC006026AFE21D1B41C6A",
+      "purpose": "right-side close-case summary"
+    },
+    {
+      "path": "artifacts/xt16_visual/scene_open_after_forward_50cm_20260614.summary.json",
+      "sha256": "B464CAD427F63E9879AAFCEBB9790E7B6E321F4D20F43778F93935207A331B69",
+      "purpose": "paired open-scene summary"
+    }
+  ],
+  "retained_hard_stops_m": {
+    "front": 0.8,
+    "side": 0.2,
+    "rear": 0.3
+  },
+  "notes": "This is an explicit supervised engineering release, not a verified measured calibration. It reuses completed static engineering evidence, requires an on-site operator and emergency stop, caps commanded navigation speed at 0.1 m/s, and does not relax stale, confidence, missing-ROI, or close-obstacle hard stops."
+}

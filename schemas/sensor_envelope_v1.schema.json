@@ -62,7 +62,7 @@
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
     "calibration_status": {
       "type": "string",
-      "enum": ["verified", "pending", "not_required", "invalid", "unknown"]
+      "enum": ["verified", "engineering_released", "pending", "not_required", "invalid", "unknown"]
     },
     "calibration_id": {
       "anyOf": [

@@ -9,9 +9,23 @@ cd /home/unitree/Go2W_SLAM_AI
 bash scripts/start_go2w_runtime_stack.sh
 ```
 
-This command starts/checks the XT16 driver, XT16 geometry sidecar, Unitree
-SLAM, and the structured gateway probe. It never sends relocation, navigation,
-mapping, or chassis motion commands.
+This command checks or starts XT16 PTP, the XT16 driver, XT16 geometry,
+Unitree SLAM, the unified D435 owner, PerceptionContext, and the structured
+gateway probe. It waits for a real cold start and gives the gateway subscriber
+time to initialize. It never sends relocation, navigation, mapping, or chassis
+motion commands.
+
+For the explicitly supervised field acceptance path:
+
+```bash
+bash scripts/start_go2w_runtime_stack.sh --supervised-engineering-release --json
+```
+
+This flag uses `configs/perception/xt16_supervised_release.json`. The record is
+not a formal measured calibration and does not change
+`xt16_geometry_calibration.json`. It requires an on-site operator and emergency
+stop, caps navigation at `0.1 m/s`, and retains every stale, confidence,
+missing-ROI, and close-obstacle hard stop.
 
 ## Readiness layers
 
@@ -23,7 +37,8 @@ The startup summary separates states that must not be collapsed into one flag:
    relocation initializes SLAM and does not command chassis motion.
 3. `execution_arming_ready`: localization has a fresh valid pose. Enabling the
    operator execution mode does not mean a navigation command is safe.
-4. `perception_ready`: the trusted XT16 summary is fresh and calibrated.
+4. `perception_ready`: the trusted XT16 summary is fresh and either formally
+   calibrated or covered by the explicit supervised engineering release.
 5. `navigation_ready`: SLAM, localization, gateway safety, and the current
    navigation obstacle checks all allow movement.
 6. `llm_ready`: a local or HTTP LLM is available. This is diagnostic only and
@@ -48,8 +63,15 @@ operator confirmation
   -> independent pause on disconnect, timeout, map change, or unsafe state
 ```
 
-An uncalibrated or stale trusted XT16 summary fails closed for navigation.
-Manual relocation remains available so localization can be recovered.
+An uncalibrated or stale trusted XT16 summary fails closed for navigation
+unless the explicit supervised engineering release is active. Manual
+relocation remains available so localization can be recovered.
+
+The supervised release is not an obstacle bypass. Normal corridor operation
+does not require an empty room: side clearance from `0.20 m` to `0.60 m`
+remains navigable at conservative speed. Side clearance below `0.20 m`, rear
+clearance below `0.30 m`, or front clearance below `0.80 m` remains a hard
+pause in every mode.
 
 Build-map origin, relocation, and navigation use separate registry roles:
 
@@ -156,9 +178,10 @@ The tool has four explicit stages:
 - localization and pose timestamps are fresh and advancing;
 - the active SLAM `map_path` matches the registry PCD;
 - the target has the positive `live_verified` tag and no blocking tag;
-- XT16 geometry explicitly reports `calibrated=true`;
-- XT16 reports a non-empty calibration ID from a verified repository
-  calibration record whose parameters exactly match the running sidecar;
+- XT16 geometry either reports `calibrated=true` with a verified repository
+  calibration ID, or reports an explicit guarded supervised release;
+- the selected calibration or release record parameters exactly match the
+  running sidecar;
 - the trusted obstacle summary is fresh, confident, and clear;
 - the gateway's own safety decision allows navigation.
 
@@ -212,6 +235,17 @@ measurements recorded and compared with XT16 output. Each scene must contain
 25 unique point-cloud timestamps, remain within the configured stability and
 effective-age limits, and have no stale reason other than the expected
 `uncalibrated_xt16_geometry` marker.
+
+The separate supervised engineering record is:
+
+```text
+configs/perception/xt16_supervised_release.json
+```
+
+`GO2W_XT16_SUPERVISED_RELEASE=1` is insufficient by itself. The release guard
+requires exact runtime geometry parameters, operator-presence and emergency
+stop declarations, a maximum speed no greater than `0.1 m/s`, immutable
+engineering evidence hashes, and the unchanged front/side/rear hard stops.
 
 ## Live no-motion acceptance - 2026-06-11
 

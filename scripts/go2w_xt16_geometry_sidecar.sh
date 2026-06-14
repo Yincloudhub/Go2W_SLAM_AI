@@ -17,6 +17,8 @@ RATE_LIMIT_HZ="${GO2W_XT16_GEOMETRY_RATE_LIMIT_HZ:-5}"
 SAFETY_STALE_MS="${GO2W_LIDAR_GEOMETRY_STALE_MS:-1000}"
 CALIBRATION_REQUESTED="${GO2W_XT16_GEOMETRY_CALIBRATED:-auto}"
 CALIBRATION_RECORD="${GO2W_XT16_CALIBRATION_RECORD:-${REPO_ROOT}/configs/perception/xt16_geometry_calibration.json}"
+SUPERVISED_RELEASE_REQUESTED="${GO2W_XT16_SUPERVISED_RELEASE:-0}"
+SUPERVISED_RELEASE_RECORD="${GO2W_XT16_SUPERVISED_RELEASE_RECORD:-${REPO_ROOT}/configs/perception/xt16_supervised_release.json}"
 export GO2W_XT16_GEOMETRY_RANGE_M="${GO2W_XT16_GEOMETRY_RANGE_M:-6.0}"
 export GO2W_XT16_GEOMETRY_PERCENTILE="${GO2W_XT16_GEOMETRY_PERCENTILE:-10.0}"
 export GO2W_XT16_GEOMETRY_MIN_POINTS_PER_ROI="${GO2W_XT16_GEOMETRY_MIN_POINTS_PER_ROI:-8}"
@@ -121,6 +123,8 @@ print_status() {
   echo "topic=${TOPIC}"
   echo "calibration_requested=${CALIBRATION_REQUESTED}"
   echo "calibration_record=${CALIBRATION_RECORD}"
+  echo "supervised_release_requested=${SUPERVISED_RELEASE_REQUESTED}"
+  echo "supervised_release_record=${SUPERVISED_RELEASE_RECORD}"
   summary_health || true
 }
 
@@ -161,20 +165,40 @@ start_sidecar() {
   fi
   : > "${LOG_FILE}"
   local calibrated_args=()
+  local calibration_reason=""
+  if [[ -n "${GO2W_XT16_GEOMETRY_EXTRA_ARGS:-}" ]] &&
+     [[ "${CALIBRATION_REQUESTED}" != "0" || "${SUPERVISED_RELEASE_REQUESTED}" == "1" ]]; then
+    echo "xt16_geometry=release_rejected reason=extra_args_not_allowed" >&2
+    return 1
+  fi
   if [[ "${CALIBRATION_REQUESTED}" == "1" || "${CALIBRATION_REQUESTED}" == "true" || "${CALIBRATION_REQUESTED}" == "yes" || "${CALIBRATION_REQUESTED}" == "auto" ]]; then
-    if [[ -n "${GO2W_XT16_GEOMETRY_EXTRA_ARGS:-}" ]]; then
-      echo "xt16_geometry=calibration_rejected reason=extra_args_not_allowed" >&2
-      return 1
-    fi
     local calibration_id
     if calibration_id="$("${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_calibration_guard.py" --record "${CALIBRATION_RECORD}")"; then
       calibrated_args=(--calibrated --calibration-id "${calibration_id}")
     elif [[ "${CALIBRATION_REQUESTED}" == "auto" ]]; then
-      echo "xt16_geometry=uncalibrated reason=${calibration_id}"
+      calibration_reason="${calibration_id}"
     else
       echo "xt16_geometry=calibration_rejected reason=${calibration_id}" >&2
       return 1
     fi
+  fi
+  if [[ "${#calibrated_args[@]}" -eq 0 ]] &&
+     [[ "${SUPERVISED_RELEASE_REQUESTED}" == "1" || "${SUPERVISED_RELEASE_REQUESTED}" == "true" || "${SUPERVISED_RELEASE_REQUESTED}" == "yes" ]]; then
+    local release_result
+    if ! release_result="$("${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_supervised_release_guard.py" --record "${SUPERVISED_RELEASE_RECORD}")"; then
+      echo "xt16_geometry=supervised_release_rejected reason=${release_result}" >&2
+      return 1
+    fi
+    local release_id="${release_result%%|*}"
+    local release_speed="${release_result#*|}"
+    calibrated_args=(
+      --supervised-release
+      --supervised-release-id "${release_id}"
+      --supervised-max-speed-mps "${release_speed}"
+    )
+    echo "xt16_geometry=supervised_release release_id=${release_id} max_speed_mps=${release_speed}"
+  elif [[ "${#calibrated_args[@]}" -eq 0 ]] && [[ -n "${calibration_reason}" ]]; then
+    echo "xt16_geometry=uncalibrated reason=${calibration_reason}"
   fi
   # shellcheck disable=SC2086
   nohup nice -n "${NICE_LEVEL}" "${PYTHON_BIN}" "${REPO_ROOT}/scripts/xt16_lidar_geometry_summary.py" \

@@ -161,6 +161,33 @@ class PerceptionContextTests(unittest.TestCase):
             self.assertEqual(uncalibrated["status"], "uncalibrated")
             self.assert_sensor_valid(uncalibrated)
 
+            supervised_data = xt16_summary()
+            supervised_data["parameters"] = {
+                "calibrated": False,
+                "calibration_id": None,
+                "supervised_release": {
+                    "active": True,
+                    "release_id": "xt16-engineering-test",
+                    "max_speed_mps": 0.1,
+                },
+            }
+            supervised_artifact = write_json(root, "xt16-supervised.json", supervised_data)
+            supervised = load_xt16_geometry_envelope(
+                supervised_artifact,
+                received_ms=10_100,
+                pid_file=pid_file,
+                process_probe=lambda pid, expected: True,
+            )
+            self.assertEqual(supervised["status"], "fresh")
+            self.assertEqual(supervised["calibration_status"], "engineering_released")
+            self.assert_sensor_valid(supervised)
+
+            context = build_perception_context([supervised], generated_at_ms=10_100)
+            self.assertEqual(
+                context["local_geometry"]["primary"]["source_id"],
+                "xt16_geometry",
+            )
+
     def test_d435_depth_and_yolo_share_owner_but_keep_independent_freshness(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             artifact = write_json(Path(temp), "d435.json", d435_summary())

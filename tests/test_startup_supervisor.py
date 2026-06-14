@@ -16,6 +16,8 @@ class StartupSupervisorTests(unittest.TestCase):
         self.assertEqual([step.name for step in plan], ["slam_stack", "gateway_world_state_probe"])
         self.assertTrue(all(not step.starts_motion for step in plan))
         self.assertTrue(all(step.required for step in plan))
+        self.assertEqual(plan[0].timeout_s, 120)
+        self.assertEqual(plan[1].startup_wait_s, 2.0)
 
     def test_dry_run_does_not_execute_commands(self) -> None:
         step = build_startup_plan(
@@ -136,6 +138,60 @@ class StartupSupervisorTests(unittest.TestCase):
 
         self.assertFalse(summary["readiness"]["perception_ready"])
         self.assertEqual(summary["readiness"]["perception_reason"], "XT16 geometry is not calibrated")
+
+    def test_explicit_supervised_release_is_perception_ready(self) -> None:
+        now_ms = int(time.time() * 1000)
+        gateway_response = {
+            "accepted": True,
+            "world_state": {
+                "safety": {
+                    "allow_navigation": True,
+                    "reason": "supervised_engineering_release",
+                    "recommended_mode": "conservative",
+                    "speed_limit_mps": 0.1,
+                },
+                "slam_health": {"status": "ok", "slam_alive": True},
+                "localization": {"status": "localized", "pose_age_ms": 100},
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0}},
+            },
+        }
+        records = [
+            {"name": "slam_stack", "required": True, "ok": True, "dry_run": False, "starts_motion": False},
+            {
+                "name": "gateway_world_state_probe",
+                "required": True,
+                "ok": True,
+                "returncode": 0,
+                "response": gateway_response,
+                "dry_run": False,
+                "starts_motion": False,
+            },
+        ]
+        summary = startup_summary(
+            records,
+            lidar_summary={
+                "source": "lidar_pointcloud",
+                "timestamp_ms": now_ms,
+                "stale": False,
+                "recommended_action": "normal",
+                "summary": {
+                    "calibrated": False,
+                    "calibration_id": None,
+                    "supervised_release": {
+                        "active": True,
+                        "release_id": "xt16-engineering-test",
+                        "max_speed_mps": 0.1,
+                    },
+                },
+            },
+        )
+
+        self.assertTrue(summary["readiness"]["perception_ready"])
+        self.assertTrue(summary["readiness"]["perception"]["supervised_release"])
+        self.assertEqual(
+            summary["readiness"]["perception"]["supervised_max_speed_mps"],
+            0.1,
+        )
 
     def test_lidar_sensor_latency_counts_toward_effective_age(self) -> None:
         now_ms = int(time.time() * 1000)

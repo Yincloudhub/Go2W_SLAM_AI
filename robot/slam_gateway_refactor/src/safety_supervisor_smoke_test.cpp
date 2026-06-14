@@ -111,6 +111,33 @@ int main()
     require(!supervisor.evaluate(health, localization, extreme_side).allow_navigation,
             "extremely close side obstacle should block");
 
+    auto supervised_release = clear;
+    supervised_release.supervised_release_active = true;
+    supervised_release.supervised_release_id = "xt16-engineering-smoke";
+    supervised_release.supervised_max_speed_mps = 0.1;
+    const auto supervised_decision =
+        supervisor.evaluate(health, localization, supervised_release);
+    require(supervised_decision.allow_navigation,
+            "clear supervised engineering release should allow navigation");
+    require(supervised_decision.recommended_mode == "conservative",
+            "supervised engineering release must remain conservative");
+    require(supervised_decision.speed_limit_mps == 0.1,
+            "supervised engineering release must cap speed at 0.1 m/s");
+
+    auto invalid_supervised_release = supervised_release;
+    invalid_supervised_release.supervised_max_speed_mps = 0.2;
+    const auto invalid_supervised_decision =
+        supervisor.evaluate(health, localization, invalid_supervised_release);
+    require(!invalid_supervised_decision.allow_navigation,
+            "invalid supervised engineering release must fail closed");
+    require(invalid_supervised_decision.reason == "supervised_release_invalid",
+            "invalid supervised engineering release reason mismatch");
+
+    supervised_release.right_clearance_m = 0.1;
+    supervised_release.recommended_action = "pause";
+    require(!supervisor.evaluate(health, localization, supervised_release).allow_navigation,
+            "supervised engineering release must retain close-side hard stop");
+
     auto stub = clear;
     stub.source = "manual_stub";
     stub.stale = true;

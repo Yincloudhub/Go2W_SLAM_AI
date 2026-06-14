@@ -223,6 +223,49 @@ class Xt16GeometryTests(unittest.TestCase):
         self.assertTrue(summary["stale"])
         self.assertIn("uncalibrated_xt16_geometry", summary["stale_reasons"])
 
+    def test_supervised_engineering_release_is_fresh_without_claiming_calibration(self) -> None:
+        summary = build_xt16_geometry_summary(
+            clear_roi_points(),
+            config=Xt16GeometryConfig(
+                supervised_release=True,
+                supervised_release_id="xt16-engineering-test",
+                supervised_max_speed_mps=0.1,
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertFalse(summary["stale"])
+        self.assertFalse(summary["parameters"]["calibrated"])
+        self.assertTrue(summary["parameters"]["supervised_release"]["active"])
+        self.assertEqual(
+            summary["parameters"]["supervised_release"]["release_id"],
+            "xt16-engineering-test",
+        )
+        self.assertEqual(
+            summary["parameters"]["supervised_release"]["max_speed_mps"],
+            0.1,
+        )
+
+    def test_supervised_engineering_release_keeps_close_obstacle_pause(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(-0.44, 0.0, count=30, spread_m=0.03))
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                supervised_release=True,
+                supervised_release_id="xt16-engineering-test",
+                supervised_max_speed_mps=0.1,
+                min_points_per_roi=5,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertFalse(summary["stale"])
+        self.assertLess(summary["right_clearance_m"], 0.2)
+        self.assertIn("right", summary["blocked_directions"])
+        self.assertEqual(summary["recommended_action"], "pause")
+
     def test_calibrated_flag_without_record_id_fails_closed(self) -> None:
         summary = build_xt16_geometry_summary(
             clear_roi_points(),

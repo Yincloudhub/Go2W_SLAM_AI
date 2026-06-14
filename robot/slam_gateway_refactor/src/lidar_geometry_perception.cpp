@@ -152,6 +152,15 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
             : producer_summary;
         summary.calibration_verified = parameters.value("calibrated", false);
         summary.calibration_id = stringOr(parameters, "calibration_id", "");
+        const auto supervised_release =
+            parameters.contains("supervised_release") &&
+            parameters.at("supervised_release").is_object()
+                ? parameters.at("supervised_release")
+                : nlohmann::json::object();
+        summary.supervised_release_active = supervised_release.value("active", false);
+        summary.supervised_release_id = stringOr(supervised_release, "release_id", "");
+        summary.supervised_max_speed_mps =
+            numberOr(supervised_release, "max_speed_mps", -1.0);
         summary.range_m = numberOr(j, "range_m", 6.0);
         summary.front_clearance_m = numberOr(j, "front_clearance_m", -1.0);
         summary.left_clearance_m = numberOr(j, "left_clearance_m", -1.0);
@@ -198,7 +207,11 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
             knownClearance(summary.rear_clearance_m);
         const bool lidar_calibration_valid =
             summary.source != "lidar_pointcloud" ||
-            (summary.calibration_verified && !summary.calibration_id.empty());
+            (summary.calibration_verified && !summary.calibration_id.empty()) ||
+            (summary.supervised_release_active &&
+             !summary.supervised_release_id.empty() &&
+             summary.supervised_max_speed_mps > 0.0 &&
+             summary.supervised_max_speed_mps <= 0.1);
         summary.stale =
             j.value("stale", false) ||
             summary.timestamp_ms <= 0 ||

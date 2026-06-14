@@ -84,6 +84,9 @@ def config_from_args(args: argparse.Namespace) -> Xt16GeometryConfig:
         vertical_sign=args.vertical_sign,
         calibrated=args.calibrated,
         calibration_id=args.calibration_id,
+        supervised_release=args.supervised_release,
+        supervised_release_id=args.supervised_release_id,
+        supervised_max_speed_mps=args.supervised_max_speed_mps,
     )
 
 
@@ -205,6 +208,13 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="Verified calibration record ID. Required for --calibrated output to become fresh.",
     )
+    parser.add_argument(
+        "--supervised-release",
+        action="store_true",
+        help="Allow an explicitly guarded engineering release without claiming formal calibration.",
+    )
+    parser.add_argument("--supervised-release-id", default="")
+    parser.add_argument("--supervised-max-speed-mps", type=float, default=0.0)
     parser.add_argument("--range-m", type=float, default=6.0)
     parser.add_argument("--percentile", type=float, default=10.0)
     parser.add_argument("--min-points-per-roi", type=int, default=8)

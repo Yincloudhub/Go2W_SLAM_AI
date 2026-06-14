@@ -195,6 +195,23 @@ def load_xt16_geometry_envelope(
     calibration_id = parameters.get("calibration_id")
     if not isinstance(calibration_id, str) or not calibration_id:
         calibration_id = None
+    release = parameters.get("supervised_release")
+    release_id = release.get("release_id") if isinstance(release, dict) else None
+    if not isinstance(release_id, str) or not release_id:
+        release_id = None
+    release_speed = (
+        float(release["max_speed_mps"])
+        if isinstance(release, dict) and _is_number(release.get("max_speed_mps"))
+        else None
+    )
+    supervised_release = bool(
+        isinstance(release, dict)
+        and release.get("active") is True
+        and release_id
+        and release_speed is not None
+        and 0.0 < release_speed <= 0.1
+    )
+    operationally_released = bool((calibrated and calibration_id) or supervised_release)
     age = _age(received, timestamp, data.get("latency_ms"))
     roi_confidence = data.get("roi_confidence")
     clearances_valid = all(
@@ -240,14 +257,14 @@ def load_xt16_geometry_envelope(
         reasons.append("producer_declared_stale")
     if age is not None and age > stale_ms:
         reasons.append("stale_budget_exceeded")
-    if not calibrated or calibration_id is None:
+    if not operationally_released:
         reasons.append("xt16_calibration_unverified")
 
     if invalid:
         status = "invalid"
     elif producer_pid is None:
         status = "offline"
-    elif not calibrated or calibration_id is None:
+    elif not operationally_released:
         status = "uncalibrated"
     elif data.get("stale") is True or age is None or age > stale_ms:
         status = "stale"
@@ -270,6 +287,12 @@ def load_xt16_geometry_envelope(
         )
         if key in data
     }
+    if supervised_release:
+        payload["supervised_release"] = {
+            "active": True,
+            "release_id": release_id,
+            "max_speed_mps": release_speed,
+        }
     return _base_envelope(
         source_id="xt16_geometry",
         source_kind="lidar_geometry",
@@ -282,7 +305,13 @@ def load_xt16_geometry_envelope(
         age_ms=age,
         status=status,
         confidence=confidence or 0.0,
-        calibration_status="verified" if calibrated and calibration_id else "pending",
+        calibration_status=(
+            "verified"
+            if calibrated and calibration_id
+            else "engineering_released"
+            if supervised_release
+            else "pending"
+        ),
         calibration_id=calibration_id,
         producer_instance_id=_live_process_instance_id(producer_pid) if producer_pid is not None else None,
         reasons=reasons,
@@ -761,7 +790,7 @@ def build_perception_context(
     if (
         xt16
         and xt16.get("status") == "fresh"
-        and xt16.get("calibration_status") == "verified"
+        and xt16.get("calibration_status") in {"verified", "engineering_released"}
     ):
         primary_geometry = {
             **dict(xt16.get("payload") or {}),
