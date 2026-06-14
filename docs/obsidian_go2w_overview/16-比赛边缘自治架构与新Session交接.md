@@ -471,8 +471,10 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 
 已知风险：
 
-- XT16 仍是 `pending_field_measurement`，不在 P0-1 中扩展处理。
-- XT16 当前旧摘要归一化为非 fresh，正式标定和低速运动验收仍 deferred。
+- XT16 仍是 `pending_field_measurement`；这表示正式 measured ledger 尚未签发，
+  不表示静态场景没有做过。前/左/右/后轴向、走廊当前算法基线和右侧成对差分
+  已完成，下一 Session 不得重复要求测机身或重做前/左/后三场。
+- XT16 摘要在未 verified 时继续归一化为非 fresh，低速运动验收仍 deferred。
 - 2026-06-14 成对静止场景确认名义半宽保持 `0.30 m`，横向 filter margin
   必须为 `0.00 m`；右侧 `0.30-0.35 m` 点带在移开设备箱后 12/12 帧消失，
   证明它是外部近障而非自回波。前后纵向 margin 仍为 `0.05 m`。
@@ -490,7 +492,8 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 
 Deferred issues：
 
-- XT16 五场人工标定和真实低速运动验收。
+- XT16 正式 measured ledger 的 promotion 与真实低速运动验收；优先复用现有
+  静态证据，只补真正缺失的 ground truth，不重复轴向/footprint 探索。
 - TI/NX live transport、时间同步、认证和重放保护。
 - 弱网 journal、ack sequence 和补传执行器。
 

@@ -59,6 +59,10 @@ COPIES = (
         Path("docs/go2w_current_system_status_20260613.md"),
         Path("21-GO2W当前系统状态与实操.md"),
     ),
+    (
+        Path("docs/go2w_session_handoff_20260614.md"),
+        Path("22-上下文归档与新Session交接.md"),
+    ),
 )
 
 LOG_COPIES = (
@@ -70,7 +74,7 @@ LOG_COPIES = (
 
 
 INDEX_BLOCK = f"""{START}
-## 2026-06-12 比赛边缘自治交接
+## 2026-06-14 当前权威交接
 
 - [[12-现场录点与晚间测试操作手册]]
 - [[13-多模态边缘自主机器狗系统规划]]
@@ -82,6 +86,7 @@ INDEX_BLOCK = f"""{START}
 - [[19-PerceptionContext-v1统一感知契约]]
 - [[20-MissionDecision-v1与唯一执行链]]
 - [[21-GO2W当前系统状态与实操]]
+- [[22-上下文归档与新Session交接]]
 
 当前操作边界：
 
@@ -97,7 +102,11 @@ INDEX_BLOCK = f"""{START}
 - `corridor_clearance_v1` 已统一走廊策略：侧向 `0.20-0.60 m` 允许保守导航，
   Gateway 将真实速度限制为 `0.20 m/s`；侧向 `<0.20 m` 才硬暂停。
 - XT16 名义 footprint 为前后/半宽 `0.30 m`；静止成对场景确认只保留前后
-  `0.05 m` 自回波余量，左右余量为 `0.00 m`，正式标定和运动验收仍未完成。
+  `0.05 m` 自回波余量，左右余量为 `0.00 m`。轴向和当前算法静态工程验证
+  已完成，不重复测机身或重做前/左/后三场；正式 measured ledger 和运动验收
+  仍未签发。
+- D435 只补前向深度，不能覆盖机腹、左右或后方；XT16 可见低矮带之外仍有
+  机腹/遮挡盲区，真实运动需另行有界验收。
 - 下一步唯一软件任务是 P0-4 弱网 journal、ack sequence 和补传执行器。
 - TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
 - 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
@@ -109,7 +118,8 @@ def upsert_block(text: str, block: str = INDEX_BLOCK) -> str:
     if START in text and END in text:
         before = text.split(START, 1)[0].rstrip()
         after = text.split(END, 1)[1].lstrip()
-        return before + "\n\n" + block.rstrip() + "\n\n" + after
+        suffix = "\n\n" + after.rstrip() if after.strip() else ""
+        return before + "\n\n" + block.rstrip() + suffix + "\n"
     return text.rstrip() + "\n\n" + block.rstrip() + "\n"
 
 

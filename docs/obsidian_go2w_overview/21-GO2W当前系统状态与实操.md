@@ -1,22 +1,26 @@
 # GO2W 当前系统状态与实操
 
-更新：2026-06-13 20:05 +08:00
+更新：2026-06-14（上下文归档）
 
 ## 一句话结论
 
 P0-1 单一 D435、P0-2 统一 PerceptionContext、P0-3 唯一决定与执行链已经完成
 代码部署和机器人无运动验收。当前机器人是“代码已部署、全部测试服务已停止”的
 安全停机状态，不是正在运行 SLAM 或自治导航。完整比赛闭环仍缺 P0-4 弱网
-journal/ack/补传执行器、XT16 实测标定和最终低速运动验收。
+journal/ack/补传执行器、XT16 正式 measured ledger 签发和最终低速运动验收。
 
 ## 版本与分支
 
 ```text
-implementation commit:             cf68b0ecca828a3881b69134a5b6ef6fd58fad3d
+pre-archive implementation commit: 317808436e56495d111402ff5a52ef1a79774c53
 local branch:                       agent/llm-on-robot
-origin/agent/llm-on-robot at audit: cf68b0ecca828a3881b69134a5b6ef6fd58fad3d
-robot HEAD at audit:                cf68b0ecca828a3881b69134a5b6ef6fd58fad3d
+origin/agent/llm-on-robot at audit: 317808436e56495d111402ff5a52ef1a79774c53
+robot HEAD at prior audit:          317808436e56495d111402ff5a52ef1a79774c53
 ```
+
+归档后的权威提交是包含
+`docs/go2w_session_handoff_20260614.md` 的分支 tip；新 Session 必须实时核对
+local、origin 和 robot HEAD，不得把上面的归档前哈希当作永久当前值。
 
 GitHub 默认分支仍是旧 `master`，提交停在 `583cf62`（2026-05-19）。当前比赛代码
 在 `agent/llm-on-robot`。多个分支不会在同一个工作区自动混合，但 GitHub 页面默认
@@ -134,16 +138,17 @@ lateral_filter_margin=0.00 m
 ```
 
 输出会记录 `points_excluded_footprint`。D435 只允许保守地缩小前向净空，左右和
-后方仍由 360 度 XT16 负责。当前参数仍是临时估计，状态为
-`pending_field_measurement`，不能据此授权真实导航。
+后方仍由 360 度 XT16 负责。`0.30 m` 是当前已经过静态筛选的有效安全 footprint，
+不是精确 CAD 尺寸。标定记录仍为 `pending_field_measurement`，因此不能据此授权
+真实导航，但也不再把“重复测量机身、重做前/左/后三场”列为当前下一步。
 
 2026-06-06 已完成前、左、右、后四方向静态箱体验证，证明坐标轴方向正确：
 前方箱体净空约 `0.50 m`，移除后约 `2.95 m`，后方箱体簇约 `0.67 m`。该批
 artifact 使用旧 footprint 和旧单百分位算法，只能作为方向证据，不能替当前
 空间簇/低矮风险算法签发最终标定。
 
-实测机身尺寸不方便时，下一步先把机器人静止放到走廊空旷处，通过本地只读
-可视化确认四方向自反射分布：
+以下本地只读可视化入口已经用于完成走廊基线和成对场景证据，后续只在算法、
+安装位姿或机身外廓变化时复用，不作为每个 Session 的重复动作：
 
 ```powershell
 cd E:\GO2W_0
@@ -202,6 +207,12 @@ footprint 剔除点中位数为 `893`，12/12 均无阻断方向。输出始终�
 `uncalibrated_xt16_geometry`，不会提前授权运动。验收结束后 geometry、
 `xt16_driver` 和 PTP 已停止，未启动 SLAM、Gateway、D435 或底盘运动。
 
+XT16 对低矮点并非完全忽略：当前 `-0.25 m` 到 `-0.10 m` 为独立
+`low_hazard` 带，四个方向可见的线缆/低矮簇会收紧净空。但低于 `min_z_m`、
+被机身遮挡或位于底盘正下方的区域仍是盲区。D435 只能补前向视野，不能单独
+覆盖底盘下方、左右或后方；真实运动时还必须依赖 Unitree 原生地形/避障能力、
+低速起步和人工急停，必要时再增加专用向下传感器。
+
 针对“侧墙较近但导航路径可通行”的误拦问题，`corridor_clearance_v1` 将阈值
 改为按名义机身边缘净空分级：
 
@@ -224,7 +235,8 @@ conservative navigation speed cap: 0.20 m/s
 | P0-2 PerceptionContext / WorldState | 完成并验收 |
 | P0-3 MissionDecision / 唯一执行链 | 完成并验收 |
 | P0-4 弱网 journal / ack / 补传 | 未实现 |
-| XT16 机身尺寸和五场标定 | 未完成 |
+| XT16 轴向/有效 footprint 静态工程验证 | 完成，不重复采集 |
+| XT16 正式 measured ledger / verified 标定 | 未签发 |
 | TI/NX live transport | 预留接口，未接实流 |
 | IMU/里程计统一运动摘要 | 预留接口，未实现 |
 | SLAM + Gateway + 低速真实运动总验收 | 未执行 |

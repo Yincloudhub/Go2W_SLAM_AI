@@ -34,15 +34,18 @@ self-returns at or above `body_min_z_m`. The lateral filter stops at the nominal
 nominal footprint, so cables or floor-level obstacles immediately outside the
 body remain visible. Reported obstacle clearance remains measured from the
 nominal footprint, not from the expanded longitudinal filter boundary.
-The values remain `pending_field_measurement`, and navigation remains blocked,
-until five stationary measured scenes confirm the physical body-edge
-relationship and the safety thresholds.
+The values remain `pending_field_measurement`, so this record cannot authorize
+navigation. This does not mean that no static validation has been performed:
+four-direction axis scenes, the current-algorithm corridor baseline, and the
+right-case/open comparison are already complete. Do not repeat front, left, or
+rear scenes simply to rediscover the same mapping or effective footprint.
 
 The footprint rejection is already active in `src/edge_autonomy/xt16_geometry.py`.
 Each summary reports `points_excluded_footprint`; no second point-cloud filter
-should be added. The next field action is to measure the distance from the XT16
-center to the front, rear, left, and right physical body edges, update the four
-footprint values, and then collect five stationary measured scenes.
+should be added. The `0.30 m` values are the accepted effective safety footprint
+for current engineering work, not a claim of exact CAD dimensions. Remeasure
+only if the LiDAR mount/body envelope changes, or if missing ground-truth is
+needed to promote the formal calibration ledger before supervised motion.
 
 Earlier static work did include all four directions. The 2026-06-06 artifacts
 confirmed the axis mapping with front, left, right, and rear boxes. They used a
@@ -194,6 +197,22 @@ scene_open_after_forward_50cm_20260614.jsonl
 
 This accepts the lateral self-return boundary only. The calibration remains
 `pending_field_measurement`; it does not authorize navigation or motion.
+
+### Low-height and underbody coverage
+
+XT16 already separates a low-hazard band from `-0.25 m` to `-0.10 m` in the
+LiDAR body frame. Supported cable or near-ground clusters in that visible band
+can tighten any of the four directional clearances. Returns below `min_z_m`,
+occluded by the body, or directly beneath the chassis remain a blind area.
+
+D435 is a forward-facing conservative supplement only. It may improve warning
+for low obstacles visible in its forward depth image, but it cannot cover the
+underbody, left, right, or rear blind areas and must not be documented as their
+sole safety source. A later real-motion release must combine the visible XT16
+low-hazard layer, D435 forward depth, Unitree native terrain/obstacle behavior,
+very low initial speed, and an operator emergency stop. Add a dedicated
+downward sensor only if the competition task requires reliable underbody/drop
+coverage beyond those limits.
 
 ## Schema version 2
 

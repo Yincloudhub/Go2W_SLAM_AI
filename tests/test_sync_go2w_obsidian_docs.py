@@ -33,6 +33,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
                 "docs/perception_context_v1.md",
                 "docs/mission_decision_v1.md",
                 "docs/go2w_current_system_status_20260613.md",
+                "docs/go2w_session_handoff_20260614.md",
                 "docs/obsidian_go2w_logs/2026-06-12-GO2W定位安全闭环日志.md",
             )
             for index, source in enumerate(sources):
@@ -46,12 +47,15 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             index_text = (overview / "00-项目总览与阅读路径.md").read_text(encoding="utf-8")
             self.assertEqual(index_text.count(START), 1)
             self.assertEqual(index_text.count(END), 1)
+            self.assertFalse(index_text.endswith("\n\n"))
             self.assertIn("updated: 2026-06-14", index_text)
             self.assertIn("[[17-D435与DeepYOLO统一感知服务]]", index_text)
             self.assertIn("[[18-GO2W运行操作手册]]", index_text)
             self.assertIn("[[19-PerceptionContext-v1统一感知契约]]", index_text)
             self.assertIn("[[20-MissionDecision-v1与唯一执行链]]", index_text)
             self.assertIn("[[21-GO2W当前系统状态与实操]]", index_text)
+            self.assertIn("[[22-上下文归档与新Session交接]]", index_text)
+            self.assertIn("不重复测机身", index_text)
             self.assertIn("P0-1 已完成", index_text)
             self.assertEqual(desktop.read_text(encoding="utf-8"), "source-0\n")
             self.assertEqual(
@@ -83,8 +87,12 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
                 "source-9\n",
             )
             self.assertEqual(
-                (vault / "机器狗" / "现场日志" / "2026-06-12-GO2W定位安全闭环日志.md").read_text(encoding="utf-8"),
+                (overview / "22-上下文归档与新Session交接.md").read_text(encoding="utf-8"),
                 "source-10\n",
+            )
+            self.assertEqual(
+                (vault / "机器狗" / "现场日志" / "2026-06-12-GO2W定位安全闭环日志.md").read_text(encoding="utf-8"),
+                "source-11\n",
             )
 
     def test_export_overview_only_copies_markdown_and_replaces_credentials(self):

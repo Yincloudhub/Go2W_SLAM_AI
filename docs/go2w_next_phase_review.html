@@ -369,6 +369,10 @@
         <span class="pill">地图 registry：<code>configs/maps/go2w_real_site_map_registry.json</code></span>
         <a class="pill" href="go2w_runtime_architecture.html">返回当前运行架构图</a>
       </div>
+      <div class="note warn">
+        历史评审快照（2026-06-05）。当前执行边界以
+        <code>go2w_session_handoff_20260614.md</code> 为准。
+      </div>
     </header>
 
     <section>
@@ -380,11 +384,11 @@
         </div>
         <div class="card">
           <h3><span class="status warn">安全仍有缺口</span></h3>
-          <p>raw XT16 PointCloud2 到四向几何 summary 的实时链路已经接通，并由 gateway 作为主安全源消费；未标定、陈旧、缺少方向或 pending hazard 均失败关闭。当前未完成的是五场人工卷尺标定和真实运动验收。IMU/odom health 仍需继续接入真实健康状态。</p>
+          <p>raw XT16 PointCloud2 到四向几何 summary 的实时链路已经接通，并由 gateway 作为主安全源消费；未标定、陈旧、缺少方向或 pending hazard 均失败关闭。轴向和有效 footprint 静态工程验证已完成；当前未签发的是正式 measured ledger 和真实运动验收。IMU/odom health 仍需继续接入真实健康状态。</p>
         </div>
         <div class="card">
           <h3><span class="status info">下一阶段重点</span></h3>
-          <p>不要替换现有 SLAM 主闭环。下一步先完成 XT16 五场人工标定、结构化任务运行态的持续写入和真实 health topic；odom/IMU 相对运动、mapless scout 继续保持 dry-run/not-wired，完成独立安全执行链后再申请放行。</p>
+          <p>不要替换现有 SLAM 主闭环，也不要重复 XT16 前、左、右、后静态采集。当前唯一软件任务是 P0-4 弱网 journal、ack sequence 和断线补传；XT16 正式 ledger、odom/IMU 相对运动、mapless scout 和真实运动继续保持 deferred。</p>
         </div>
       </div>
       <div class="note good">

@@ -1,5 +1,10 @@
 # GO2W 近场碰撞事故与恢复验证
 
+> 本文保留 2026-06-01 事故和当时临时恢复方案。下文的 D435 三 ROI 硬门槛和
+> 独立侧车描述已被当前架构取代。现行入口见
+> `docs/go2w_runtime_operations_runbook.md` 与
+> `docs/go2w_current_system_status_20260613.md`。
+
 ## 事故现象
 
 2026-06-01，机器人从初始点执行多点导航时，起步右转后持续顶住右侧箱体，直到关节发热并停止工作。事故后应保持机器人趴下，完成静态检查和分级验证前不得恢复真实运动。
@@ -25,14 +30,23 @@
 因此应把两类故障分开：时间失同步解释“点云/重定位为什么不可用”，不能替代
 已有的碰撞因果结论。
 
-## 当前修正策略
+## 当时临时修正策略（已归档）
 
 - 手工 `6.0m` 距离只允许作为调试占位，固定标记为 `manual_stub + stale`，不能解锁运动。
-- 当前阶段由 D435 轻量 ROI 摘要提供近场传感器凭据。只消费最新 JSON，不向 UI、LLM 或执行器传原始图像。
-- 真正执行前要求 D435 摘要小于 `1000ms`，前、左、右 ROI 置信度均不低于 `0.15`，前、左、右距离均不小于 `0.8m`。
+- 当时由 D435 轻量 ROI 摘要提供临时近场凭据。该方案只用于事故后的过渡验证。
+- 当时使用 D435 前、左、右 ROI 门槛；该门槛不再是当前真实执行契约。
 - 默认导航模式改为 `mode=0`，明确启用 Unitree SLAM 绕障。
-- DeepYOLO 保持可选语义侧车。它不参与运动许可，不应与 D435 轻量深度侧车在真实运动时争抢相机资源。
-- XT16 点云几何摘要仍是后续必须补齐的正式主安全源。完成前，D435 轻量摘要是额外硬门槛，不是 XT16 几何感知的替代终点。
+- DeepYOLO 当时是可选侧车；当前已并入单一 D435 capture owner。
+- XT16 点云几何后来成为四向主安全源，D435 只保留前向保守补充角色。
+
+## 当前策略
+
+- D435 depth 与 YOLO 共用唯一 `D435CaptureOwner`，旧入口只能转发。
+- XT16 提供四向 geometry 和可见低矮风险带；未 verified 时继续 fail-closed。
+- D435 只进入 `forward_supplements`，不能替代 XT16 左、右、后或底盘下方覆盖。
+- 唯一执行链为
+  `TaskQueue -> MissionDecisionEngine -> SLAM Gateway -> Unitree SDK`，
+  Gateway 是最终运动权威。
 
 ## 上电后分级恢复
 
@@ -54,19 +68,17 @@ bash scripts/run_go2w_operator_web.sh
 ### 2. 静态状态检查
 
 ```bash
-bash scripts/go2w_stereo_depth_sidecar.sh health
+bash scripts/go2w_d435_perception_sidecar.sh health
 PYTHONPATH=src python3 scripts/go2w_agent_entry.py --status --pretty
 ```
 
 必须看到：
 
 ```text
-local_obstacle.source = stereo_depth
-local_obstacle.stale = false
-local_obstacle.age_ms <= 1000
-local_obstacle.front_confidence >= 0.15
-local_obstacle.left_confidence >= 0.15
-local_obstacle.right_confidence >= 0.15
+PerceptionContext.local_geometry.primary = fresh verified XT16
+PerceptionContext.local_geometry.forward_supplements = fresh D435 depth when available
+D435 owner instance / timestamp / sequence = valid
+Gateway motion authority = false during static verification
 ```
 
 ### 3. 趴下阻断测试
@@ -80,6 +92,7 @@ local_obstacle.right_confidence >= 0.15
 ## 禁止事项
 
 - 不允许用手工修改 JSON 距离绕过安全门。
-- 不允许在 D435 摘要过期、ROI 置信度不足、左右存在近障时开启真实执行。
+- 不允许在 XT16 stale/uncalibrated、D435 前向摘要异常或任一可信来源报告近障时
+  开启真实执行；D435 不负责左右/后方或底盘下方兜底。
 - 不允许直接使用 `mode=1` 作为默认现场导航模式。
 - 不允许在箱体、桌脚、电缆或人员紧邻机器人时做多点任务。

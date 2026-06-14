@@ -40,8 +40,15 @@
     "completed_stationary_measured_scenes": 0,
     "artifact_paths": [],
     "artifact_sha256": {},
+    "engineering_validation": {
+      "axis_scenes": "artifacts/xt16_calibration/2026-06-06_static_axes/calibration_summary.md",
+      "current_algorithm_corridor_baseline": "artifacts/xt16_visual/20260613_corridor_rslidar_margin05_20s.jsonl",
+      "current_algorithm_right_case_summary": "artifacts/xt16_visual/scene_right_case_close_20260614.summary.json",
+      "current_algorithm_open_summary": "artifacts/xt16_visual/scene_open_after_forward_50cm_20260614.summary.json",
+      "repeat_static_axis_scenes_now": false
+    },
     "acceptance_max_abs_error_m": 0.15,
     "max_abs_error_m": null,
-    "notes": "The provisional nominal footprint is symmetric at 0.30 m. The longitudinal body-height filter margin remains 0.05 m because the stationary corridor and open comparison retain central front/rear self returns near the nominal edge. The lateral filter margin is 0.0 m: a 2026-06-14 paired capture showed 245-345 points per frame in the right 0.30-0.35 m band with the equipment case present and zero points in that band across 12 open-scene frames after moving forward about 0.5 m. Those points were external case/cable returns, not robot self returns. Low hazards outside the nominal footprint remain visible. Reported clearance remains referenced to the nominal 0.30 m body edge. This estimate remains pending until five stationary scenes are accepted."
+    "notes": "The effective nominal safety footprint is symmetric at 0.30 m. It has been exercised against four-direction axis scenes, the current-algorithm corridor baseline, and the 2026-06-14 right-case/open paired comparison. The longitudinal body-height filter margin remains 0.05 m; the lateral margin is 0.0 m because the right 0.30-0.35 m returns disappeared when the external case was removed. Do not repeat the front/left/rear static scenes merely to rediscover the same axes or footprint. The record remains pending because completed_stationary_measured_scenes counts only the formal five-artifact measured calibration ledger required by the existing guard, not all engineering tests already performed. Reuse existing evidence and collect only genuinely missing ground-truth if a later supervised motion release chooses to promote this record."
   }
 }
