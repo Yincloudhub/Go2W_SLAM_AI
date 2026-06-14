@@ -7,6 +7,12 @@ from edge_autonomy.map_registry import MapProfile, MapRegistry, MapRegistryError
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_map_registry.example.json"
 REAL_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_real_site_map_registry.json"
+YIN_SIYUAN_CALIBRATION_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "artifacts"
+    / "real_site_pcd"
+    / "yin_siyuan_calibration_20260522.json"
+)
 
 
 class MapRegistryTests(unittest.TestCase):
@@ -88,6 +94,20 @@ class MapRegistryTests(unittest.TestCase):
         self.assertEqual(profile.get_node("initial_point").node_id, "initial_point")
         with self.assertRaises(MapRegistryError):
             profile.relocate_command("initial_point")
+
+    def test_real_registry_keeps_confirmed_yin_siyuan_calibration(self) -> None:
+        profile = MapRegistry.from_file(REAL_REGISTRY_PATH).get_map("go2w_real_site")
+        calibration = json.loads(YIN_SIYUAN_CALIBRATION_PATH.read_text(encoding="utf-8"))
+        expected = calibration["confirmed_pose"]
+        actual = profile.get_node("yin_siyuan_station").pose
+
+        self.assertAlmostEqual(actual.x, expected["x"])
+        self.assertAlmostEqual(actual.y, expected["y"])
+        self.assertAlmostEqual(actual.z, expected["z"])
+        self.assertAlmostEqual(actual.q_x, expected["q_x"])
+        self.assertAlmostEqual(actual.q_y, expected["q_y"])
+        self.assertAlmostEqual(actual.q_z, expected["q_z"])
+        self.assertAlmostEqual(actual.q_w, expected["q_w"])
 
     def test_unverified_active_anchor_cannot_emit_relocation_command(self) -> None:
         data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))

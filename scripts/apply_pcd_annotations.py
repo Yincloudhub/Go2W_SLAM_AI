@@ -9,7 +9,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
+DEFAULT_CALIBRATION_DIR = REPO_ROOT / "artifacts" / "real_site_pcd"
 DEFAULT_MAP_ID = "go2w_real_site"
+PROTECTED_TAGS = {"live_calibrated", "live_verified", "ui_verified"}
 
 
 def zh(text: str) -> str:
@@ -91,7 +93,41 @@ def normalized_pose(raw_pose: dict[str, Any], *, default_speed: float, default_m
     return pose
 
 
-def apply_annotations(registry: dict[str, Any], annotations: list[dict[str, Any]], args: argparse.Namespace) -> list[dict[str, Any]]:
+def load_calibrated_node_ids(calibration_dir: Path) -> set[str]:
+    calibrated: set[str] = set()
+    if not calibration_dir.is_dir():
+        return calibrated
+    for path in calibration_dir.glob("*_calibration_*.json"):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        node_id = str(record.get("node_id", "")).strip() if isinstance(record, dict) else ""
+        confirmed_pose = record.get("confirmed_pose") if isinstance(record, dict) else None
+        if node_id and isinstance(confirmed_pose, dict):
+            calibrated.add(node_id)
+    return calibrated
+
+
+def protected_node_reason(node: dict[str, Any], calibrated_node_ids: set[str]) -> str | None:
+    node_id = str(node.get("node_id", "")).strip()
+    if node_id in calibrated_node_ids:
+        return "confirmed calibration artifact exists"
+    tags = node.get("tags")
+    if isinstance(tags, list):
+        protected = sorted(PROTECTED_TAGS.intersection(str(tag) for tag in tags))
+        if protected:
+            return f"protected tags: {', '.join(protected)}"
+    if isinstance(node.get("calibration"), dict) or isinstance(node.get("calibration_observation"), dict):
+        return "calibration metadata exists"
+    return None
+
+
+def apply_annotations(
+    registry: dict[str, Any],
+    annotations: list[dict[str, Any]],
+    args: argparse.Namespace,
+) -> dict[str, list[dict[str, Any]]]:
     target_map = None
     for item in registry.get("maps", []):
         if item.get("map_id") == args.map_id:
@@ -102,8 +138,11 @@ def apply_annotations(registry: dict[str, Any], annotations: list[dict[str, Any]
 
     nodes = target_map.setdefault("topology_nodes", [])
     by_id = {node.get("node_id"): node for node in nodes if isinstance(node, dict)}
-    updated: list[dict[str, Any]] = []
+    result: dict[str, list[dict[str, Any]]] = {"updated": [], "skipped": []}
     seen_ids: set[str] = set()
+    calibration_dir = Path(getattr(args, "calibration_dir", DEFAULT_CALIBRATION_DIR))
+    calibrated_node_ids = load_calibrated_node_ids(calibration_dir)
+    allow_overwrite_verified = bool(getattr(args, "allow_overwrite_verified", False))
 
     for annotation in annotations:
         name = str(annotation.get("name", "")).strip()
@@ -121,6 +160,17 @@ def apply_annotations(registry: dict[str, Any], annotations: list[dict[str, Any]
             node = {"node_id": node_id}
             nodes.append(node)
             by_id[node_id] = node
+        elif not allow_overwrite_verified:
+            reason = protected_node_reason(node, calibrated_node_ids)
+            if reason:
+                result["skipped"].append(
+                    {
+                        "node_id": node_id,
+                        "name": name,
+                        "reason": reason,
+                    }
+                )
+                continue
 
         node.update(
             {
@@ -133,9 +183,9 @@ def apply_annotations(registry: dict[str, Any], annotations: list[dict[str, Any]
                 "description": spec["description"],
             }
         )
-        updated.append({"node_id": node_id, "name": name, "pose": pose})
+        result["updated"].append({"node_id": node_id, "name": name, "pose": pose})
 
-    return updated
+    return result
 
 
 def main() -> int:
@@ -146,19 +196,25 @@ def main() -> int:
     parser.add_argument("--annotations-b64", default="")
     parser.add_argument("--default-speed", type=float, default=0.3)
     parser.add_argument("--mode", type=int, default=0)
+    parser.add_argument("--calibration-dir", default=str(DEFAULT_CALIBRATION_DIR))
+    parser.add_argument(
+        "--allow-overwrite-verified",
+        action="store_true",
+        help="Explicitly allow PCD annotations to replace calibrated or verified nodes.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     registry_path = Path(args.registry)
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
     annotations = load_annotations(args)
-    updated = apply_annotations(registry, annotations, args)
-    if not updated:
+    result = apply_annotations(registry, annotations, args)
+    if not result["updated"] and not result["skipped"]:
         raise SystemExit("no known annotations matched; check Chinese names and UTF-8 encoding")
 
     if not args.dry_run:
         registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"updated": updated, "dry_run": bool(args.dry_run)}, ensure_ascii=False, indent=2))
+    print(json.dumps({**result, "dry_run": bool(args.dry_run)}, ensure_ascii=False, indent=2))
     return 0
 
 

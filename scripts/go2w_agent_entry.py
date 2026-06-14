@@ -235,6 +235,14 @@ def calibrate_node_from_current_pose(args: argparse.Namespace, node_id: str) -> 
     tags = target_node.get("tags", [])
     if isinstance(tags, list):
         target_node["tags"] = [tag for tag in tags if tag != "needs_calibration"]
+        if "live_calibrated" not in target_node["tags"]:
+            target_node["tags"].append("live_calibrated")
+    target_node["calibration"] = {
+        "confirmed_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "source": "gateway_world_state.current_pose",
+        "method": "cli_calibrate_node_current_pose",
+        "previous_pose": old_pose,
+    }
     target_node["description"] = f"{target_node.get('description', '')} calibrated from current live pose.".strip()
     registry_path.write_text(json.dumps(registry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {

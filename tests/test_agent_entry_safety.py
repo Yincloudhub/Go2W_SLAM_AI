@@ -129,6 +129,58 @@ class AgentEntrySafetyTests(unittest.TestCase):
         self.assertIn("--relocation-anchor is required", payload["steps"][-1]["result"]["reason"])
         relocate.assert_not_called()
 
+    def test_live_node_calibration_records_protected_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "registry.json"
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "maps": [
+                            {
+                                "map_id": "go2w_real_site",
+                                "topology_nodes": [
+                                    {
+                                        "node_id": "wp_a",
+                                        "name": "A",
+                                        "tags": ["real_site", "needs_calibration"],
+                                        "pose": {"x": 0.0, "y": 0.0, "speed": 0.2, "mode": 0},
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            args = type("Args", (), {"registry": str(registry_path), "map_id": "go2w_real_site"})()
+            world_state = {
+                "world_state": {
+                    "current_pose": {
+                        "pose": {
+                            "x": 1.2,
+                            "y": -0.3,
+                            "z": 0.01,
+                            "q_x": 0.0,
+                            "q_y": 0.0,
+                            "q_z": 0.1,
+                            "q_w": 0.995,
+                        }
+                    }
+                }
+            }
+
+            with patch.object(go2w_agent_entry, "get_world_state", return_value=world_state):
+                result = go2w_agent_entry.calibrate_node_from_current_pose(args, "wp_a")
+
+            updated = json.loads(registry_path.read_text(encoding="utf-8"))["maps"][0]["topology_nodes"][0]
+
+        self.assertTrue(result["updated"])
+        self.assertNotIn("needs_calibration", updated["tags"])
+        self.assertIn("live_calibrated", updated["tags"])
+        self.assertEqual(updated["calibration"]["source"], "gateway_world_state.current_pose")
+        self.assertEqual(updated["calibration"]["method"], "cli_calibrate_node_current_pose")
+        self.assertEqual(updated["calibration"]["previous_pose"]["x"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
