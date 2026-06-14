@@ -349,6 +349,75 @@ class PerceptionContextTests(unittest.TestCase):
             self.assertEqual(context["degraded_capabilities"], ["d435_depth", "d435_yolo"])
             self.assert_context_valid(context)
 
+    def test_sequence_tracker_accepts_reset_for_new_producer_instance(self) -> None:
+        tracker = SensorSequenceTracker()
+        tracker.apply(
+            [
+                {
+                    "source_id": "d435_depth",
+                    "sequence": 32_701,
+                    "producer_instance_id": "boot:9390:57559",
+                    "status": "fresh",
+                    "status_reasons": [],
+                }
+            ]
+        )
+
+        restarted = tracker.apply(
+            [
+                {
+                    "source_id": "d435_depth",
+                    "sequence": 1,
+                    "producer_instance_id": "boot:36424:299330",
+                    "status": "fresh",
+                    "status_reasons": [],
+                }
+            ]
+        )[0]
+
+        self.assertEqual(restarted["status"], "fresh")
+        self.assertNotIn("sequence_rollback", restarted["status_reasons"])
+
+    def test_sequence_tracker_does_not_seed_new_instance_from_stale_artifact(self) -> None:
+        tracker = SensorSequenceTracker()
+        tracker.apply(
+            [
+                {
+                    "source_id": "d435_depth",
+                    "sequence": 32_701,
+                    "producer_instance_id": "boot:9390:57559",
+                    "status": "fresh",
+                    "status_reasons": [],
+                }
+            ]
+        )
+        tracker.apply(
+            [
+                {
+                    "source_id": "d435_depth",
+                    "sequence": 32_701,
+                    "producer_instance_id": "boot:36424:299330",
+                    "status": "stale",
+                    "status_reasons": ["stale_budget_exceeded"],
+                }
+            ]
+        )
+
+        restarted = tracker.apply(
+            [
+                {
+                    "source_id": "d435_depth",
+                    "sequence": 1,
+                    "producer_instance_id": "boot:36424:299330",
+                    "status": "fresh",
+                    "status_reasons": [],
+                }
+            ]
+        )[0]
+
+        self.assertEqual(restarted["status"], "fresh")
+        self.assertNotIn("sequence_rollback", restarted["status_reasons"])
+
     def test_schema_rejects_bool_confidence_and_negative_sequence(self) -> None:
         envelope = reserved_motion_envelope("motion", "imu_motion", received_ms=10_100)
         envelope["confidence"] = True

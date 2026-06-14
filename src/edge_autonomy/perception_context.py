@@ -35,7 +35,7 @@ class SensorSequenceTracker:
                     reasons = list(envelope.get("status_reasons") or [])
                     reasons.append("sequence_rollback")
                     envelope["status_reasons"] = list(dict.fromkeys(reasons))[:32]
-                elif envelope.get("status") in {"fresh", "stale"}:
+                elif envelope.get("status") == "fresh":
                     self._last[source_id] = (producer_instance, sequence)
             checked.append(envelope)
         return checked
