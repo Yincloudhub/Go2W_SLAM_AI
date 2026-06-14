@@ -89,6 +89,9 @@ class RuntimeResourceProfileTests(unittest.TestCase):
         self.assertIn("require_driver_topic xt16_driver /unitree/slam_lidar/points 6", text)
         self.assertIn("--qos-reliability best_effort", text)
         self.assertIn("/slam_info may remain silent until a relocation request", text)
+        self.assertIn('PERCEPTION_CONTEXT_ACTION="restart-if-stale"', text)
+        self.assertIn('PERCEPTION_CONTEXT_ACTION="restart"', text)
+        self.assertIn('GO2W_XT16_SUPERVISED_RELEASE', text)
 
     def test_runtime_startup_is_one_command_and_complete_by_default(self):
         text = (REPO_ROOT / "scripts" / "start_go2w_runtime_stack.sh").read_text(encoding="utf-8")

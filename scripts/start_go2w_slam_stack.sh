@@ -388,7 +388,16 @@ if [[ "${GO2W_START_STEREO_DEPTH:-1}" == "1" ]]; then
   fi
 fi
 
-if ! bash "${SCRIPT_DIR}/go2w_perception_context_sidecar.sh" restart-if-stale; then
+PERCEPTION_CONTEXT_ACTION="restart-if-stale"
+if [[ "${GO2W_XT16_SUPERVISED_RELEASE:-0}" == "1" ||
+      "${GO2W_XT16_SUPERVISED_RELEASE:-0}" == "true" ||
+      "${GO2W_XT16_SUPERVISED_RELEASE:-0}" == "yes" ]]; then
+  # A live reducer may predate the engineering-release contract after a Git
+  # fast-forward. Refresh only this read-only process so it loads the current
+  # SensorEnvelope semantics.
+  PERCEPTION_CONTEXT_ACTION="restart"
+fi
+if ! bash "${SCRIPT_DIR}/go2w_perception_context_sidecar.sh" "${PERCEPTION_CONTEXT_ACTION}"; then
   echo "warning: PerceptionContext producer is unavailable; Planner, LLM, and UI will fail closed" >&2
 fi
 
