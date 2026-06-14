@@ -89,6 +89,8 @@ class PerceptionContextServiceTests(unittest.TestCase):
         self.assertIn("go2w_perception_context_sidecar.sh", slam_text)
         self.assertIn("go2w_perception_context_sidecar.sh", web_text)
         self.assertIn("--perception-context-path", web_text)
+        self.assertIn("--capture-command", web_text)
+        self.assertIn("capture_keyframe.py --latest-image", web_text)
         self.assertNotIn("GO2W_STEREO_SUMMARY_PATH", web_text)
         self.assertNotIn("GO2W_LIDAR_GEOMETRY_SUMMARY_PATH", web_text)
         self.assertIn("go2w_perception_context_sidecar.sh", snapshot_text)

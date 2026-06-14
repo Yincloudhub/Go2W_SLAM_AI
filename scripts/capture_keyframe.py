@@ -76,14 +76,51 @@ def write_sidecar(payload: dict[str, Any], sidecar_path: Path) -> None:
     sidecar_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def copy_source_image(source_image: str, output_image: Path) -> tuple[bool, str]:
+def resolve_source_path(source_image: str) -> Path:
     source = Path(source_image).expanduser()
     if not source.is_absolute():
         source = (Path.cwd() / source).resolve()
+    return source
+
+
+def copy_source_image(source_image: str, output_image: Path) -> tuple[bool, str]:
+    source = resolve_source_path(source_image)
     if not source.exists() or not source.is_file():
         return False, f"source image not found: {source}"
     shutil.copyfile(source, output_image)
     return True, "source_image"
+
+
+def copy_latest_image(source_image: str, output_image: Path, max_age_ms: int) -> dict[str, Any]:
+    source = resolve_source_path(source_image)
+    try:
+        source_stat = source.stat()
+    except OSError:
+        return {
+            "captured": False,
+            "source": "d435_latest_color",
+            "source_image_path": str(source),
+            "reason": f"latest D435 image not found: {source}",
+        }
+    source_timestamp_ms = int(source_stat.st_mtime * 1000)
+    source_age_ms = max(0, now_ms() - source_timestamp_ms)
+    if source_age_ms > max_age_ms:
+        return {
+            "captured": False,
+            "source": "d435_latest_color",
+            "source_image_path": str(source),
+            "source_timestamp_ms": source_timestamp_ms,
+            "source_age_ms": source_age_ms,
+            "reason": f"latest D435 image is stale: age_ms={source_age_ms} max_age_ms={max_age_ms}",
+        }
+    shutil.copyfile(source, output_image)
+    return {
+        "captured": True,
+        "source": "d435_latest_color",
+        "source_image_path": str(source),
+        "source_timestamp_ms": source_timestamp_ms,
+        "source_age_ms": source_age_ms,
+    }
 
 
 def capture_with_external_command(args: argparse.Namespace, output_image: Path, run_id: str) -> dict[str, Any]:
@@ -188,7 +225,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", default=os.environ.get("GO2W_KEYFRAME_DIR", ""))
     parser.add_argument("--output-image", default=os.environ.get("GO2W_OUTPUT_IMAGE", ""))
     parser.add_argument("--source-image", default="", help="Copy an existing image; mainly for tests and replay.")
+    parser.add_argument(
+        "--latest-image",
+        default=os.environ.get(
+            "GO2W_D435_LATEST_COLOR_PATH",
+            str(REPO_ROOT / "artifacts" / "d435_perception_service" / "latest_color.jpg"),
+        ),
+        help="Atomically published RGB image from the unified D435 capture owner.",
+    )
+    parser.add_argument(
+        "--max-source-age-ms",
+        type=int,
+        default=int(os.environ.get("GO2W_KEYFRAME_MAX_SOURCE_AGE_MS", "3000") or 3000),
+    )
     parser.add_argument("--command", default="", help="External bash capture command. It receives GO2W_OUTPUT_IMAGE.")
+    parser.add_argument(
+        "--allow-direct-camera",
+        action="store_true",
+        help="Diagnostic-only fallback that may open a camera device directly.",
+    )
     parser.add_argument("--device-index", type=int, default=int(os.environ.get("GO2W_CAMERA_DEVICE_INDEX", "0") or 0))
     parser.add_argument("--video-device", default=os.environ.get("GO2W_VIDEO_DEVICE", "/dev/video0"))
     parser.add_argument("--width", type=int, default=int(os.environ.get("GO2W_CAMERA_WIDTH", "0") or 0))
@@ -229,7 +284,9 @@ def main(argv: list[str] | None = None) -> int:
             payload["reason"] = source
     elif args.command or os.environ.get("GO2W_CAMERA_CAPTURE_COMMAND"):
         payload.update(capture_with_external_command(args, image_path, run_id))
-    else:
+    elif args.latest_image:
+        payload.update(copy_latest_image(args.latest_image, image_path, max(0, args.max_source_age_ms)))
+    elif args.allow_direct_camera:
         opencv_payload = capture_with_opencv(args, image_path)
         if opencv_payload.get("captured") is True:
             payload.update(opencv_payload)
@@ -238,6 +295,14 @@ def main(argv: list[str] | None = None) -> int:
             payload.update(ffmpeg_payload if ffmpeg_payload.get("captured") is True else opencv_payload)
             if ffmpeg_payload.get("captured") is not True:
                 payload["fallback_failure"] = ffmpeg_payload
+    else:
+        payload.update(
+            {
+                "captured": False,
+                "source": "none",
+                "reason": "unified D435 owner image not configured; direct camera capture is disabled",
+            }
+        )
 
     if payload.get("captured") is True:
         try:

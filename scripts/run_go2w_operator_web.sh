@@ -18,6 +18,8 @@ START_RVIZ2_SCRIPT="${GO2W_START_RVIZ2_SCRIPT:-${REPO_ROOT}/scripts/start_go2w_r
 WEB_HOST="${GO2W_WEB_HOST:-127.0.0.1}"
 WEB_PORT="${GO2W_WEB_PORT:-8765}"
 PERCEPTION_CONTEXT_PATH="${GO2W_PERCEPTION_CONTEXT_PATH:-${REPO_ROOT}/artifacts/perception_context_v1.json}"
+D435_LATEST_COLOR_PATH="${GO2W_D435_LATEST_COLOR_PATH:-${REPO_ROOT}/artifacts/d435_perception_service/latest_color.jpg}"
+CAPTURE_COMMAND="${GO2W_CAPTURE_COMMAND:-python3 ${SCRIPT_DIR}/capture_keyframe.py --latest-image ${D435_LATEST_COLOR_PATH}}"
 export GO2W_COLLECTION_STATUS_PATH="${GO2W_COLLECTION_STATUS_PATH:-${HOME}/go2w_dataset/collection_status.json}"
 export GO2W_START_XT16_GEOMETRY="${GO2W_START_XT16_GEOMETRY:-1}"
 export GO2W_XT16_GEOMETRY_CALIBRATED="${GO2W_XT16_GEOMETRY_CALIBRATED:-auto}"
@@ -48,6 +50,7 @@ exec "${PYTHON:-python3}" "${REPO_ROOT}/scripts/go2w_operator_web.py" \
   --registry "${REGISTRY_PATH}" \
   --map-id "${MAP_ID}" \
   --perception-context-path "${PERCEPTION_CONTEXT_PATH}" \
+  --capture-command "${CAPTURE_COMMAND}" \
   --gateway-client "${GATEWAY_CLIENT}" \
   --start-slam-script "${START_SLAM_SCRIPT}" \
   --start-rviz2-script "${START_RVIZ2_SCRIPT}" \

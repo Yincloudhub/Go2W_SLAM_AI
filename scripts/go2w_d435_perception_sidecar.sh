@@ -10,6 +10,9 @@ HEADLESS_BIN="${GO2W_DEEPYOLO_HEADLESS_BIN:-${SRC_DIR}/go2w_headless/build/yolo_
 SERVICE_DIR="${GO2W_D435_SERVICE_DIR:-${REPO_ROOT}/artifacts/d435_perception_service}"
 STREAM_DIR="${GO2W_D435_STREAM_DIR:-${SERVICE_DIR}/jsonl}"
 DEPTH_PACKET="${GO2W_D435_DEPTH_PACKET_PATH:-${SERVICE_DIR}/depth_packet.json}"
+LATEST_COLOR_PATH="${GO2W_D435_LATEST_COLOR_PATH:-${SERVICE_DIR}/latest_color.jpg}"
+LATEST_COLOR_METADATA_PATH="${GO2W_D435_LATEST_COLOR_METADATA_PATH:-${SERVICE_DIR}/latest_color.json}"
+LATEST_COLOR_INTERVAL_MS="${GO2W_D435_LATEST_COLOR_INTERVAL_MS:-1000}"
 SUMMARY_PATH="${GO2W_D435_SUMMARY_PATH:-${REPO_ROOT}/artifacts/d435_perception_summary.json}"
 DEPTH_COMPAT_PATH="${GO2W_STEREO_SUMMARY_PATH:-${REPO_ROOT}/artifacts/stereo_depth_summary.json}"
 YOLO_COMPAT_PATH="${GO2W_DEEPYOLO_SUMMARY_PATH:-${REPO_ROOT}/artifacts/vision_semantic_summary.json}"
@@ -225,6 +228,7 @@ print_status() {
     && echo "d435_supervisor=running pid=${supervisor_pid}" \
     || echo "d435_supervisor=stopped"
   echo "summary_path=${SUMMARY_PATH}"
+  echo "latest_color_path=${LATEST_COLOR_PATH}"
 }
 
 start_sidecar() {
@@ -247,6 +251,9 @@ start_sidecar() {
     GO2W_DEEPYOLO_HEARTBEAT_MS=1000 \
     GO2W_D435_DEPTH_EVERY_N="${DEPTH_EVERY_N}" \
     GO2W_D435_DEPTH_PACKET_PATH="${DEPTH_PACKET}" \
+    GO2W_D435_LATEST_COLOR_PATH="${LATEST_COLOR_PATH}" \
+    GO2W_D435_LATEST_COLOR_METADATA_PATH="${LATEST_COLOR_METADATA_PATH}" \
+    GO2W_D435_LATEST_COLOR_INTERVAL_MS="${LATEST_COLOR_INTERVAL_MS}" \
     "${HEADLESS_BIN}" > "${CAPTURE_LOG}" 2>&1 < /dev/null 9>&- &
   echo "$!" > "${CAPTURE_PID_FILE}"
   nohup nice -n "${NICE_LEVEL}" python3 "${SCRIPT_DIR}/d435_perception_summary.py" \

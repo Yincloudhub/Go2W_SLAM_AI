@@ -133,6 +133,52 @@ static void go2wWriteDepthPacket(
     std::rename(tmp_path.c_str(), output_path.c_str());
 }
 
+static bool go2wWriteLatestColorFrame(
+    const cv::Mat& color_bgr,
+    const std::string& output_path,
+    const std::string& metadata_path,
+    uint64_t captured_at_ms,
+    uint64_t frame_sequence,
+    double sensor_timestamp_ms
+) {
+    if (color_bgr.empty() || output_path.empty()) return false;
+    const std::string tmp_image_path = output_path + ".tmp.jpg";
+    const std::vector<int> jpeg_params{cv::IMWRITE_JPEG_QUALITY, 85};
+    if (!cv::imwrite(tmp_image_path, color_bgr, jpeg_params)) return false;
+    if (std::rename(tmp_image_path.c_str(), output_path.c_str()) != 0) {
+        std::remove(tmp_image_path.c_str());
+        return false;
+    }
+    if (!metadata_path.empty()) {
+        std::ostringstream json;
+        json << "{"
+             << "\"schema_version\":1,"
+             << "\"source\":\"d435_capture_owner\","
+             << "\"timestamp_ms\":" << captured_at_ms << ","
+             << "\"captured_at_ms\":" << captured_at_ms << ","
+             << "\"frame_sequence\":" << frame_sequence << ","
+             << "\"sensor_timestamp_ms\":" << std::fixed << std::setprecision(3)
+             << sensor_timestamp_ms << ","
+             << "\"image_path\":\"" << output_path << "\""
+             << "}";
+        const std::string tmp_metadata_path = metadata_path + ".tmp";
+        bool metadata_written = false;
+        {
+            std::ofstream output(tmp_metadata_path, std::ios::out | std::ios::trunc);
+            if (output.is_open()) {
+                output << json.str() << std::endl;
+                metadata_written = output.good();
+            }
+        }
+        if (metadata_written) {
+            std::rename(tmp_metadata_path.c_str(), metadata_path.c_str());
+        } else {
+            std::remove(tmp_metadata_path.c_str());
+        }
+    }
+    return true;
+}
+
 static std::string go2wAttachCaptureMetadata(
     std::string json,
     uint64_t frame_sequence,
@@ -194,11 +240,24 @@ capture_loop_replacement = """    rs2::align align_to_color(RS2_STREAM_COLOR);
     if (depth_every_n <= 0) depth_every_n = 2;
     const char* depth_packet_path_env = std::getenv("GO2W_D435_DEPTH_PACKET_PATH");
     std::string depth_packet_path = depth_packet_path_env ? depth_packet_path_env : "";
+    const char* latest_color_path_env = std::getenv("GO2W_D435_LATEST_COLOR_PATH");
+    std::string latest_color_path = latest_color_path_env ? latest_color_path_env : "";
+    const char* latest_color_metadata_path_env = std::getenv("GO2W_D435_LATEST_COLOR_METADATA_PATH");
+    std::string latest_color_metadata_path =
+        latest_color_metadata_path_env ? latest_color_metadata_path_env : "";
+    const char* latest_color_interval_env = std::getenv("GO2W_D435_LATEST_COLOR_INTERVAL_MS");
+    uint64_t latest_color_interval_ms = latest_color_interval_env
+        ? std::strtoull(latest_color_interval_env, nullptr, 10)
+        : 1000;
+    if (latest_color_interval_ms == 0) latest_color_interval_ms = 1000;
+    uint64_t last_color_publish_ms = 0;
     uint64_t capture_frame_count = 0;
 
     std::cout << "[GO2W] capture_every_n=" << capture_every_n << std::endl;
     std::cout << "[GO2W] depth_every_n=" << depth_every_n
               << " depth_packet_path=" << depth_packet_path << std::endl;
+    std::cout << "[GO2W] latest_color_path=" << latest_color_path
+              << " interval_ms=" << latest_color_interval_ms << std::endl;
     std::cout << "[RealSense] RGBD";"""
 if capture_loop_marker not in text:
     raise SystemExit("failed to locate DeepYOLO capture loop setup")
@@ -261,6 +320,39 @@ capture_publish_replacement = """            shared_sensor.timestamp_ms = go2w_c
 if capture_publish_marker not in text:
     raise SystemExit("failed to locate DeepYOLO shared sensor publish")
 text = text.replace(capture_publish_marker, capture_publish_replacement, 1)
+
+color_frame_marker = """        cv::Mat color_bgr(
+            cv::Size(color_frame.get_width(), color_frame.get_height()),
+            CV_8UC3,
+            (void*)color_frame.get_data(),
+            cv::Mat::AUTO_STEP
+        );
+
+        cv::Mat depth_u16("""
+color_frame_replacement = """        cv::Mat color_bgr(
+            cv::Size(color_frame.get_width(), color_frame.get_height()),
+            CV_8UC3,
+            (void*)color_frame.get_data(),
+            cv::Mat::AUTO_STEP
+        );
+        if (!latest_color_path.empty()
+            && (last_color_publish_ms == 0
+                || go2w_captured_at_ms >= last_color_publish_ms + latest_color_interval_ms)
+            && go2wWriteLatestColorFrame(
+                color_bgr,
+                latest_color_path,
+                latest_color_metadata_path,
+                go2w_captured_at_ms,
+                go2w_frame_sequence,
+                go2w_sensor_timestamp_ms
+            )) {
+            last_color_publish_ms = go2w_captured_at_ms;
+        }
+
+        cv::Mat depth_u16("""
+if color_frame_marker not in text:
+    raise SystemExit("failed to locate DeepYOLO color frame publication")
+text = text.replace(color_frame_marker, color_frame_replacement, 1)
 
 old_engine = 'std::string engine_path = "../yolo11m.engine";'
 new_engine = (

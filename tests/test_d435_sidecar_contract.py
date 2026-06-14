@@ -67,6 +67,16 @@ class D435SidecarContractTests(unittest.TestCase):
         self.assertIn("get_frame_number()", text)
         self.assertIn("get_timestamp()", text)
 
+    def test_capture_owner_atomically_publishes_latest_color_frame(self):
+        generator = (REPO_ROOT / "scripts" / "build_deepyolo_headless.sh").read_text(encoding="utf-8")
+        manager = (REPO_ROOT / "scripts" / "go2w_d435_perception_sidecar.sh").read_text(encoding="utf-8")
+        self.assertIn("go2wWriteLatestColorFrame", generator)
+        self.assertIn('output_path + ".tmp.jpg"', generator)
+        self.assertIn("std::rename(tmp_image_path.c_str(), output_path.c_str())", generator)
+        self.assertIn('std::getenv("GO2W_D435_LATEST_COLOR_PATH")', generator)
+        self.assertIn('GO2W_D435_LATEST_COLOR_PATH="${LATEST_COLOR_PATH}"', manager)
+        self.assertIn('GO2W_D435_LATEST_COLOR_INTERVAL_MS="${LATEST_COLOR_INTERVAL_MS}"', manager)
+
 
 if __name__ == "__main__":
     unittest.main()
