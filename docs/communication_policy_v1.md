@@ -127,5 +127,27 @@ journal_slam_command: absent
 journal_target_pose: absent
 ```
 
-机器人无运动验收必须在 Git fast-forward 部署后执行，且仍不得启动 SLAM、
-Gateway、D435、XT16 或底盘运动。
+## 机器人无运动验收
+
+2026-06-14 在 `unitree@192.168.123.18` 完成 Git fast-forward 和纯软件验收：
+
+```text
+implementation_commit: c53f9a833bb42160d4d84b06cb48e6df51718c74
+robot_python_full_unittest: 327/327 passed
+robot_decision: dry_run_queue
+robot_gateway_checked: false
+robot_motion_executed: false
+robot_disconnected_sequence: 1..6
+robot_disconnected_pending: 6
+robot_disconnected_replay_count: 0
+robot_recovered_replay_sequence: 1..6
+robot_ack_sequence: 6
+robot_pending_after_ack: 0
+robot_automatic_resume_allowed: false
+robot_journal_slam_command: absent
+robot_journal_target_pose: absent
+robot_go2w_processes_before: none
+robot_go2w_processes_after: none
+```
+
+验收未启动 SLAM、Gateway、D435、XT16 或底盘运动。

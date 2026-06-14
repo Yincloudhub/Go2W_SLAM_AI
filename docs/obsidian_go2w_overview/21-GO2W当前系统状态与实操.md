@@ -7,8 +7,8 @@
 P0-1 单一 D435、P0-2 统一 PerceptionContext、P0-3 唯一决定与执行链已经完成
 代码部署和机器人无运动验收。当前机器人是“代码已部署、全部测试服务已停止”的
 安全停机状态，不是正在运行 SLAM 或自治导航。P0-4 弱网 journal/ack/补传执行器
-已完成本地实现和无运动验收，待机器人 Git fast-forward 后做同样的无运动验收。
-完整比赛闭环仍缺 XT16 正式 measured ledger 签发和最终低速运动验收。
+已完成本地与机器人无运动验收。完整比赛闭环仍缺 XT16 正式 measured ledger
+签发和最终低速运动验收。
 
 ## 版本与分支
 
@@ -235,7 +235,7 @@ conservative navigation speed cap: 0.20 m/s
 | P0-1 单一 D435 owner | 完成并验收 |
 | P0-2 PerceptionContext / WorldState | 完成并验收 |
 | P0-3 MissionDecision / 唯一执行链 | 完成并验收 |
-| P0-4 弱网 journal / ack / 补传 | 本地实现与无运动验收完成，机器人待验收 |
+| P0-4 弱网 journal / ack / 补传 | 完成并通过本地/机器人无运动验收 |
 | XT16 轴向/有效 footprint 静态工程验证 | 完成，不重复采集 |
 | XT16 正式 measured ledger / verified 标定 | 未签发 |
 | TI/NX live transport | 预留接口，未接实流 |
@@ -256,4 +256,8 @@ conservative navigation speed cap: 0.20 m/s
 - replay 不包含 Gateway/SLAM 命令、任意 target pose 或原始传感器载荷；
 - 远端 TaskQueue 只能路由到 MissionDecisionEngine。
 
-机器人只允许 Git fast-forward 后运行纯 journal/dry-run 验收，不启动任何运动链。
+实现提交 `c53f9a8` 已在机器人 Git fast-forward 部署。机器人全量 Python
+`327/327` 通过；断线 sequence `1..6` 全部进入 pending，断线补传为 0，重连
+按 `1..6` 补发，累计 ack 到 6 后 pending 清零。恢复策略保持
+`automatic_resume_allowed=false`，journal 不包含 `slam_command` 或
+`target_pose`。验收前后相关 GO2W 进程均为空，未启动任何运动链。

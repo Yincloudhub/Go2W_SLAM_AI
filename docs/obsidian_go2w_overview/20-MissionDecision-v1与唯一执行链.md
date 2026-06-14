@@ -136,4 +136,5 @@ p0-3-mission-decision-chain-accepted-20260613
 P0-4 已在本地接入：
 `CommunicationPolicyExecutor + append-only journal + ack sequence + reconnect replay`。
 同一 queue 的真实执行先取得持久 `execution_claim`；恢复和补传都不得自动重放
-Gateway 命令。机器人无运动验收待 Git fast-forward 部署后执行。
+Gateway 命令。实现提交 `c53f9a8` 已通过机器人全量 Python `327/327` 和断网/
+重连/ack 无运动验收，Gateway 未检查、运动未执行。

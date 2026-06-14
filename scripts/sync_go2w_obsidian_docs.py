@@ -112,9 +112,9 @@ INDEX_BLOCK = f"""{START}
   仍未签发。
 - D435 只补前向深度，不能覆盖机腹、左右或后方；XT16 可见低矮带之外仍有
   机腹/遮挡盲区，真实运动需另行有界验收。
-- P0-4 已完成本地实现与无运动验收：任务、决定和执行状态进入 append-only
-  journal，sequence/ack/reconnect replay 已接入，机器人仅待 Git fast-forward
-  后做纯 journal/dry-run 无运动验收。
+- P0-4 已完成本地与机器人无运动验收：任务、决定和执行状态进入 append-only
+  journal，sequence/ack/reconnect replay 已接入；恢复不自动重放运动命令，
+  Gateway 未检查、底盘未运动。
 - TI 雷达 / NX 先以 `semantic_only` 接入，不直接授权运动。
 - 弱网只影响远程同步，本地感知、任务状态机和 Gateway 不等待网络。
 {END}
