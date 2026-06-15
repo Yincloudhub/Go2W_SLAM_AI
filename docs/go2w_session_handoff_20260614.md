@@ -265,11 +265,16 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
   也不是运动模式未开启。
 - 减法重构提交为 `6eab6ea`，local、origin、robot 已同步。验证结果：
   本地 `368 passed, 2 skipped`；机器人 `370 passed`；Gateway C++ 全量编译通过，
-  三个 smoke 可执行程序均通过。当前 CMake 未注册 CTest，因此不能把
-  `No tests were found` 误记为测试通过。
+  三个 CTest 均通过。机器人旧版 `ctest` 不支持 `--test-dir build`，必须先进入
+  `robot/slam_gateway_refactor/build` 再运行；否则会在源码目录产生空 `Testing/`。
 - 本次提交还修正 `SportClient::Move()` 非零状态码被误当成功的问题，并在恢复后
   第二次导航被拒绝时保留 Gateway 原始拒绝原因。这两项是错误处理修正，不增加
   新安全判定。
+- 重启后的首次标准 CLI 重定位暴露重复构造回归：`ChassisController` 手工拼接的
+  `initial_pose` 缺少 Gateway 要求的锚点 `name`。提交 `fa4cec1` 删除手工拼接，
+  统一复用 `MapProfile.relocate_command()`。机器人定向测试 `33 passed`，标准
+  `--relocate` 回归成功；当前定位 `localized`、置信度 `0.90`，`safe_guard`
+  允许 `mode=0` 导航。
 
 ## 7. 新 Session 可直接使用的提示词
 
