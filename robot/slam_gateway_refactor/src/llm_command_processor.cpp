@@ -403,15 +403,14 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         goal.name = "__supervised_reposition_" + direction + "__";
         offsetPose(goal, direction, current_yaw, distance_m);
         goal.mode = 0;
-        goal.speed = static_cast<float>(requested_speed_mps);
+        goal.speed = static_cast<float>(
+            obstacle_policy::kNativeNavigationMinSpeedMps);
         auto result = ok(
             action,
-            gateway_.submitSupervisedReposition(
-                direction,
-                distance_m,
-                requested_speed_mps));
+            gateway_.submitNavigationGoal(goal));
         result["distance_m"] = distance_m;
         result["direction"] = direction;
+        result["controller"] = "unitree_pose_navigation_mode_0";
         result["reposition_target_pose"] = goal.toJson();
         return result;
     }

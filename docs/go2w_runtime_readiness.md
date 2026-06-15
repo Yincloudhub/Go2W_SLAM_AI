@@ -24,8 +24,8 @@ bash scripts/start_go2w_runtime_stack.sh --supervised-engineering-release --json
 This flag uses `configs/perception/xt16_supervised_release.json`. The record is
 not a formal measured calibration and does not change
 `xt16_geometry_calibration.json`. It requires an on-site operator and emergency
-stop, fixes native mode-0 navigation at the Unitree GO2 minimum `0.2 m/s`,
-keeps bounded recovery at `0.1 m/s`, and retains every stale, confidence,
+stop, fixes native mode-0 navigation and bounded recovery at the Unitree GO2
+minimum `0.2 m/s`, and retains every stale, confidence,
 missing-ROI, and close-obstacle hard stop.
 
 ## Readiness layers
@@ -75,9 +75,9 @@ left/right clearance threshold. Only after native navigation reports failure
 or sustained no progress can fresh XT16 geometry produce bounded forward,
 backward, left, and right recovery candidates. The local LLM selects a
 candidate from that set; `MissionDecisionEngine` validates the direction and
-distance, and the Gateway executes it with
-`SportClient::Move`, zero yaw rate, a 0.10 m/s speed cap, and direction-specific
-clearance reserves. The recovery translation is attempted at most once. After
+distance, and the Gateway converts it to a temporary Unitree `mode=0`
+pose-navigation target using the native 0.20 m/s minimum and direction-specific
+clearance reserves. The recovery target is attempted at most once. After
 it stops, the original target returns directly to Unitree navigation without a
 second LLM handoff decision.
 
@@ -105,7 +105,7 @@ The default progress observation is `0.08 m` translation or `0.12 rad` yaw
 within 20 seconds. This is deliberately above the measured SLAM pose jitter.
 When native navigation has no real progress, the supervisor pauses, refreshes
 world state, asks the recovery strategy layer to select one bounded candidate,
-executes that single zero-yaw reposition at at most `0.10 m/s`, and returns the
+executes that single bounded Unitree `mode=0` recovery target at `0.20 m/s`, and returns the
 original target to Unitree navigation. It does not chain blind
 relative moves without a native-navigation retry.
 

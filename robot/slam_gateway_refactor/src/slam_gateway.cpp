@@ -48,35 +48,6 @@ int64_t stereoSummaryMaxAgeMs()
     }
 }
 
-double directionalClearance(
-    const LocalObstacleSummary& obstacle,
-    const std::string& direction)
-{
-    if (direction == "forward") return obstacle.front_clearance_m;
-    if (direction == "backward") return obstacle.rear_clearance_m;
-    if (direction == "left") return obstacle.left_clearance_m;
-    if (direction == "right") return obstacle.right_clearance_m;
-    return -1.0;
-}
-
-void offsetPose(
-    PoseData& pose,
-    const std::string& direction,
-    double yaw,
-    double distance_m)
-{
-    double forward_m = 0.0;
-    double left_m = 0.0;
-    if (direction == "forward") forward_m = distance_m;
-    if (direction == "backward") forward_m = -distance_m;
-    if (direction == "left") left_m = distance_m;
-    if (direction == "right") left_m = -distance_m;
-    pose.x += static_cast<float>(
-        std::cos(yaw) * forward_m - std::sin(yaw) * left_m);
-    pose.y += static_cast<float>(
-        std::sin(yaw) * forward_m + std::cos(yaw) * left_m);
-}
-
 }  // namespace
 
 SlamGateway::SlamGateway()
@@ -99,9 +70,6 @@ SlamGateway::SlamGateway()
 
 SlamGateway::~SlamGateway()
 {
-    if (reposition_active_.load() || reposition_thread_.joinable()) {
-        stopSupervisedReposition();
-    }
     taskThreadStop();
     // Do not stop the SLAM backend from short-lived status/query clients.
     // Use the explicit stop_slam command when the backend really should stop.
@@ -122,9 +90,6 @@ void SlamGateway::initApis()
     UT_ROBOT_CLIENT_REG_API_NO_PROI(ROBOT_API_ID_START_MAPPING_PL);
     UT_ROBOT_CLIENT_REG_API_NO_PROI(ROBOT_API_ID_END_MAPPING_PL);
     UT_ROBOT_CLIENT_REG_API_NO_PROI(ROBOT_API_ID_START_RELOCATION_PL);
-    sport_client_.SetTimeout(2.0f);
-    sport_client_.Init();
-    sport_initialized_ = true;
 }
 
 ServiceResult SlamGateway::callApi(int32_t api_id, const std::string& parameter)
@@ -236,191 +201,8 @@ ServiceResult SlamGateway::submitNavigationGoal(const PoseData& goal)
     return result;
 }
 
-ServiceResult SlamGateway::submitSupervisedReposition(
-    const std::string& direction,
-    double distance_m,
-    double speed_mps)
-{
-    stopSupervisedReposition();
-    if (!sport_initialized_) {
-        return {
-            -1,
-            "sport client is not initialized",
-            false
-        };
-    }
-    const CurrentPose start_pose = getCurrentPose();
-    const double yaw = quaternionToYaw(
-        start_pose.pose.q_x,
-        start_pose.pose.q_y,
-        start_pose.pose.q_z,
-        start_pose.pose.q_w);
-    PoseData target = start_pose.pose;
-    target.name = "__supervised_reposition_" + direction + "__";
-    target.mode = 0;
-    target.speed = static_cast<float>(speed_mps);
-    offsetPose(target, direction, yaw, distance_m);
-
-    {
-        std::lock_guard<std::mutex> lk(state_mutex_);
-        nav_state_.timestamp_ms = nowMs();
-        nav_state_.task_id = "reposition_" + std::to_string(nav_state_.timestamp_ms);
-        nav_state_.target_node = target.name;
-        nav_state_.target_pose = target;
-        nav_state_.state = "running";
-        nav_state_.is_arrived = false;
-        nav_state_.failure_reason.clear();
-        nav_state_.last_status_code = 0;
-        nav_state_.last_service_reply = "supervised sport translation accepted";
-        updateDistanceToGoalLocked();
-    }
-
-    reposition_stop_requested_.store(false);
-    reposition_active_.store(true);
-    reposition_thread_ = std::thread(
-        &SlamGateway::supervisedRepositionLoop,
-        this,
-        direction,
-        distance_m,
-        speed_mps,
-        start_pose);
-
-    ServiceResult result;
-    result.ok = true;
-    result.status_code = 0;
-    result.data = nlohmann::json(
-        {
-            {"controller", "go2_sport_move"},
-            {"direction", direction},
-            {"distance_m", distance_m},
-            {"speed_mps", speed_mps},
-            {"yaw_rate_rps", 0.0}
-        }).dump();
-    return result;
-}
-
-void SlamGateway::supervisedRepositionLoop(
-    std::string direction,
-    double distance_m,
-    double speed_mps,
-    CurrentPose start_pose)
-{
-    const double start_x = start_pose.pose.x;
-    const double start_y = start_pose.pose.y;
-    const double max_duration_s = distance_m / speed_mps + 2.0;
-    const auto started = std::chrono::steady_clock::now();
-    std::string failure_reason;
-    bool arrived = false;
-
-    while (!reposition_stop_requested_.load()) {
-        const auto safety = getSafetyDecision();
-        const auto obstacle = getLocalObstacleSummary();
-        if (!safety.allow_navigation) {
-            failure_reason = "reposition_safety_blocked:" + safety.reason;
-            break;
-        }
-        if (directionalClearance(obstacle, direction) <
-            obstacle_policy::repositionReserveM(direction)) {
-            failure_reason = "reposition_directional_clearance_exhausted";
-            break;
-        }
-
-        const auto current = getCurrentPose();
-        const double travelled_m = std::hypot(
-            static_cast<double>(current.pose.x) - start_x,
-            static_cast<double>(current.pose.y) - start_y);
-        if (travelled_m >= std::max(0.0, distance_m - 0.03)) {
-            arrived = true;
-            break;
-        }
-        const double elapsed_s = std::chrono::duration<double>(
-            std::chrono::steady_clock::now() - started).count();
-        if (elapsed_s > max_duration_s) {
-            failure_reason = "reposition_distance_not_reached_before_timeout";
-            break;
-        }
-
-        float vx = 0.0f;
-        float vy = 0.0f;
-        if (direction == "forward") vx = static_cast<float>(speed_mps);
-        if (direction == "backward") vx = static_cast<float>(-speed_mps);
-        if (direction == "left") vy = static_cast<float>(speed_mps);
-        if (direction == "right") vy = static_cast<float>(-speed_mps);
-        int32_t status = 0;
-        {
-            std::lock_guard<std::mutex> lock(sport_mutex_);
-            status = sport_client_.Move(vx, vy, 0.0f);
-        }
-        if (status != 0) {
-            failure_reason = "sport_move_rejected:" + std::to_string(status);
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    {
-        if (sport_initialized_) {
-            std::lock_guard<std::mutex> lock(sport_mutex_);
-            sport_client_.StopMove();
-        }
-    }
-    reposition_active_.store(false);
-    {
-        std::lock_guard<std::mutex> lk(state_mutex_);
-        updateDistanceToGoalLocked();
-        if (arrived) {
-            nav_state_.state = "arrived";
-            nav_state_.is_arrived = true;
-            nav_state_.failure_reason.clear();
-        } else if (!reposition_stop_requested_.load()) {
-            nav_state_.state = "failed";
-            nav_state_.failure_reason =
-                failure_reason.empty()
-                    ? "supervised_reposition_stopped"
-                    : failure_reason;
-        }
-    }
-}
-
-int32_t SlamGateway::stopSupervisedReposition()
-{
-    const bool had_reposition =
-        reposition_active_.load() || reposition_thread_.joinable();
-    reposition_stop_requested_.store(true);
-    int32_t status = 0;
-    if (had_reposition && sport_initialized_) {
-        std::lock_guard<std::mutex> lock(sport_mutex_);
-        status = sport_client_.StopMove();
-    }
-    if (reposition_thread_.joinable() &&
-        reposition_thread_.get_id() != std::this_thread::get_id()) {
-        reposition_thread_.join();
-    }
-    reposition_active_.store(false);
-    return status;
-}
-
 ServiceResult SlamGateway::pauseNavigation()
 {
-    bool reposition_task = false;
-    {
-        std::lock_guard<std::mutex> lk(state_mutex_);
-        reposition_task =
-            nav_state_.target_node.rfind("__supervised_reposition_", 0) == 0;
-    }
-    if (reposition_task || reposition_active_.load()) {
-        ServiceResult result;
-        result.status_code = stopSupervisedReposition();
-        result.ok = result.status_code >= 0;
-        result.data = nlohmann::json(
-            {
-                {"controller", "go2_sport_move"},
-                {"stopped", result.ok}
-            }).dump();
-        std::lock_guard<std::mutex> lk(state_mutex_);
-        nav_state_.state = result.ok ? "paused" : nav_state_.state;
-        return result;
-    }
     nlohmann::json j;
     j["data"] = nlohmann::json::object();
     auto r = callApi(ROBOT_API_ID_PAUSE_NAV, j.dump());

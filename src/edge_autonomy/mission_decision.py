@@ -214,7 +214,7 @@ def build_recovery_decision(
                 "action": "supervised_reposition",
                 "direction": direction,
                 "distance_m": requested_distance_m,
-                "speed_mps": 0.10,
+                "speed_mps": 0.20,
                 "operator_ack": True,
             }
 

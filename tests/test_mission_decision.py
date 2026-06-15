@@ -184,6 +184,10 @@ class MissionDecisionTests(unittest.TestCase):
             accepted["authorized_command"]["direction"],
             "left",
         )
+        self.assertEqual(
+            accepted["authorized_command"]["speed_mps"],
+            0.20,
+        )
         self.assertFalse(accepted["llm_direct_motion"])
         self.assertFalse(rejected["accepted"])
         self.assertEqual(

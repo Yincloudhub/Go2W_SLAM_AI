@@ -74,6 +74,11 @@ class LlmContextTests(unittest.TestCase):
             departure["status"],
             "internal_llm_strategy_with_deterministic_guard",
         )
+        self.assertEqual(
+            departure["limits"]["controller"],
+            "unitree_pose_navigation_mode_0",
+        )
+        self.assertEqual(departure["limits"]["max_speed_mps"], 0.2)
         for edge in context["world_state_summary"]["topology"]["edges"]:
             self.assertFalse(edge["distance_verified"])
             self.assertIsNone(edge["expected_distance_m"])

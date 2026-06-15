@@ -1176,7 +1176,7 @@ def build_recovery_translation_analysis(
         },
         "direction": selected["direction"] if selected else None,
         "distance_m": selected["distance_m"] if selected else 0.0,
-        "speed_mps": 0.10,
+        "speed_mps": 0.20,
         "candidates": candidates,
     }
 
@@ -1329,7 +1329,7 @@ def run_post_navigation_recovery(
         ),
     )
     reposition_args.arrival_monitor_s = max(
-        15.0,
+        25.0,
         float(reposition_command["distance_m"])
         / float(reposition_command["speed_mps"])
         + 10.0,

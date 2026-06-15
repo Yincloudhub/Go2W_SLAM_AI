@@ -255,8 +255,8 @@ def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> d
                 "limits": {
                     "directions": ["forward", "backward", "left", "right"],
                     "max_distance_m": 0.5,
-                    "max_speed_mps": 0.1,
-                    "max_yaw_rate_rps": 0.0,
+                    "controller": "unitree_pose_navigation_mode_0",
+                    "max_speed_mps": 0.2,
                 },
                 "fallback": "pause_and_request_human",
             },
