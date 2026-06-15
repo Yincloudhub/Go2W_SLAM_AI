@@ -208,6 +208,18 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
 - The ordinary freshness rule remains `1 s`. Only explicit supervised release
   at `0.10 m/s` may use a previously valid XT16 summary up to `2 s`; older,
   missing, or untrusted data still fails closed.
+- The next field retry showed that Unitree accepted API 1102 and returned a
+  valid path, but the robot did not move. GO2W had paused the persistent SLAM
+  backend after the previous run and a new short-lived client did not issue
+  API 1202. New pose goals now use plan-then-resume semantics and only report
+  `running` after both calls succeed.
+- The old fixed 25-second monitor was also shorter than the theoretical
+  straight-line travel time for a 2.85 m target at 0.10 m/s. The monitor
+  budget now scales with start distance and commanded speed.
+- Sustained no-progress detection observes both translation and yaw. An
+  in-place turn therefore refreshes progress and is not blocked merely because
+  target distance has not decreased. These observation epsilons are not
+  left/right clearance rules and do not estimate the rotational swept body.
 
 ## 7. 新 Session 可直接使用的提示词
 

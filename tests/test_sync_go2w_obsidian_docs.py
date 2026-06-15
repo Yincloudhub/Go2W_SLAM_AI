@@ -49,7 +49,7 @@ class SyncGo2wObsidianDocsTests(unittest.TestCase):
             self.assertEqual(index_text.count(START), 1)
             self.assertEqual(index_text.count(END), 1)
             self.assertFalse(index_text.endswith("\n\n"))
-            self.assertIn("updated: 2026-06-14", index_text)
+            self.assertIn("updated: 2026-06-15", index_text)
             self.assertIn("[[17-D435与DeepYOLO统一感知服务]]", index_text)
             self.assertIn("[[18-GO2W运行操作手册]]", index_text)
             self.assertIn("[[19-PerceptionContext-v1统一感知契约]]", index_text)

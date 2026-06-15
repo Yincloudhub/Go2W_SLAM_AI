@@ -185,21 +185,55 @@ ServiceResult SlamGateway::submitNavigationGoal(const PoseData& goal)
     }
 
     std::cout << "parameter:" << goal.toNavigationJson() << std::endl;
-    auto r = callApi(ROBOT_API_ID_POSE_NAV_PL, goal.toNavigationJson());
+    auto plan_result = callApi(ROBOT_API_ID_POSE_NAV_PL, goal.toNavigationJson());
+    ServiceResult result = plan_result;
+    if (plan_result.ok) {
+        nlohmann::json resume_parameter;
+        resume_parameter["data"] = nlohmann::json::object();
+        auto resume_result = callApi(ROBOT_API_ID_RESUME_NAV, resume_parameter.dump());
+
+        const auto decode_reply = [](const std::string& raw) {
+            auto parsed = nlohmann::json::parse(raw, nullptr, false);
+            return parsed.is_discarded() ? nlohmann::json(raw) : parsed;
+        };
+        nlohmann::json service_data = {
+            {"plan", decode_reply(plan_result.data)},
+            {"resume", decode_reply(resume_result.data)},
+            {"auto_resume_after_goal", true}
+        };
+        if (!resume_result.ok) {
+            nlohmann::json pause_parameter;
+            pause_parameter["data"] = nlohmann::json::object();
+            auto pause_result =
+                callApi(ROBOT_API_ID_PAUSE_NAV, pause_parameter.dump());
+            service_data["pause_after_resume_failure"] = {
+                {"ok", pause_result.ok},
+                {"status_code", pause_result.status_code},
+                {"data", decode_reply(pause_result.data)}
+            };
+        }
+        result = {
+            resume_result.status_code,
+            service_data.dump(),
+            resume_result.ok
+        };
+    }
 
     {
         std::lock_guard<std::mutex> lk(state_mutex_);
         nav_state_.timestamp_ms = nowMs();
-        nav_state_.last_status_code = r.status_code;
-        nav_state_.last_service_reply = r.data;
-        if (r.ok) {
+        nav_state_.last_status_code = result.status_code;
+        nav_state_.last_service_reply = result.data;
+        if (result.ok) {
             nav_state_.state = "running";
+            nav_state_.failure_reason.clear();
         } else {
             nav_state_.state = "failed";
-            nav_state_.failure_reason = "pose_nav_call_failed";
+            nav_state_.failure_reason =
+                plan_result.ok ? "pose_nav_resume_failed" : "pose_nav_call_failed";
         }
     }
-    return r;
+    return result;
 }
 
 ServiceResult SlamGateway::submitSupervisedReposition(
@@ -402,6 +436,9 @@ ServiceResult SlamGateway::resumeNavigation()
     auto r = callApi(ROBOT_API_ID_RESUME_NAV, j.dump());
     std::lock_guard<std::mutex> lk(state_mutex_);
     nav_state_.state = r.ok ? "running" : nav_state_.state;
+    if (r.ok) {
+        nav_state_.failure_reason.clear();
+    }
     return r;
 }
 

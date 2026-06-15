@@ -86,6 +86,19 @@ ordinary local proximity remains an advisory to avoid overriding Unitree's
 planner; health, localization, sensor validity, lease loss, and explicit
 emergency-stop conditions remain hard stops.
 
+Each accepted pose goal is followed by an explicit Unitree resume request.
+This is required because the closed loop pauses navigation after arrival,
+timeout, or failure, while the Unitree SLAM process remains alive across
+short-lived agent clients. A successful new 1102 plan therefore clears the
+old pause with 1202 before the Gateway reports the task as running.
+
+Arrival monitoring is derived from the live start distance and commanded
+speed instead of a fixed 25-second trip limit. The no-progress watchdog uses
+observed translation or yaw change, so a legitimate turn in place counts as
+motion. The small translation/yaw values are observation thresholds for
+detecting a stationary backend; they are not obstacle-clearance thresholds
+and do not approximate whether the body can turn.
+
 The ordinary obstacle freshness limit remains 1 second. During the explicit
 0.10 m/s supervised release only, a previously valid XT16 summary has a
 2-second maximum age. This tolerates one short producer delay while limiting

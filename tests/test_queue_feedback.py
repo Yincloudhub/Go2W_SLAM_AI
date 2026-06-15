@@ -12,6 +12,8 @@ from scripts.run_robot_closed_loop import (
     gateway_rejection_reason,
     generate_mobility_strategy_proposal,
     generate_llm_feedback_result,
+    navigation_monitor_budget_s,
+    navigation_motion_progressed,
     operator_feedback_message,
     run_supervised_navigation_session,
     supervised_departure_decision,
@@ -377,6 +379,99 @@ class QueueFeedbackTests(unittest.TestCase):
         self.assertEqual(observed_arrival, arrival)
         self.assertEqual(commands, [command])
         self.assertIs(wait.call_args.kwargs["session"].__class__, FakeSession)
+
+    def test_navigation_monitor_budget_uses_distance_and_command_speed(self) -> None:
+        args = SimpleNamespace(
+            arrival_monitor_s=25.0,
+            navigation_monitor_travel_factor=1.8,
+            navigation_monitor_startup_margin_s=15.0,
+        )
+        command = {
+            "target_pose": {
+                "x": 1.0,
+                "y": 2.0,
+                "speed": 0.1,
+            }
+        }
+
+        budget = navigation_monitor_budget_s(command, 2.85, args)
+
+        self.assertAlmostEqual(budget, 66.3)
+
+    def test_navigation_motion_progress_accepts_turn_in_place(self) -> None:
+        self.assertTrue(
+            navigation_motion_progressed(
+                {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                {"x": 0.0, "y": 0.0, "yaw": 0.1},
+                distance_threshold_m=0.03,
+                yaw_threshold_rad=0.08,
+            )
+        )
+
+    def test_navigation_stall_requests_pause(self) -> None:
+        state = {
+            "accepted": True,
+            "world_state": {
+                "safety": {"allow_navigation": True, "reason": "ok"},
+                "slam_health": {
+                    "status": "ok",
+                    "slam_alive": True,
+                    "localization_alive": True,
+                },
+                "localization": {
+                    "status": "localized",
+                    "confidence": 0.9,
+                    "pose_age_ms": 100,
+                },
+                "current_pose": {
+                    "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}
+                },
+                "navigation": {"state": "running"},
+            },
+        }
+
+        class FakeSession:
+            def heartbeat(self):
+                return {"accepted": True}
+
+            def command(self, command):
+                if command["action"] == "pause_navigation":
+                    return {"accepted": True}
+                return state
+
+        args = SimpleNamespace(
+            timeout_s=1,
+            gateway_error_limit=1,
+            slam_poll_interval_s=0.1,
+            arrival_monitor_interval_s=0.1,
+            ui_refresh_interval_s=1.0,
+            operator_feedback_interval_s=1.0,
+            llm_feedback_interval_s=1.0,
+            max_arrival_samples=10,
+            max_feedback_events=10,
+            max_llm_feedback_events=10,
+            arrival_monitor_s=1.0,
+            arrival_distance_m=0.25,
+            arrival_confirm_samples=2,
+            llm_feedback_mode="off",
+            navigation_stall_s=0.12,
+            navigation_progress_distance_m=0.03,
+            navigation_progress_yaw_rad=0.08,
+        )
+
+        result = wait_for_arrival(
+            {
+                "action": "navigate_to_pose",
+                "target_node": "wp_a",
+                "target_pose": {"x": 1.0, "y": 0.0, "speed": 0.1},
+            },
+            args,
+            target_name="A",
+            session=FakeSession(),
+        )
+
+        self.assertEqual(result["reason"], "native_navigation_no_progress")
+        self.assertTrue(result["paused"])
 
     def test_dry_run_queue_is_not_marked_completed(self) -> None:
         registry = MapRegistry.from_file(REGISTRY_PATH)

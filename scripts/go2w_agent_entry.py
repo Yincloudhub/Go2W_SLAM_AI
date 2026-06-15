@@ -547,6 +547,16 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
             str(args.arrival_confirm_samples),
             "--arrival-monitor-s",
             str(args.arrival_monitor_s),
+            "--navigation-monitor-travel-factor",
+            str(args.navigation_monitor_travel_factor),
+            "--navigation-monitor-startup-margin-s",
+            str(args.navigation_monitor_startup_margin_s),
+            "--navigation-stall-s",
+            str(args.navigation_stall_s),
+            "--navigation-progress-distance-m",
+            str(args.navigation_progress_distance_m),
+            "--navigation-progress-yaw-rad",
+            str(args.navigation_progress_yaw_rad),
             "--arrival-monitor-interval-s",
             str(args.arrival_monitor_interval_s),
             "--slam-poll-interval-s",
@@ -720,6 +730,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--require-arrival-yaw", action="store_true", help="Require yaw threshold before auto-pause; default pauses by distance only.")
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
     parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
+    parser.add_argument("--navigation-monitor-travel-factor", type=float, default=1.8)
+    parser.add_argument("--navigation-monitor-startup-margin-s", type=float, default=15.0)
+    parser.add_argument("--navigation-stall-s", type=float, default=20.0)
+    parser.add_argument("--navigation-progress-distance-m", type=float, default=0.03)
+    parser.add_argument("--navigation-progress-yaw-rad", type=float, default=0.08)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
     parser.add_argument("--slam-poll-interval-s", type=float, default=1.0)
     parser.add_argument("--ui-refresh-interval-s", type=float, default=1.0)

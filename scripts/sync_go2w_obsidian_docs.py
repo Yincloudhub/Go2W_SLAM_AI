@@ -78,7 +78,7 @@ LOG_COPIES = (
 
 
 INDEX_BLOCK = f"""{START}
-## 2026-06-14 当前权威交接
+## 2026-06-15 当前权威交接
 
 - [[12-现场录点与晚间测试操作手册]]
 - [[13-多模态边缘自主机器狗系统规划]]
@@ -105,8 +105,9 @@ INDEX_BLOCK = f"""{START}
   是唯一决定层，Python supervisor 是唯一比赛上层执行 owner。
 - P0-3 完成标记为 `p0-3-mission-decision-chain-accepted-20260613`。
 - `corridor_clearance_v1` 保留为 XT16 四向几何摘要分级；显式工程放行使用
-  `planner_mobility_v3` 判断 Unitree `mode=0` 的前向出发能力。侧/后近物体
-  保留告警并限速 `0.10 m/s`，不再对静止机器人做全局运动否决。
+  `semantic_mobility_v5`，注册目标直接交给 Unitree `mode=0` 原生规划和绕障。
+  GO2W 不用固定左/右净空近似转向包络；原生导航失败或持续无进展后才生成
+  有界平移恢复候选。
 - XT16 名义 footprint 为前后/半宽 `0.30 m`；静止成对场景确认只保留前后
   `0.05 m` 自回波余量，左右余量为 `0.00 m`。轴向和当前算法静态工程验证
   已完成，不重复测机身或重做前/左/后三场；正式 measured ledger 和运动验收
@@ -131,7 +132,7 @@ def upsert_block(text: str, block: str = INDEX_BLOCK) -> str:
     return text.rstrip() + "\n\n" + block.rstrip() + "\n"
 
 
-def update_frontmatter_date(text: str, updated: str = "2026-06-14") -> str:
+def update_frontmatter_date(text: str, updated: str = "2026-06-15") -> str:
     lines = text.splitlines()
     if not lines or lines[0] != "---":
         return text

@@ -305,6 +305,69 @@ def distance_to_pose(world_state_result: dict[str, Any], target_pose: dict[str, 
         return None
 
 
+def navigation_monitor_budget_s(
+    command: dict[str, Any],
+    distance_m: float | None,
+    args: argparse.Namespace,
+) -> float:
+    minimum_s = max(1.0, float(getattr(args, "arrival_monitor_s", 25.0)))
+    if distance_m is None or not math.isfinite(distance_m) or distance_m < 0.0:
+        return minimum_s
+    target_pose = command.get("target_pose", {})
+    speed_candidates = (
+        target_pose.get("speed") if isinstance(target_pose, dict) else None,
+        command.get("speed_mps"),
+        getattr(args, "nav_speed_mps", None),
+    )
+    speed_mps = next(
+        (
+            float(value)
+            for value in speed_candidates
+            if isinstance(value, (int, float))
+            and math.isfinite(float(value))
+            and float(value) > 0.0
+        ),
+        None,
+    )
+    if speed_mps is None:
+        return minimum_s
+    travel_factor = max(
+        1.0,
+        float(getattr(args, "navigation_monitor_travel_factor", 1.8)),
+    )
+    startup_margin_s = max(
+        0.0,
+        float(getattr(args, "navigation_monitor_startup_margin_s", 15.0)),
+    )
+    return max(minimum_s, distance_m / speed_mps * travel_factor + startup_margin_s)
+
+
+def navigation_motion_progressed(
+    previous_pose: dict[str, Any] | None,
+    current_pose: dict[str, Any] | None,
+    *,
+    distance_threshold_m: float,
+    yaw_threshold_rad: float,
+) -> bool:
+    if not isinstance(previous_pose, dict) or not isinstance(current_pose, dict):
+        return False
+    try:
+        dx = float(current_pose["x"]) - float(previous_pose["x"])
+        dy = float(current_pose["y"]) - float(previous_pose["y"])
+        previous_yaw = float(previous_pose["yaw"])
+        current_yaw = float(current_pose["yaw"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    yaw_delta = math.atan2(
+        math.sin(current_yaw - previous_yaw),
+        math.cos(current_yaw - previous_yaw),
+    )
+    return (
+        math.hypot(dx, dy) >= max(0.0, distance_threshold_m)
+        or abs(yaw_delta) >= max(0.0, yaw_threshold_rad)
+    )
+
+
 def operator_feedback_message(
     phase: str,
     text: str,
@@ -505,7 +568,25 @@ def wait_for_arrival(
     last_ui = time.monotonic() - ui_interval
     last_feedback = time.monotonic() - feedback_interval
     last_llm_feedback = time.monotonic() - llm_feedback_interval
-    deadline = time.monotonic() + args.arrival_monitor_s
+    monitor_started = time.monotonic()
+    monitor_budget_s = max(1.0, float(args.arrival_monitor_s))
+    deadline = monitor_started + monitor_budget_s
+    monitor_budget_initialized = False
+    navigation_stall_s = max(
+        0.0,
+        float(getattr(args, "navigation_stall_s", 20.0)),
+    )
+    progress_distance_m = max(
+        0.0,
+        float(getattr(args, "navigation_progress_distance_m", 0.03)),
+    )
+    progress_yaw_rad = max(
+        0.0,
+        float(getattr(args, "navigation_progress_yaw_rad", 0.08)),
+    )
+    last_motion_progress = monitor_started
+    progress_pose: dict[str, Any] | None = None
+    best_distance_m: float | None = None
 
     def request_pause(reason: str) -> dict[str, Any]:
         try:
@@ -553,6 +634,8 @@ def wait_for_arrival(
             "max_feedback_events": max_feedback_events,
             "max_llm_feedback_events": max_llm_feedback_events,
             "dropped_counts": dropped_counts,
+            "monitor_budget_s": round(monitor_budget_s, 3),
+            "navigation_stall_s": navigation_stall_s,
         }
 
     while time.monotonic() < deadline:
@@ -632,6 +715,10 @@ def wait_for_arrival(
 
         distance_m = distance_to_pose(state, target_pose)
         world = state.get("world_state", {}) if isinstance(state, dict) else {}
+        if not monitor_budget_initialized and distance_m is not None:
+            monitor_budget_s = navigation_monitor_budget_s(command, distance_m, args)
+            deadline = max(deadline, monitor_started + monitor_budget_s)
+            monitor_budget_initialized = True
         allowed, reason = gateway_allows_navigation(state)
         if not allowed:
             pause = request_pause(reason)
@@ -710,6 +797,58 @@ def wait_for_arrival(
                 "pause": pause,
             }
         now = time.monotonic()
+        current_pose = (
+            world.get("current_pose", {}).get("pose", {})
+            if isinstance(world, dict)
+            and isinstance(world.get("current_pose"), dict)
+            else {}
+        )
+        distance_progress = (
+            distance_m is not None
+            and (
+                best_distance_m is None
+                or best_distance_m - distance_m >= progress_distance_m
+            )
+        )
+        pose_progress = navigation_motion_progressed(
+            progress_pose,
+            current_pose,
+            distance_threshold_m=progress_distance_m,
+            yaw_threshold_rad=progress_yaw_rad,
+        )
+        if progress_pose is None or distance_progress or pose_progress:
+            progress_pose = dict(current_pose) if isinstance(current_pose, dict) else None
+            if distance_m is not None:
+                best_distance_m = (
+                    distance_m
+                    if best_distance_m is None
+                    else min(best_distance_m, distance_m)
+                )
+            last_motion_progress = now
+        if (
+            command.get("action") == "navigate_to_pose"
+            and navigation_stall_s > 0.0
+            and now - last_motion_progress >= navigation_stall_s
+        ):
+            stall_reason = "native_navigation_no_progress"
+            pause = request_pause(stall_reason)
+            return {
+                "arrived": False,
+                "paused": pause["accepted"],
+                "threshold_m": args.arrival_distance_m,
+                "samples": samples,
+                "operator_feedback": operator_feedback,
+                "llm_feedback_requests": llm_feedback_requests,
+                "llm_feedback_results": llm_feedback_results,
+                "performance": performance_summary(),
+                "reason": stall_reason,
+                "pause": pause,
+                "stall_evidence": {
+                    "last_motion_progress_age_s": round(now - last_motion_progress, 3),
+                    "best_distance_m": best_distance_m,
+                    "current_distance_m": distance_m,
+                },
+            }
         if now - last_ui >= ui_interval:
             sample["ui_refresh"] = True
             last_ui = now
@@ -1758,6 +1897,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
     parser.add_argument("--arrival-monitor-s", type=float, default=25.0)
+    parser.add_argument("--navigation-monitor-travel-factor", type=float, default=1.8)
+    parser.add_argument("--navigation-monitor-startup-margin-s", type=float, default=15.0)
+    parser.add_argument("--navigation-stall-s", type=float, default=20.0)
+    parser.add_argument("--navigation-progress-distance-m", type=float, default=0.03)
+    parser.add_argument("--navigation-progress-yaw-rad", type=float, default=0.08)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
     parser.add_argument("--slam-poll-interval-s", type=float, default=1.0)
     parser.add_argument("--ui-refresh-interval-s", type=float, default=1.0)
