@@ -343,6 +343,23 @@ def navigation_monitor_budget_s(
     return max(minimum_s, distance_m / speed_mps * travel_factor + startup_margin_s)
 
 
+def navigation_target_progress_deadline(
+    deadline: float,
+    *,
+    now: float,
+    distance_progress: bool,
+    command: dict[str, Any],
+    distance_m: float | None,
+    args: argparse.Namespace,
+) -> float:
+    if not distance_progress or distance_m is None:
+        return deadline
+    return max(
+        deadline,
+        now + navigation_monitor_budget_s(command, distance_m, args),
+    )
+
+
 def normalize_unitree_navigation_speed(
     speed_mps: float | None,
     mode: int | None,
@@ -821,12 +838,11 @@ def wait_for_arrival(
             and isinstance(world.get("current_pose"), dict)
             else {}
         )
+        initial_progress_sample = best_distance_m is None
         distance_progress = (
             distance_m is not None
-            and (
-                best_distance_m is None
-                or best_distance_m - distance_m >= progress_distance_m
-            )
+            and best_distance_m is not None
+            and best_distance_m - distance_m >= progress_distance_m
         )
         pose_progress = navigation_motion_progressed(
             progress_pose,
@@ -834,7 +850,7 @@ def wait_for_arrival(
             distance_threshold_m=progress_distance_m,
             yaw_threshold_rad=progress_yaw_rad,
         )
-        if progress_pose is None or distance_progress or pose_progress:
+        if initial_progress_sample or distance_progress or pose_progress:
             progress_pose = dict(current_pose) if isinstance(current_pose, dict) else None
             if distance_m is not None:
                 best_distance_m = (
@@ -843,6 +859,14 @@ def wait_for_arrival(
                     else min(best_distance_m, distance_m)
                 )
             last_motion_progress = now
+        deadline = navigation_target_progress_deadline(
+            deadline,
+            now=now,
+            distance_progress=distance_progress,
+            command=command,
+            distance_m=distance_m,
+            args=args,
+        )
         if (
             command.get("action") == "navigate_to_pose"
             and navigation_stall_s > 0.0

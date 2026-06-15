@@ -15,6 +15,7 @@ from scripts.run_robot_closed_loop import (
     generate_recovery_strategy_proposal,
     navigation_monitor_budget_s,
     navigation_motion_progressed,
+    navigation_target_progress_deadline,
     normalize_unitree_navigation_speed,
     operator_feedback_message,
     run_post_navigation_recovery,
@@ -324,6 +325,40 @@ class QueueFeedbackTests(unittest.TestCase):
                 yaw_threshold_rad=0.12,
             )
         )
+
+    def test_target_progress_extends_budget_but_turning_does_not(self) -> None:
+        args = SimpleNamespace(
+            arrival_monitor_s=25.0,
+            navigation_monitor_travel_factor=1.8,
+            navigation_monitor_startup_margin_s=15.0,
+        )
+        command = {
+            "target_pose": {
+                "x": 1.0,
+                "y": 2.0,
+                "speed": 0.2,
+            }
+        }
+
+        unchanged = navigation_target_progress_deadline(
+            30.0,
+            now=20.0,
+            distance_progress=False,
+            command=command,
+            distance_m=1.3,
+            args=args,
+        )
+        extended = navigation_target_progress_deadline(
+            30.0,
+            now=20.0,
+            distance_progress=True,
+            command=command,
+            distance_m=1.3,
+            args=args,
+        )
+
+        self.assertEqual(unchanged, 30.0)
+        self.assertAlmostEqual(extended, 46.7)
 
     def test_mode_zero_navigation_speed_uses_unitree_minimum(self) -> None:
         self.assertEqual(normalize_unitree_navigation_speed(0.1, 0), 0.2)
