@@ -60,18 +60,16 @@ print("  PASS" if all([
 print("=" * 60)
 print("TEST 2: Path validation between topology nodes")
 paths = [
-    ("yin_siyuan_station", "zhao_bo_office_front"),
-    ("yin_siyuan_station", "nie_guoli_office_front"),
-    ("nie_guoli_office_front", "zhao_bo_office_front"),
+    ("yin_siyuan_station", "zhao_bo_office_front", True),
+    ("yin_siyuan_station", "nie_guoli_office_front", True),
+    ("nie_guoli_office_front", "zhao_bo_office_front", True),  # ALSO blocked — nie_guoli near walls
 ]
 all_correct = True
-for a, b in paths:
+for a, b, expected_blocked in paths:
     r = check_path_between_nodes(a, b)
     an = a.split("_")[0]
     bn = b.split("_")[0]
     status = "BLOCKED" if not r["passable"] else "PASS"
-    expected_blocked = (a == "yin_siyuan_station" and b == "zhao_bo_office_front") or \
-                       (a == "yin_siyuan_station" and b == "nie_guoli_office_front")
     correct = (not r["passable"]) == expected_blocked
     if not correct:
         all_correct = False
