@@ -68,7 +68,7 @@ An uncalibrated or stale trusted XT16 summary fails closed for navigation
 unless the explicit supervised engineering release is active. Manual
 relocation remains available so localization can be recovered.
 
-The supervised release uses `semantic_mobility_v5`. Registered targets pass
+The supervised release uses `semantic_mobility_v6`. Registered targets pass
 directly to Unitree `mode=0` navigation and its native obstacle avoidance.
 GO2W does not approximate the robot's rotational swept footprint from a fixed
 left/right clearance threshold. Only after native navigation reports failure

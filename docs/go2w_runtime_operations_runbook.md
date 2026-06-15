@@ -435,7 +435,7 @@ rear:  <0.50 m conservative, <0.30 m pause
 ```
 
 上表仍是 XT16 几何摘要的方向分级，不直接等同于受监督导航许可。
-`semantic_mobility_v5` 把起步判断和原生导航职责分开：
+`semantic_mobility_v6` 延续 v5 的职责划分，并修正原生导航最低速度：
 
 1. 注册点目标直接下发 Unitree `mode=0`，由原生规划器根据机器狗外形和局部地图
    判断起步转向与绕障。

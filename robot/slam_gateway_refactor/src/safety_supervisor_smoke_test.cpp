@@ -99,7 +99,7 @@ int main()
     require(corridor_decision.speed_limit_mps == 0.2,
             "conservative corridor mode must expose a real speed limit");
     const auto corridor_json = corridor_decision.toJson();
-    require(corridor_json.value("policy_version", std::string{}) == "semantic_mobility_v5",
+    require(corridor_json.value("policy_version", std::string{}) == "semantic_mobility_v6",
             "safety JSON must identify the active clearance policy");
     require(corridor_json.value("motion_direction", std::string{}) == "planner_controlled",
             "safety JSON must keep direction under planner control");
