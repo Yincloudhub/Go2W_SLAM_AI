@@ -490,12 +490,15 @@ timestamp。由于两个处理器频率不同，最新 depth 与最新 YOLO 的 
 - 当前 TI/NX 没有仓库内 bridge supervisor；未提供明确在线证据时 loader
   必须输出 `offline`，即使 artifact 存在。
 
-Deferred issues：
+Deferred issues（2026-06-15 更新）：
 
-- XT16 正式 measured ledger 的 promotion 与真实低速运动验收；优先复用现有
+- XT16 正式 measured ledger 的 promotion 与真实低速运动总验收；优先复用现有
   静态证据，只补真正缺失的 ground truth，不重复轴向/footprint 探索。
 - TI/NX live transport、时间同步、认证和重放保护。
-- 弱网 journal、ack sequence 和补传执行器。
+- ~~弱网 journal、ack sequence 和补传执行器。~~ → **P0-4 已完成**（2026-06-14，commit c53f9a8）。当前 safe_guard 为唯一运行时策略。
+- IMU/里程计统一运动摘要。
+
+> 更新于 2026-06-15。本文"下一步唯一任务是 P0-4"的描述已过时，当前主线为 safe_guard 闭环验证。
 
 ### 2026-06-13 corridor clearance policy
 

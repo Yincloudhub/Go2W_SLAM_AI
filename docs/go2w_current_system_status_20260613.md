@@ -1,14 +1,22 @@
 # GO2W 当前系统状态与实操
 
-更新：2026-06-14（上下文归档）
+更新：2026-06-15（safe_guard 导航闭环验证中）
+> ⚠️ 2026-06-15 状态变更：机器人已进入 safe_guard 监督导航阶段，supervised_release 已激活。
+> 本文"安全停机"声明已于 06-15 作废，当前权威状态见本文末尾 [#safe_guard状态](#safe_guard状态)。
 
-## 一句话结论
+## 一句话结论（作废）
 
-P0-1 单一 D435、P0-2 统一 PerceptionContext、P0-3 唯一决定与执行链已经完成
-代码部署和机器人无运动验收。当前机器人是“代码已部署、全部测试服务已停止”的
+~~P0-1 单一 D435、P0-2 统一 PerceptionContext、P0-3 唯一决定与执行链已经完成
+代码部署和机器人无运动验收。当前机器人是"代码已部署、全部测试服务已停止"的
 安全停机状态，不是正在运行 SLAM 或自治导航。P0-4 弱网 journal/ack/补传执行器
 已完成本地与机器人无运动验收。完整比赛闭环仍缺 XT16 正式 measured ledger
-签发和最终低速运动验收。
+签发和最终低速运动验收。~~
+
+## 当前结论（2026-06-15）
+
+P0-1/2/3/4 全部完成。机器人已进入 **safe_guard 监督导航阶段**：
+supervised_release（engineering_validated）已激活，0.2 m/s，操作员在场+急停在手。
+当前唯一运行时策略为 `safe_guard`，旧策略 v4-v6 已删除，不可调用。
 
 ## 版本与分支
 
@@ -17,6 +25,9 @@ pre-archive implementation commit: 317808436e56495d111402ff5a52ef1a79774c53
 local branch:                       agent/llm-on-robot
 origin/agent/llm-on-robot at audit: 317808436e56495d111402ff5a52ef1a79774c53
 robot HEAD at prior audit:          317808436e56495d111402ff5a52ef1a79774c53
+current HEAD (2026-06-15):          fb97866 refactor(recovery): reuse native pose navigation
+recent additions:                    e2b5907 fix(navigation): preserve stall window after progress
+                                     fb97866 refactor(recovery): reuse native pose navigation
 ```
 
 归档后的权威提交是包含
@@ -276,3 +287,20 @@ Unitree `mode=0` pose navigation 是否存在前向出发走廊；侧/后近物�
 按 `1..6` 补发，累计 ack 到 6 后 pending 清零。恢复策略保持
 `automatic_resume_allowed=false`，journal 不包含 `slam_command` 或
 `target_pose`。验收前后相关 GO2W 进程均为空，未启动任何运动链。
+
+## safe_guard 状态（2026-06-15 新增）
+
+当前唯一运行时策略为 `safe_guard`。旧策略名（v4-v6, supervised_departure, corridor_clearance_v1, planner_mobility_v3, semantic_mobility_v4/v5/v6）已删除，不可调用。
+
+**关键特性：**
+- 注册目标通过 Gateway 预检后直接交给 Unitree `mode=0` 原生导航
+- 转向与绕障由 Unitree 局部规划器负责，GO2W 不估算旋转可行性
+- 侧/后近障仅为告警（限速 0.1 m/s），不否决导航
+- 前向 < 0.80m、定位丢失、传感器过期、租约丢失仍硬暂停
+- 恢复：仅在 `native_navigation_no_progress` 后允许 1 次 bounded reposition（0.1 m/s, ≤0.5m, 零 yaw）
+
+**supervised_release 状态：** `xt16-engineering-20260615-native-nav-min-speed`，engineering_validated，0.2 m/s，需操作员在场+急停。
+
+**已知风险：** D435 未运行（前向深度缺失），XT16 低矮带盲区仍存在，需操作员目视辅助。
+
+> 本文由 Hermes Agent 更新于 2026-06-15。上一版"安全停机"声明作废。
