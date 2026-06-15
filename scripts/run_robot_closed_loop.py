@@ -1157,9 +1157,8 @@ def build_recovery_translation_analysis(
     # Rotation fallback: if all four directions blocked, try turning
     if not available:
         rotation_candidates = []
-        for yaw_offset_deg, label in [(90, 'right'), (-90, 'left'), (180, 'back')]:
+        for yaw_offset_deg, label, check_dir in [(90, 'right', 'right'), (-90, 'left', 'left'), (180, 'back', 'rear')]:
             yaw_offset = math.radians(yaw_offset_deg)
-            check_dir = 'right' if yaw_offset_deg > 0 else 'left'
             check_clearance = clearances.get(check_dir, 0)
             if check_clearance >= 0.35:
                 rotation_candidates.append({
@@ -1185,7 +1184,7 @@ def build_recovery_translation_analysis(
                 'side clearance ' + str(round(best['side_clearance_m'], 2)) + 'm'
             )
     # End rotation fallback
-    if available:
+    if available and not selected.get("rotation"):
         reason = (
             f"bounded {selected['direction']} translation is available after "
             "native planner stall"

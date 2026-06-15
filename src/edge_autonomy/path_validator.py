@@ -107,16 +107,16 @@ def check_path(
 
 def build_adaptive_coarse_map(*, grid_size: int = 40, margin_m: float = 3.0) -> Dict[str, Any]:
     """Build coarse map with range auto-fitted to topology nodes + margin."""
+    xs, ys = [], []
     with open(REGISTRY_PATH) as f:
         reg = json.load(f)
-    
-    xs, ys = [], []
+    map_id = reg.get("default_map_id", "go2w_real_site")
     for m in reg["maps"]:
-        if m["map_id"] == "go2w_real_site":
+        if m["map_id"] == map_id:
             for n in m["topology_nodes"]:
                 p = n["pose"]
-                xs.extend([p["x"], p["x"]])
-                ys.extend([p["y"], p["y"]])
+                xs.append(p["x"])
+                ys.append(p["y"])
     
     if not xs:
         return build_coarse_map(grid_size=grid_size)
@@ -164,8 +164,11 @@ def build_coarse_map(
             if 0 <= gx < grid_size and 0 <= gy < grid_size:
                 grid[gy][gx] += 1
 
-    # Binarize: cell is occupied if > threshold points
-    threshold = 3
+    # Binarize: threshold scales with cell area to maintain sensitivity
+    # base: threshold=3 at cell=0.33m (30x30, 10x9m range)
+    cell_area = dx * dy
+    base_area = 0.11  # ~0.33*0.33
+    threshold = max(2, int(3 * base_area / cell_area))
     occupied = [
         [1 if grid[gy][gx] >= threshold else 0 for gx in range(grid_size)]
         for gy in range(grid_size)
