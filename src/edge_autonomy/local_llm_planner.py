@@ -12,6 +12,12 @@ from typing import Any, Protocol
 from .llm_context import command_requests_relative_motion, relative_motion_preview_from_command
 from .task_queue import validate_task_queue
 
+try:
+    from .path_validator import build_coarse_map
+    _COARSE_MAP = build_coarse_map(grid_size=30)
+except Exception:
+    _COARSE_MAP = None
+
 
 PLAN_REQUIRED_KEYS = {"plan_id", "mode", "confidence", "reason", "steps", "communication_policy", "requires_human_ack"}
 PLAN_MODES = {"mapped_navigation", "mapless_scout", "safe_hold", "human_confirm"}
@@ -114,7 +120,10 @@ LIGHTWEIGHT_SYSTEM_PROMPT = (
     "You are a fast local planner for a Unitree GO2W robot. "
     "Output exactly one compact JSON object. No markdown. No explanation outside JSON. "
     "Use only known target_node ids from candidates. Never output raw Unitree API ids or cmd_vel. "
-    "If unsafe or unclear, use human_confirm or safe_hold."
+    "If unsafe or unclear, use human_confirm or safe_hold. "
+    "The coarse_map shows walls as ██ and open space as ··. "
+    "If direct path to target passes through ██, plan a multi-hop route through intermediate "
+    "topology nodes in open space. Each hop = create_navigation_subgoal + wait_until."
 )
 
 
@@ -139,7 +148,7 @@ Priority rules:
 3. If distance_to_requested_target_m <= arrival_distance_m: safe_hold with hold_position. Do not navigate.
 4. If low_battery is true and target is not charging_point: human_confirm with request_human_confirm. Do not navigate.
 5. If weak_bandwidth is true: first step set_communication_policy; communication_policy.mode semantic_only; drop raw_video, dense_pointcloud, high_rate_images.
-6. For valid navigation: create_navigation_subgoal then wait_until. If photo_required is true, include capture_keyframe after wait_until.
+6. MULTI-HOP ROUTING: Examine the coarse_map. If walls (██) block the direct line from current position to requested_target, do NOT create a single create_navigation_subgoal for the blocked target. Instead, find an intermediate candidate node positioned in open space (·) that creates a valid path, then plan: create_navigation_subgoal(intermediate) → wait_until → create_navigation_subgoal(target) → wait_until. The coarse_map_nodes show each candidate's grid position. If no clear multi-hop path exists, use human_confirm.
 
 Case:
 {planner_context}
@@ -340,6 +349,15 @@ def build_lightweight_planner_context(planner_context: dict[str, Any]) -> dict[s
         "capability_contract": planner_context.get("capability_contract"),
         "relative_motion_request": planner_context.get("relative_motion_request")
         or (summary.get("relative_motion_request") if isinstance(summary, dict) else None),
+        "coarse_map": _COARSE_MAP["grid_string"] if _COARSE_MAP else "",
+        "coarse_map_nodes": _COARSE_MAP["nodes"] if _COARSE_MAP else {},
+        "coarse_map_grid_size": _COARSE_MAP["grid_size"] if _COARSE_MAP else 0,
+        "navigation_hint": (
+            "If direct path to target has walls (██) in the coarse_map, "
+            "plan a multi-hop route through intermediate topology nodes "
+            "that are connected via open space (·). Use create_navigation_subgoal "
+            "for each hop, followed by wait_until."
+        ),
     }
 
 
