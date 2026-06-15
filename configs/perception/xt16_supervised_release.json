@@ -2,16 +2,16 @@
   "schema_version": 1,
   "sensor": "XT16",
   "sensor_serial": "AW4EFF24934EFF50",
-  "release_id": "xt16-engineering-20260614",
+  "release_id": "xt16-engineering-20260615-native-nav-min-speed",
   "status": "engineering_validated",
-  "issued_at": "2026-06-14T00:00:00+08:00",
+  "issued_at": "2026-06-15T13:00:00+08:00",
   "issued_by": "go2w-field-engineering",
   "formal_calibration": false,
   "requires_operator_presence": true,
   "requires_emergency_stop": true,
-  "max_speed_mps": 0.1,
+  "max_speed_mps": 0.2,
   "navigation_mode": 0,
-  "motion_policy": "unitree_pose_navigation_front_departure",
+  "motion_policy": "unitree_mode0_native_navigation_with_bounded_recovery",
   "parameters": {
     "range_m": 6.0,
     "percentile": 10.0,
@@ -69,5 +69,5 @@
     "side": 0.2,
     "rear": 0.3
   },
-  "notes": "This is an explicit supervised engineering release, not a verified measured calibration. It reuses completed static engineering evidence, requires an on-site operator and emergency stop, and caps Unitree mode-0 pose navigation at 0.1 m/s. Navigation admission is based on a clear forward departure corridor and fresh localization/perception. Side and rear proximity remain visible advisories and force conservative speed, but do not globally deny planner-controlled movement. Front blockage, stale data, low confidence, or missing ROI remain hard stops."
+  "notes": "This is an explicit supervised engineering release, not a verified measured calibration. It reuses completed static engineering evidence and requires an on-site operator and emergency stop. Unitree GO2 mode-0 pose navigation is fixed at the documented minimum supported speed of 0.2 m/s; lower values are accepted by API 1102 but do not move the chassis. Internal bounded recovery remains separately capped at 0.1 m/s. Registered targets pass directly to native obstacle avoidance. Side and rear proximity remain visible advisories and do not globally deny planner-controlled movement. Missing or untrusted perception, expired freshness grace, localization loss, lease loss, or emergency stop remain hard stops."
 }

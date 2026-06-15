@@ -209,7 +209,7 @@ def load_xt16_geometry_envelope(
         and release.get("active") is True
         and release_id
         and release_speed is not None
-        and 0.0 < release_speed <= 0.1
+        and math.isclose(release_speed, 0.2, rel_tol=0.0, abs_tol=1e-9)
     )
     operationally_released = bool((calibrated and calibration_id) or supervised_release)
     age = _age(received, timestamp, data.get("latency_ms"))

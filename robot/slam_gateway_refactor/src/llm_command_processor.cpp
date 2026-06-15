@@ -307,6 +307,12 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
             }
         }
         PoseData goal = authorization.authorized_pose;
+        if (goal.mode == 0) {
+            goal.speed = static_cast<float>(
+                std::max<double>(
+                    goal.speed,
+                    obstacle_policy::kNativeNavigationMinSpeedMps));
+        }
         if (safety.recommended_mode == "conservative") {
             goal.speed = static_cast<float>(
                 std::min<double>(
@@ -314,6 +320,13 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
                     safety.speed_limit_mps >= 0.0
                         ? safety.speed_limit_mps
                         : obstacle_policy::kConservativeSpeedMps));
+        }
+        if (
+            goal.mode == 0 &&
+            goal.speed + 1e-9 <
+                obstacle_policy::kNativeNavigationMinSpeedMps) {
+            return reject(
+                "unitree_pose_navigation_speed_below_supported_minimum");
         }
         return ok(action, gateway_.submitNavigationGoal(goal));
     }

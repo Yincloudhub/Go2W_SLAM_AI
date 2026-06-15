@@ -144,7 +144,7 @@ def args(path: Path, **overrides) -> argparse.Namespace:
         "relocation_settle_s": 0.0,
         "max_pose_age_ms": 500.0,
         "max_obstacle_age_ms": 1500.0,
-        "nav_speed_mps": 0.1,
+        "nav_speed_mps": 0.2,
         "gateway_client": "gateway",
         "network_interface": "eth0",
         "timeout_s": 1,
@@ -261,7 +261,7 @@ class SupervisedAcceptanceTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue(payload["ready"])
             self.assertFalse(payload["motion_commands_sent"])
-            self.assertIn("--nav-speed-mps 0.10", payload["supervised_motion_command"])
+            self.assertIn("--nav-speed-mps 0.20", payload["supervised_motion_command"])
             self.assertIn("--no-auto-relocate", payload["supervised_motion_command"])
 
     def test_prepare_navigation_does_not_require_robot_to_remain_near_relocation_anchor(self) -> None:

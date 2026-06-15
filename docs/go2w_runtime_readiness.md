@@ -24,7 +24,8 @@ bash scripts/start_go2w_runtime_stack.sh --supervised-engineering-release --json
 This flag uses `configs/perception/xt16_supervised_release.json`. The record is
 not a formal measured calibration and does not change
 `xt16_geometry_calibration.json`. It requires an on-site operator and emergency
-stop, caps navigation at `0.1 m/s`, and retains every stale, confidence,
+stop, fixes native mode-0 navigation at the Unitree GO2 minimum `0.2 m/s`,
+keeps bounded recovery at `0.1 m/s`, and retains every stale, confidence,
 missing-ROI, and close-obstacle hard stop.
 
 ## Readiness layers
@@ -99,10 +100,10 @@ motion. The small translation/yaw values are observation thresholds for
 detecting a stationary backend; they are not obstacle-clearance thresholds
 and do not approximate whether the body can turn.
 
-The ordinary obstacle freshness limit remains 1 second. During the explicit
-0.10 m/s supervised release only, a previously valid XT16 summary has a
-2-second maximum age. This tolerates one short producer delay while limiting
-additional travel during the grace interval to at most 0.10 m. Older data,
+The ordinary obstacle freshness limit remains 1 second. During explicit
+supervised native navigation at 0.20 m/s, a previously valid XT16 summary has a
+1.5-second maximum age. This tolerates one short producer delay while limiting
+additional travel beyond the ordinary freshness window to at most 0.10 m. Older data,
 invalid sources, and missing timestamps still fail closed.
 
 Build-map origin, relocation, and navigation use separate registry roles:
@@ -201,7 +202,7 @@ The tool has four explicit stages:
    not require localization to be healthy before it starts and cannot issue a
    motion or SLAM mutation command.
 4. `prepare-navigation`: validates the target and live navigation gate, then
-   prints a 0.1 m/s supervised command. It never executes navigation itself
+   prints the Unitree minimum 0.2 m/s supervised command. It never executes navigation itself
    and does not require the robot to remain near its previous relocation anchor.
 
 `prepare-navigation` fails closed unless all of these conditions hold:
@@ -276,7 +277,7 @@ configs/perception/xt16_supervised_release.json
 
 `GO2W_XT16_SUPERVISED_RELEASE=1` is insufficient by itself. The release guard
 requires exact runtime geometry parameters, operator-presence and emergency
-stop declarations, a maximum speed no greater than `0.1 m/s`, immutable
+ stop declarations, the exact Unitree GO2 native minimum `0.2 m/s`, immutable
 engineering evidence hashes, Unitree obstacle-avoidance mode `0`, and the
 unchanged `0.80 m` forward-departure hard stop.
 

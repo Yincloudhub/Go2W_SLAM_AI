@@ -229,7 +229,7 @@ class Xt16GeometryTests(unittest.TestCase):
             config=Xt16GeometryConfig(
                 supervised_release=True,
                 supervised_release_id="xt16-engineering-test",
-                supervised_max_speed_mps=0.1,
+                supervised_max_speed_mps=0.2,
                 min_points_per_roi=5,
             ),
             timestamp_ms=1,
@@ -244,7 +244,7 @@ class Xt16GeometryTests(unittest.TestCase):
         )
         self.assertEqual(
             summary["parameters"]["supervised_release"]["max_speed_mps"],
-            0.1,
+            0.2,
         )
 
     def test_supervised_engineering_release_keeps_close_obstacle_pause(self) -> None:
@@ -255,7 +255,7 @@ class Xt16GeometryTests(unittest.TestCase):
             config=Xt16GeometryConfig(
                 supervised_release=True,
                 supervised_release_id="xt16-engineering-test",
-                supervised_max_speed_mps=0.1,
+                supervised_max_speed_mps=0.2,
                 min_points_per_roi=5,
             ),
             timestamp_ms=1,
@@ -397,7 +397,7 @@ class Xt16GeometryTests(unittest.TestCase):
             config=Xt16GeometryConfig(
                 supervised_release=True,
                 supervised_release_id="xt16-engineering-test",
-                supervised_max_speed_mps=0.1,
+                supervised_max_speed_mps=0.2,
                 min_points_per_roi=5,
             ),
             timestamp_ms=1,

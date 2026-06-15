@@ -237,7 +237,12 @@ def build_xt16_geometry_summary(
     supervised_release_active = bool(
         cfg.supervised_release
         and supervised_release_id
-        and 0.0 < float(cfg.supervised_max_speed_mps) <= 0.1
+        and math.isclose(
+            float(cfg.supervised_max_speed_mps),
+            0.2,
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
     )
     operationally_released = calibration_verified or supervised_release_active
     body_values: dict[str, list[DirectionalSample]] = {
@@ -393,7 +398,12 @@ def build_xt16_geometry_summary(
         stale_reasons.append("missing_xt16_calibration_id")
     if cfg.supervised_release and not supervised_release_id:
         stale_reasons.append("missing_xt16_supervised_release_id")
-    if cfg.supervised_release and not (0.0 < float(cfg.supervised_max_speed_mps) <= 0.1):
+    if cfg.supervised_release and not math.isclose(
+        float(cfg.supervised_max_speed_mps),
+        0.2,
+        rel_tol=0.0,
+        abs_tol=1e-9,
+    ):
         stale_reasons.append("invalid_xt16_supervised_speed_limit")
     if missing_required:
         stale_reasons.append("missing_required_roi:" + ",".join(missing_required))

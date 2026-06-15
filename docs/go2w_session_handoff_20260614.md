@@ -221,6 +221,22 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
   target distance has not decreased. These observation epsilons are not
   left/right clearance rules and do not estimate the rotational swept body.
 
+### 2026-06-15 semantic mobility v6 native speed correction
+
+- Field evidence showed API 1102 path planning and API 1202 resume both
+  succeeded, but x/y/yaw did not change. Unitree's official GO2 SLAM contract
+  defines the pose-navigation speed range as `0.2-1.0 m/s`; the previous
+  supervised `0.1 m/s` request was outside the supported range.
+- Supervised Unitree `mode=0` navigation is now normalized to exactly
+  `0.20 m/s`. The internal bounded `SportClient::Move` recovery controller
+  remains separately capped at `0.10 m/s`.
+- Because native navigation is now twice the previous requested speed, the
+  supervised XT16 freshness grace is reduced from `2.0 s` to `1.5 s`. Relative
+  to the ordinary `1.0 s` rule, the additional possible travel remains
+  `0.10 m`.
+- This correction does not add a fixed left/right turning threshold. Unitree's
+  local planner still owns the rotational footprint and obstacle avoidance.
+
 ## 7. 新 Session 可直接使用的提示词
 
 ```text

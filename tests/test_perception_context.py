@@ -168,7 +168,7 @@ class PerceptionContextTests(unittest.TestCase):
                 "supervised_release": {
                     "active": True,
                     "release_id": "xt16-engineering-test",
-                    "max_speed_mps": 0.1,
+                    "max_speed_mps": 0.2,
                 },
             }
             supervised_artifact = write_json(root, "xt16-supervised.json", supervised_data)

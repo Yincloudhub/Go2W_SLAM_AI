@@ -101,6 +101,45 @@ class AgentEntrySafetyTests(unittest.TestCase):
         self.assertIsNone(preflight["allowed"])
         self.assertNotIn("go_dry_run_preflight_not_enforced", [step["step"] for step in payload["steps"]])
 
+    def test_agent_normalizes_mode_zero_speed_to_unitree_minimum(self) -> None:
+        observed = {}
+
+        def fake_run_closed_loop(args, command):
+            observed["speed"] = args.nav_speed_mps
+            return {
+                "returncode": 0,
+                "result": {
+                    "planner": {},
+                    "execution": {"executed": False, "blocked_reason": "dry run"},
+                },
+                "stderr": "",
+            }
+
+        stdout = io.StringIO()
+        with patch.object(go2w_agent_entry, "run_closed_loop", side_effect=fake_run_closed_loop):
+            with tempfile.TemporaryDirectory() as tmp:
+                with contextlib.redirect_stdout(stdout):
+                    rc = go2w_agent_entry.main(
+                        [
+                            "--go",
+                            "yin_siyuan_station",
+                            "--dry-run",
+                            "--skip-gateway-check",
+                            "--nav-mode",
+                            "0",
+                            "--nav-speed-mps",
+                            "0.1",
+                            "--full-output",
+                            "--log-dir",
+                            tmp,
+                        ]
+                    )
+
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual(rc, 0)
+        self.assertEqual(observed["speed"], 0.2)
+        self.assertEqual(payload["nav_speed_mps"], 0.2)
+
     def test_explicit_relocation_requires_matching_anchor_confirmation(self) -> None:
         stdout = io.StringIO()
         with patch.object(go2w_agent_entry, "relocate_to_anchor") as relocate:

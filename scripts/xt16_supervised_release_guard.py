@@ -14,7 +14,7 @@ except ImportError:
     from xt16_calibration_guard import PARAMETER_ENV, _same_value
 
 
-MAX_SUPERVISED_SPEED_MPS = 0.1
+NATIVE_NAVIGATION_SPEED_MPS = 0.2
 
 
 def validate_record(
@@ -42,7 +42,10 @@ def validate_record(
         return False, "supervised release must require an emergency stop", "", 0.0
     if record.get("navigation_mode") != 0:
         return False, "supervised release must require Unitree navigation mode 0", "", 0.0
-    if str(record.get("motion_policy") or "") != "unitree_pose_navigation_front_departure":
+    if (
+        str(record.get("motion_policy") or "")
+        != "unitree_mode0_native_navigation_with_bounded_recovery"
+    ):
         return False, "supervised release motion policy is invalid", "", 0.0
     try:
         max_speed_mps = float(record.get("max_speed_mps"))
@@ -50,10 +53,14 @@ def validate_record(
         return False, "supervised release max speed is invalid", "", 0.0
     if (
         not math.isfinite(max_speed_mps)
-        or max_speed_mps <= 0.0
-        or max_speed_mps > MAX_SUPERVISED_SPEED_MPS
+        or not math.isclose(
+            max_speed_mps,
+            NATIVE_NAVIGATION_SPEED_MPS,
+            rel_tol=0.0,
+            abs_tol=1e-9,
+        )
     ):
-        return False, "supervised release max speed exceeds 0.1 m/s", "", 0.0
+        return False, "supervised release native navigation speed must be 0.2 m/s", "", 0.0
 
     evidence = record.get("evidence")
     if not isinstance(evidence, list) or len(evidence) < 4:

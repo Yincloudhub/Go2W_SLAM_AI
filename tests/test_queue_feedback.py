@@ -14,6 +14,7 @@ from scripts.run_robot_closed_loop import (
     generate_llm_feedback_result,
     navigation_monitor_budget_s,
     navigation_motion_progressed,
+    normalize_unitree_navigation_speed,
     operator_feedback_message,
     run_supervised_navigation_session,
     supervised_departure_decision,
@@ -407,6 +408,11 @@ class QueueFeedbackTests(unittest.TestCase):
                 yaw_threshold_rad=0.08,
             )
         )
+
+    def test_mode_zero_navigation_speed_uses_unitree_minimum(self) -> None:
+        self.assertEqual(normalize_unitree_navigation_speed(0.1, 0), 0.2)
+        self.assertEqual(normalize_unitree_navigation_speed(0.3, 0), 0.3)
+        self.assertEqual(normalize_unitree_navigation_speed(0.1, 1), 0.1)
 
     def test_navigation_stall_requests_pause(self) -> None:
         state = {

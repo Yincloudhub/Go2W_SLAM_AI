@@ -67,6 +67,7 @@ DEFAULT_ASK_SCRIPT = "/home/unitree/llm_runtime/scripts/ask_qwen.sh"
 DEFAULT_COMMUNICATION_JOURNAL = (
     REPO_ROOT / "artifacts" / "communication" / "communication_journal_v1.jsonl"
 )
+UNITREE_GO2_NAV_MIN_SPEED_MPS = 0.2
 BLOCKING_NAVIGATION_TARGET_TAGS = frozenset(
     {
         "disabled",
@@ -340,6 +341,17 @@ def navigation_monitor_budget_s(
         float(getattr(args, "navigation_monitor_startup_margin_s", 15.0)),
     )
     return max(minimum_s, distance_m / speed_mps * travel_factor + startup_margin_s)
+
+
+def normalize_unitree_navigation_speed(
+    speed_mps: float | None,
+    mode: int | None,
+) -> float | None:
+    if speed_mps is None:
+        return None
+    if mode == 0 and speed_mps > 0.0:
+        return max(speed_mps, UNITREE_GO2_NAV_MIN_SPEED_MPS)
+    return speed_mps
 
 
 def navigation_motion_progressed(
@@ -1892,7 +1904,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--network-interface", default=os.environ.get("GO2W_NETWORK_INTERFACE", "eth0"))
     parser.add_argument("--gateway-startup-wait-s", type=float, default=4.0)
     parser.add_argument("--skip-gateway-check", action="store_true")
-    parser.add_argument("--nav-speed-mps", type=float, default=0.0, help="Override navigation speed for the generated slam command. 0 keeps registry/plan speed.")
+    parser.add_argument("--nav-speed-mps", type=float, default=0.0, help="Override navigation speed. Unitree GO2 mode 0 is normalized to its 0.2 m/s minimum; 0 keeps registry speed.")
     parser.add_argument("--nav-mode", type=int, default=None, help="Override Unitree navigation mode for the generated slam command.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-confirm-samples", type=int, default=2)
@@ -2019,7 +2031,10 @@ def main(argv: list[str] | None = None) -> int:
         timeout_s=args.timeout_s,
         prompt_mode=args.prompt_mode,
     )
-    nav_speed = args.nav_speed_mps if args.nav_speed_mps > 0 else None
+    nav_speed = normalize_unitree_navigation_speed(
+        args.nav_speed_mps if args.nav_speed_mps > 0 else None,
+        args.nav_mode,
+    )
     slam_command = plan_to_slam_command(result.plan, registry, speed=nav_speed, mode=args.nav_mode)
     task_queue = plan_to_task_queue(result.plan, planner_context, existing_queue=result.task_queue)
     queue_execution = None

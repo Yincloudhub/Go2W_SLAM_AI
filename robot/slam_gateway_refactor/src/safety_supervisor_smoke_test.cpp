@@ -115,18 +115,18 @@ int main()
     auto supervised_release = clear;
     supervised_release.supervised_release_active = true;
     supervised_release.supervised_release_id = "xt16-engineering-smoke";
-    supervised_release.supervised_max_speed_mps = 0.1;
+    supervised_release.supervised_max_speed_mps = 0.2;
     const auto supervised_decision =
         supervisor.evaluate(health, localization, supervised_release);
     require(supervised_decision.allow_navigation,
             "clear supervised engineering release should allow navigation");
     require(supervised_decision.recommended_mode == "conservative",
             "supervised engineering release must remain conservative");
-    require(supervised_decision.speed_limit_mps == 0.1,
-            "supervised engineering release must cap speed at 0.1 m/s");
+    require(supervised_decision.speed_limit_mps == 0.2,
+            "supervised engineering release must use the native 0.2 m/s minimum");
 
     auto invalid_supervised_release = supervised_release;
-    invalid_supervised_release.supervised_max_speed_mps = 0.2;
+    invalid_supervised_release.supervised_max_speed_mps = 0.1;
     const auto invalid_supervised_decision =
         supervisor.evaluate(health, localization, invalid_supervised_release);
     require(!invalid_supervised_decision.allow_navigation,
@@ -136,7 +136,7 @@ int main()
 
     auto supervised_delayed = supervised_release;
     supervised_delayed.stale = true;
-    supervised_delayed.age_ms = 1500;
+    supervised_delayed.age_ms = 1400;
     const auto supervised_delayed_decision =
         supervisor.evaluate(health, localization, supervised_delayed);
     require(supervised_delayed_decision.allow_navigation,
@@ -146,7 +146,7 @@ int main()
             "supervised_unitree_avoidance_available_with_sensor_delay_advisory",
         "brief supervised sensor delay reason mismatch");
 
-    supervised_delayed.age_ms = 2100;
+    supervised_delayed.age_ms = 1600;
     const auto supervised_too_stale_decision =
         supervisor.evaluate(health, localization, supervised_delayed);
     require(!supervised_too_stale_decision.allow_navigation,
@@ -167,7 +167,7 @@ int main()
         "side/rear proximity should be reported as a supervised advisory");
     require(supervised_side_advisory.motion_direction == "unitree_pose_navigation_mode_0",
             "supervised mobility must identify the Unitree planner mode");
-    require(supervised_side_advisory.speed_limit_mps == 0.1,
+    require(supervised_side_advisory.speed_limit_mps == 0.2,
             "side/rear advisory must retain the supervised speed cap");
 
     supervised_release.front_clearance_m = 0.6;

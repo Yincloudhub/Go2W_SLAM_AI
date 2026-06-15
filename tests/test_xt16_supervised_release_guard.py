@@ -25,8 +25,11 @@ class Xt16SupervisedReleaseGuardTests(unittest.TestCase):
         ok, reason, release_id, max_speed_mps = validate_record(self.record, self.environment)
 
         self.assertTrue(ok, reason)
-        self.assertEqual(release_id, "xt16-engineering-20260614")
-        self.assertEqual(max_speed_mps, 0.1)
+        self.assertEqual(
+            release_id,
+            "xt16-engineering-20260615-native-nav-min-speed",
+        )
+        self.assertEqual(max_speed_mps, 0.2)
 
     def test_release_cannot_claim_formal_calibration(self) -> None:
         record = copy.deepcopy(self.record)
@@ -39,12 +42,12 @@ class Xt16SupervisedReleaseGuardTests(unittest.TestCase):
 
     def test_release_cannot_raise_speed_limit(self) -> None:
         record = copy.deepcopy(self.record)
-        record["max_speed_mps"] = 0.2
+        record["max_speed_mps"] = 0.3
 
         ok, reason, _, _ = validate_record(record, self.environment)
 
         self.assertFalse(ok)
-        self.assertIn("exceeds 0.1", reason)
+        self.assertIn("must be 0.2", reason)
 
     def test_release_cannot_relax_front_departure_hard_stop(self) -> None:
         record = copy.deepcopy(self.record)

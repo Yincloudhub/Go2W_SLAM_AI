@@ -180,7 +180,7 @@ class StartupSupervisorTests(unittest.TestCase):
                     "supervised_release": {
                         "active": True,
                         "release_id": "xt16-engineering-test",
-                        "max_speed_mps": 0.1,
+                        "max_speed_mps": 0.2,
                     },
                 },
             },
@@ -190,7 +190,7 @@ class StartupSupervisorTests(unittest.TestCase):
         self.assertTrue(summary["readiness"]["perception"]["supervised_release"])
         self.assertEqual(
             summary["readiness"]["perception"]["supervised_max_speed_mps"],
-            0.1,
+            0.2,
         )
 
     def test_lidar_sensor_latency_counts_toward_effective_age(self) -> None:

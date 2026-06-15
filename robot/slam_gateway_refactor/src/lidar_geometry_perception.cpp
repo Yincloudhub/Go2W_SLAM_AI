@@ -217,8 +217,9 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
             (summary.calibration_verified && !summary.calibration_id.empty()) ||
             (summary.supervised_release_active &&
              !summary.supervised_release_id.empty() &&
-             summary.supervised_max_speed_mps > 0.0 &&
-             summary.supervised_max_speed_mps <= 0.1);
+             std::abs(
+                 summary.supervised_max_speed_mps -
+                 obstacle_policy::kNativeNavigationMinSpeedMps) <= 1e-9);
         summary.stale =
             j.value("stale", false) ||
             summary.timestamp_ms <= 0 ||

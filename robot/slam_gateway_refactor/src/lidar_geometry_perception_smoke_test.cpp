@@ -54,7 +54,7 @@ void writeSummary(
             {"supervised_release", {
                 {"active", supervised_release},
                 {"release_id", supervised_release ? "xt16-engineering-smoke" : ""},
-                {"max_speed_mps", supervised_release ? 0.1 : 0.0}
+                {"max_speed_mps", supervised_release ? 0.2 : 0.0}
             }}
         };
     }

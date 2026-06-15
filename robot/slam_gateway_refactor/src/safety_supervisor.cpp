@@ -1,6 +1,8 @@
 #include "slam_gateway/safety_supervisor.hpp"
 #include "slam_gateway/obstacle_policy.hpp"
 
+#include <cmath>
+
 namespace slam_gateway {
 
 SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
@@ -52,8 +54,9 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
     }
     if (obstacle.supervised_release_active &&
         (obstacle.supervised_release_id.empty() ||
-         obstacle.supervised_max_speed_mps <= 0.0 ||
-         obstacle.supervised_max_speed_mps > 0.1)) {
+         std::abs(
+             obstacle.supervised_max_speed_mps -
+             obstacle_policy::kNativeNavigationMinSpeedMps) > 1e-9)) {
         d.allow_navigation = false;
         d.should_pause = true;
         d.recommended_mode = "hold";

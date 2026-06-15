@@ -669,7 +669,7 @@ def prepare_navigation_stage(args: argparse.Namespace) -> tuple[int, dict[str, A
         "operator_requirements": [
             "keep the emergency stop available",
             "keep the robot in sight",
-            "run only one short target at 0.1 m/s",
+            "run only one short target at the Unitree minimum 0.2 m/s",
             "stop if clearance, localization, or pose disagrees with the scene",
         ],
     }
@@ -726,7 +726,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--relocation-settle-s", type=float, default=3.0)
     parser.add_argument("--max-pose-age-ms", type=float, default=500.0)
     parser.add_argument("--max-obstacle-age-ms", type=float, default=1000.0)
-    parser.add_argument("--nav-speed-mps", type=float, default=0.1)
+    parser.add_argument("--nav-speed-mps", type=float, default=0.2)
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY))
     parser.add_argument("--map-id", default="go2w_real_site")
     parser.add_argument("--gateway-client", default=str(DEFAULT_GATEWAY_CLIENT))
@@ -744,8 +744,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.samples < 1:
         raise SystemExit("--samples must be at least 1")
-    if not 0 < args.nav_speed_mps <= 0.1:
-        raise SystemExit("--nav-speed-mps must be in (0, 0.1] for supervised acceptance")
+    if not math.isclose(args.nav_speed_mps, 0.2, rel_tol=0.0, abs_tol=1e-9):
+        raise SystemExit("--nav-speed-mps must be 0.2 for Unitree GO2 supervised navigation")
     stages = {
         "status": status_stage,
         "relocate": relocate_stage,

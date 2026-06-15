@@ -723,7 +723,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true", help="Plan and safety-check only. This is the default when --execute is absent.")
     parser.add_argument("--skip-gateway-check", action="store_true", help="For planner dry-runs, skip the closed-loop gateway check after planning.")
     parser.add_argument("--no-auto-pause", action="store_true", help="Do not pause navigation after reaching the target distance.")
-    parser.add_argument("--nav-speed-mps", type=float, default=0.3, help="Global navigation speed override for field runs. Use 0 to keep per-node registry speed.")
+    parser.add_argument("--nav-speed-mps", type=float, default=0.3, help="Global navigation speed override. Unitree GO2 mode 0 is normalized to its 0.2 m/s minimum.")
     parser.add_argument("--nav-mode", type=int, default=0, help="Global Unitree navigation mode override for field runs. Default 0 enables obstacle avoidance; use 1 only for explicit stop-mode diagnostics or -1 to keep registry mode.")
     parser.add_argument("--arrival-distance-m", type=float, default=0.25)
     parser.add_argument("--arrival-yaw-rad", type=float, default=0.18)
@@ -828,6 +828,8 @@ def main(argv: list[str] | None = None) -> int:
             args.prompt_mode = "hybrid"
         elif args.prompt_mode == "hybrid":
             args.prompt_mode = "hybrid"
+        if args.nav_mode == 0 and 0.0 < args.nav_speed_mps < 0.2:
+            args.nav_speed_mps = 0.2
 
     command = decode_command(args)
     say_text = decode_say(args)
