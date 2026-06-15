@@ -117,8 +117,59 @@ class ChassisControllerTests(unittest.TestCase):
                 )
 
         self.assertFalse(result["accepted"])
-        self.assertIn("active relocalization anchor", result["reason"])
+        self.assertIn("unknown anchor_id", result["reason"])
         gateway.assert_not_called()
+
+    def test_relocation_uses_registry_command_contract(self) -> None:
+        registry = {
+            "version": 1,
+            "default_map_id": "site",
+            "maps": [
+                {
+                    "map_id": "site",
+                    "name": "site",
+                    "pcd_path": "/tmp/site.pcd",
+                    "relocalization_anchors": [
+                        {
+                            "anchor_id": "mapping_origin",
+                            "status": "verified",
+                            "pose": {
+                                "x": 0.0,
+                                "y": 0.0,
+                                "z": 0.0,
+                                "q_x": 0.0,
+                                "q_y": 0.0,
+                                "q_z": 0.0,
+                                "q_w": 1.0,
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            registry_path = Path(tmp) / "registry.json"
+            registry_path.write_text(json.dumps(registry), encoding="utf-8")
+            controller = ChassisController(
+                registry_path=registry_path,
+                map_id="site",
+                gateway=GatewayConfig(client_path="gateway"),
+            )
+            with patch(
+                "edge_autonomy.chassis_controller.run_gateway_command",
+                return_value={"accepted": True},
+            ) as gateway:
+                result = controller.relocate_to_anchor(
+                    "mapping_origin",
+                    map_path_fallback="/tmp/fallback.pcd",
+                )
+
+        self.assertTrue(result["accepted"])
+        command = gateway.call_args.args[0]
+        self.assertEqual(command["anchor_id"], "mapping_origin")
+        self.assertEqual(command["initial_pose"]["name"], "mapping_origin")
+        self.assertEqual(command["initial_pose"]["speed"], 0.0)
+        self.assertEqual(command["initial_pose"]["mode"], 0)
 
     def test_persistent_session_matches_response_request_id(self) -> None:
         class FakeStdin:

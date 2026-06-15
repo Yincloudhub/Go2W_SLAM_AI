@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .gateway_safety import gateway_allows_navigation
+from .map_registry import MapRegistry, MapRegistryError
 
 
 @dataclass(frozen=True)
@@ -352,45 +353,17 @@ class ChassisController:
         return run_gateway_command({"action": "pause_navigation"}, self.gateway)
 
     def relocate_to_anchor(self, anchor_id: str, *, map_path_fallback: str) -> dict[str, Any]:
-        profile = self.registry_map()
-        if not profile:
-            return {"accepted": False, "action": "relocate", "reason": f"map_id {self.map_id!r} not found"}
-        anchors = profile.get("relocalization_anchors", [])
-        anchor = next(
-            (
-                item
-                for item in anchors
-                if isinstance(item, dict) and item.get("anchor_id") == anchor_id
-            ),
-            None,
-        )
-        if not anchor:
+        try:
+            profile = MapRegistry.from_file(self.registry_path).get_map(self.map_id)
+            command = profile.relocate_command(anchor_id)
+        except MapRegistryError as exc:
             return {
                 "accepted": False,
                 "action": "relocate",
-                "reason": f"active relocalization anchor {anchor_id!r} not found",
+                "reason": str(exc),
             }
-        status = str(anchor.get("status") or "").strip().lower()
-        if status != "verified" and not status.startswith("verified_"):
-            return {
-                "accepted": False,
-                "action": "relocate",
-                "reason": f"relocalization anchor {anchor_id!r} is not verified: {status or 'missing'}",
-            }
-        pose = anchor.get("pose")
-        if not isinstance(pose, dict):
-            return {"accepted": False, "action": "relocate", "reason": f"anchor_id {anchor_id!r} has no pose"}
-        return run_gateway_command(
-            {
-                "action": "relocate",
-                "operator_ack": True,
-                "map_id": self.map_id,
-                "map_path": self.map_path(map_path_fallback),
-                "anchor_id": anchor_id,
-                "initial_pose": pose,
-            },
-            self.gateway,
-        )
+        command["map_path"] = str(command.get("map_path") or map_path_fallback)
+        return run_gateway_command(command, self.gateway)
 
     def preflight(self) -> dict[str, Any]:
         state = self.world_state()
