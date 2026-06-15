@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 
 #include "slam_gateway/models.hpp"
@@ -22,6 +23,9 @@ public:
 
 private:
     LocalObstacleSummary summary_;
+    mutable std::mutex fusion_state_mutex_;
+    mutable int64_t last_stereo_block_timestamp_ms_{0};
+    mutable int secondary_front_block_confirmation_count_{0};
 };
 
 }  // namespace slam_gateway

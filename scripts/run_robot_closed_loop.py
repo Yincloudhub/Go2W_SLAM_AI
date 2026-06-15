@@ -42,7 +42,10 @@ from edge_autonomy.local_llm_planner import (  # noqa: E402
     run_local_llm_planner,
 )
 from edge_autonomy.map_registry import MapProfile, MapRegistry  # noqa: E402
-from edge_autonomy.mission_decision import build_mission_decision  # noqa: E402
+from edge_autonomy.mission_decision import (  # noqa: E402
+    build_mission_decision,
+    build_mobility_decision,
+)
 from edge_autonomy.operator_display import build_operator_display_state  # noqa: E402
 from edge_autonomy.perception_context import load_perception_context_file  # noqa: E402
 from edge_autonomy.runtime_state import build_runtime_snapshot  # noqa: E402
@@ -82,6 +85,15 @@ FEEDBACK_SYSTEM_PROMPT = (
     "你是 Unitree GO2W 机器狗的操作面板反馈助手。"
     "只输出一句自然中文，面向现场操作者，说明当前去哪、是否到达、是否需要人工介入。"
     "不要输出 JSON、Markdown、解释或多余前后缀。"
+)
+MOBILITY_STRATEGY_SYSTEM_PROMPT = (
+    "You are the bounded mobility strategy layer for a Unitree GO2W robot. "
+    "Return exactly one JSON object with keys action, direction, distance_m, "
+    "confidence, reason. action must be reposition, navigate, or hold. "
+    "For reposition, choose only a listed candidate direction and choose "
+    "distance_m between 0.20 and that candidate's distance_m. "
+    "Use navigate only when reposition_required is false. "
+    "Never output velocity, yaw rate, raw API ids, shell commands, or extra keys."
 )
 
 
@@ -548,6 +560,14 @@ def wait_for_arrival(
             if session is not None:
                 heartbeat = session.heartbeat()
                 if heartbeat.get("accepted") is not True:
+                    dropped_counts["arrival_samples"] += append_limited(
+                        samples,
+                        {
+                            "heartbeat_rejection": heartbeat,
+                            "consecutive_errors": consecutive_errors + 1,
+                        },
+                        max_samples,
+                    )
                     raise RuntimeError(
                         f"navigation heartbeat rejected: {heartbeat.get('reason')}"
                     )
@@ -662,6 +682,32 @@ def wait_for_arrival(
             "safety": world.get("safety") if isinstance(world, dict) else None,
         }
         dropped_counts["arrival_samples"] += append_limited(samples, sample, max_samples)
+        navigation = (
+            world.get("navigation", {})
+            if isinstance(world, dict)
+            else {}
+        )
+        if (
+            isinstance(navigation, dict)
+            and navigation.get("state") in {"failed", "cancelled", "timeout"}
+        ):
+            failure_reason = str(
+                navigation.get("failure_reason")
+                or f"navigation state is {navigation.get('state')}"
+            )
+            pause = request_pause(failure_reason)
+            return {
+                "arrived": False,
+                "paused": pause["accepted"],
+                "threshold_m": args.arrival_distance_m,
+                "samples": samples,
+                "operator_feedback": operator_feedback,
+                "llm_feedback_requests": llm_feedback_requests,
+                "llm_feedback_results": llm_feedback_results,
+                "performance": performance_summary(),
+                "reason": failure_reason,
+                "pause": pause,
+            }
         now = time.monotonic()
         if now - last_ui >= ui_interval:
             sample["ui_refresh"] = True
@@ -800,12 +846,21 @@ def run_supervised_navigation_session(
             if result.get("accepted") is not True:
                 return result, None
             monitor_command = command
-            if command.get("action") == "supervised_departure":
-                target_pose = result.get("departure_target_pose")
+            if command.get("action") in {
+                "supervised_departure",
+                "supervised_reposition",
+            }:
+                target_pose = (
+                    result.get("reposition_target_pose")
+                    or result.get("departure_target_pose")
+                )
                 if isinstance(target_pose, dict):
                     monitor_command = {
                         **command,
-                        "target_node": "__supervised_departure__",
+                        "target_node": str(
+                            target_pose.get("name")
+                            or "__supervised_reposition__"
+                        ),
                         "target_pose": target_pose,
                     }
             arrival = wait_for_arrival(
@@ -826,7 +881,7 @@ def run_supervised_navigation_session(
         )
 
 
-def supervised_departure_decision(
+def supervised_reposition_decision(
     preflight_state: dict[str, Any] | None,
     slam_command: dict[str, Any],
 ) -> dict[str, Any]:
@@ -870,7 +925,6 @@ def supervised_departure_decision(
         target_distance_m > 0.75
         and (constrained_turn or side_rear_advisory)
     )
-    distance_m = min(0.50, max(0.0, front - 0.50))
     trigger = "not_required"
     if required:
         trigger = (
@@ -878,17 +932,64 @@ def supervised_departure_decision(
             if constrained_turn
             else "side_rear_advisory_before_planner_control"
         )
-    available = required and distance_m >= 0.20
+
+    clearances = {
+        "forward": front,
+        "backward": rear,
+        "left": left,
+        "right": right,
+    }
+    relief = {
+        "forward": max(0.0, 0.30 - rear),
+        "backward": max(0.0, 0.80 - front),
+        "left": max(0.0, 0.35 - right),
+        "right": max(0.0, 0.35 - left),
+    }
+    offsets = {
+        "forward": (math.cos(yaw), math.sin(yaw)),
+        "backward": (-math.cos(yaw), -math.sin(yaw)),
+        "left": (-math.sin(yaw), math.cos(yaw)),
+        "right": (math.sin(yaw), -math.cos(yaw)),
+    }
+    candidates = []
+    for direction in ("forward", "left", "right", "backward"):
+        clearance = clearances[direction]
+        distance_m = min(0.50, max(0.0, clearance - 0.35))
+        if distance_m < 0.20:
+            continue
+        offset_x, offset_y = offsets[direction]
+        candidate_distance_to_target = math.hypot(
+            dx - offset_x * distance_m,
+            dy - offset_y * distance_m,
+        )
+        goal_progress_m = target_distance_m - candidate_distance_to_target
+        score = (
+            min(clearance, 2.0) * 0.20
+            + relief[direction] * 3.0
+            + goal_progress_m * 0.50
+        )
+        candidates.append(
+            {
+                "direction": direction,
+                "clearance_m": clearance,
+                "distance_m": distance_m,
+                "turning_relief_m": relief[direction],
+                "goal_progress_m": goal_progress_m,
+                "score": score,
+            }
+        )
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    selected = candidates[0] if required and candidates else None
+    available = selected is not None
     if available:
         reason = (
-            "initial turn is constrained and a bounded forward departure is available"
-            if trigger == "initial_turn_constrained"
-            else "side or rear clearance is advisory and a bounded forward buffer is available"
+            f"bounded {selected['direction']} reposition selected to create "
+            "turning space"
         )
     elif required:
-        reason = "bounded forward departure clearance is insufficient"
+        reason = "no direction has enough clearance for bounded reposition"
     elif target_distance_m <= 0.75:
-        reason = "target is too close to justify a departure maneuver"
+        reason = "target is too close to justify a reposition maneuver"
     else:
         reason = "turning envelope and side or rear clearance are clear"
     return {
@@ -904,9 +1005,129 @@ def supervised_departure_decision(
             "right": right,
             "rear": rear,
         },
-        "distance_m": distance_m,
+        "direction": selected["direction"] if selected else None,
+        "distance_m": selected["distance_m"] if selected else 0.0,
         "speed_mps": 0.10,
+        "candidates": candidates,
     }
+
+
+def supervised_departure_decision(
+    preflight_state: dict[str, Any] | None,
+    slam_command: dict[str, Any],
+) -> dict[str, Any]:
+    return supervised_reposition_decision(preflight_state, slam_command)
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    raise ValueError("mobility strategy returned no JSON object")
+
+
+def generate_mobility_strategy_proposal(
+    mobility_analysis: dict[str, Any],
+    slam_command: dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    backend: LocalCommandBackend | None = None,
+) -> dict[str, Any]:
+    candidates = [
+        {
+            "direction": item.get("direction"),
+            "max_distance_m": item.get("distance_m"),
+            "clearance_m": item.get("clearance_m"),
+            "turning_relief_m": item.get("turning_relief_m"),
+            "goal_progress_m": item.get("goal_progress_m"),
+        }
+        for item in mobility_analysis.get("candidates", [])
+        if isinstance(item, dict)
+    ]
+
+    def deterministic(source: str, error: str = "") -> dict[str, Any]:
+        if mobility_analysis.get("required") and candidates:
+            selected = candidates[0]
+            proposal = {
+                "action": "reposition",
+                "direction": selected["direction"],
+                "distance_m": selected["max_distance_m"],
+                "confidence": 0.5,
+                "reason": "deterministic fallback selected highest ranked candidate",
+                "source": source,
+            }
+        elif mobility_analysis.get("required"):
+            proposal = {
+                "action": "hold",
+                "direction": "",
+                "distance_m": 0.0,
+                "confidence": 1.0,
+                "reason": "no bounded reposition candidate is available",
+                "source": source,
+            }
+        else:
+            proposal = {
+                "action": "navigate",
+                "direction": "",
+                "distance_m": 0.0,
+                "confidence": 0.8,
+                "reason": "turning envelope is ready for mapped navigation",
+                "source": source,
+            }
+        if error:
+            proposal["fallback_error"] = error
+        return proposal
+
+    mode = str(getattr(args, "mobility_strategy_mode", "live"))
+    if mode == "deterministic":
+        return deterministic("deterministic_configured")
+
+    request = {
+        "target_node": slam_command.get("target_node"),
+        "target_pose": slam_command.get("target_pose"),
+        "reposition_required": mobility_analysis.get("required"),
+        "trigger": mobility_analysis.get("trigger"),
+        "bearing_error_rad": mobility_analysis.get("bearing_error_rad"),
+        "current_clearance_m": mobility_analysis.get("clearance_m"),
+        "candidates": candidates,
+    }
+    prompt = (
+        "Select the next bounded mobility strategy from this current world "
+        "state. Return JSON only.\n"
+        + json.dumps(request, ensure_ascii=False, separators=(",", ":"))
+    )
+    try:
+        llm_backend = backend or LocalCommandBackend(args.local_command)
+        raw_answer = llm_backend.generate(
+            prompt,
+            system_prompt=MOBILITY_STRATEGY_SYSTEM_PROMPT,
+            max_tokens=int(getattr(args, "mobility_strategy_max_tokens", 96)),
+            timeout_s=int(getattr(args, "mobility_strategy_timeout_s", 8)),
+        )
+        proposal = _extract_json_object(raw_answer)
+        required_keys = {
+            "action",
+            "direction",
+            "distance_m",
+            "confidence",
+            "reason",
+        }
+        if set(proposal) != required_keys:
+            raise ValueError("mobility strategy keys do not match contract")
+        if proposal.get("action") not in {"reposition", "navigate", "hold"}:
+            raise ValueError("mobility strategy action is invalid")
+        proposal["source"] = "local_llm"
+        proposal["raw_answer"] = raw_answer
+        return proposal
+    except Exception as exc:
+        return deterministic("deterministic_fallback", str(exc))
 
 
 def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
@@ -1191,66 +1412,204 @@ def execute_task_queue(
             )
             continue
 
-        departure = supervised_departure_decision(preflight_state, slam_command)
-        if departure.get("required"):
-            if not departure.get("available"):
-                blocked_reason = str(departure.get("reason"))
+        reposition_failed = False
+        max_reposition_steps = max(
+            1,
+            int(getattr(args, "max_reposition_steps", 3)),
+        )
+        reposition_step = 0
+        while True:
+            reposition = supervised_reposition_decision(
+                preflight_state,
+                slam_command,
+            )
+            if not reposition.get("required"):
+                if reposition_step > 0:
+                    strategy = generate_mobility_strategy_proposal(
+                        reposition,
+                        slam_command,
+                        args,
+                    )
+                    mobility_decision = build_mobility_decision(
+                        reposition,
+                        strategy,
+                    )
+                    append_queue_event(
+                        {
+                            "task_id": f"{task_id}_planner_handoff",
+                            "action": "mobility_strategy",
+                            "status": (
+                                "ok"
+                                if mobility_decision.get("decision")
+                                == "execute_navigation"
+                                else "blocked"
+                            ),
+                            "target_node": target_node,
+                            "mobility_semantics": reposition,
+                            "mobility_decision": mobility_decision,
+                        }
+                    )
+                    if (
+                        mobility_decision.get("decision")
+                        != "execute_navigation"
+                    ):
+                        blocked_reason = str(
+                            mobility_decision.get("reason")
+                            or "mobility strategy did not authorize navigation"
+                        )
+                        failed_step = task_id
+                        reposition_failed = True
+                break
+            if reposition_step >= max_reposition_steps:
+                blocked_reason = (
+                    "turning envelope remains constrained after "
+                    f"{max_reposition_steps} supervised reposition steps"
+                )
                 failed_step = task_id
                 append_queue_event(
                     {
-                        "task_id": f"{task_id}_departure",
-                        "action": "supervised_departure",
+                        "task_id": f"{task_id}_reposition_limit",
+                        "action": "supervised_reposition",
                         "status": "blocked",
                         "target_node": target_node,
-                        "mobility_semantics": departure,
+                        "mobility_semantics": reposition,
                         "blocked_reason": blocked_reason,
                     }
                 )
+                reposition_failed = True
                 break
-            departure_command = {
-                "action": "supervised_departure",
-                "distance_m": departure["distance_m"],
-                "speed_mps": departure["speed_mps"],
-                "operator_ack": True,
-            }
-            departure_args = copy.copy(args)
-            departure_args.arrival_distance_m = min(
+
+            strategy = generate_mobility_strategy_proposal(
+                reposition,
+                slam_command,
+                args,
+            )
+            mobility_decision = build_mobility_decision(
+                reposition,
+                strategy,
+            )
+            if mobility_decision.get("decision") == "hold":
+                blocked_reason = str(
+                    mobility_decision.get("reason")
+                    or reposition.get("reason")
+                )
+                failed_step = task_id
+                append_queue_event(
+                    {
+                        "task_id": f"{task_id}_reposition_{reposition_step + 1}",
+                        "action": "mobility_strategy",
+                        "status": "blocked",
+                        "target_node": target_node,
+                        "mobility_semantics": reposition,
+                        "mobility_decision": mobility_decision,
+                        "blocked_reason": blocked_reason,
+                    }
+                )
+                reposition_failed = True
+                break
+            if (
+                mobility_decision.get("accepted") is not True
+                or mobility_decision.get("decision") != "execute_reposition"
+            ):
+                blocked_reason = str(
+                    mobility_decision.get("reason")
+                    or "MissionDecisionEngine rejected mobility strategy"
+                )
+                failed_step = task_id
+                append_queue_event(
+                    {
+                        "task_id": f"{task_id}_reposition_{reposition_step + 1}",
+                        "action": "mobility_strategy",
+                        "status": "blocked",
+                        "target_node": target_node,
+                        "mobility_semantics": reposition,
+                        "mobility_decision": mobility_decision,
+                        "blocked_reason": blocked_reason,
+                    }
+                )
+                reposition_failed = True
+                break
+
+            reposition_step += 1
+            reposition_command = dict(
+                mobility_decision["authorized_command"]
+            )
+            reposition_args = copy.copy(args)
+            reposition_args.arrival_distance_m = min(
                 0.10,
-                max(0.05, float(departure["distance_m"]) * 0.20),
+                max(
+                    0.05,
+                    float(reposition_command["distance_m"]) * 0.20,
+                ),
             )
-            departure_args.arrival_monitor_s = max(
+            reposition_args.arrival_monitor_s = max(
                 15.0,
-                float(departure["distance_m"]) / float(departure["speed_mps"]) + 10.0,
+                float(reposition_command["distance_m"])
+                / float(reposition_command["speed_mps"])
+                + 10.0,
             )
-            departure_result, departure_arrival = run_supervised_navigation_session(
-                departure_command,
-                departure_args,
-                target_name="受监督前移脱困",
+            reposition_result, reposition_arrival = (
+                run_supervised_navigation_session(
+                    reposition_command,
+                    reposition_args,
+                    target_name=(
+                        "supervised "
+                        f"{reposition_command['direction']} reposition"
+                    ),
+                )
             )
-            departure_ok = bool(
-                departure_result.get("accepted")
-                and isinstance(departure_arrival, dict)
-                and departure_arrival.get("arrived")
-                and departure_arrival.get("paused")
+            reposition_ok = bool(
+                reposition_result.get("accepted")
+                and isinstance(reposition_arrival, dict)
+                and reposition_arrival.get("arrived")
+                and reposition_arrival.get("paused")
             )
             append_queue_event(
                 {
-                    "task_id": f"{task_id}_departure",
-                    "action": "supervised_departure",
-                    "status": "ok" if departure_ok else "failed",
+                    "task_id": f"{task_id}_reposition_{reposition_step}",
+                    "action": "supervised_reposition",
+                    "status": "ok" if reposition_ok else "failed",
                     "target_node": target_node,
-                    "mobility_semantics": departure,
-                    "send_result": departure_result,
-                    "arrival": departure_arrival,
+                    "mobility_semantics": reposition,
+                    "mobility_decision": mobility_decision,
+                    "send_result": reposition_result,
+                    "arrival": reposition_arrival,
                 }
             )
-            if not departure_ok:
+            if not reposition_ok:
                 blocked_reason = str(
-                    (departure_arrival or {}).get("reason")
-                    or gateway_rejection_reason(departure_result)
+                    (reposition_arrival or {}).get("reason")
+                    or gateway_rejection_reason(reposition_result)
                 )
                 failed_step = task_id
+                reposition_failed = True
                 break
+
+            settle_s = max(
+                0.0,
+                float(getattr(args, "reposition_settle_s", 0.6)),
+            )
+            if settle_s > 0.0:
+                time.sleep(settle_s)
+            try:
+                preflight_state = run_gateway_command(
+                    {"action": "get_world_state"},
+                    client_path=args.gateway_client,
+                    network_interface=args.network_interface,
+                    timeout_s=args.timeout_s,
+                    startup_wait_s=args.gateway_startup_wait_s,
+                )
+            except Exception as exc:
+                blocked_reason = (
+                    "failed to refresh world state after supervised "
+                    f"reposition: {exc}"
+                )
+                failed_step = task_id
+                reposition_failed = True
+                break
+
+        if reposition_failed:
+            break
 
         departing_feedback = operator_feedback_message(
             "departing",
@@ -1411,6 +1770,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-feedback-events", type=int, default=120)
     parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
+    parser.add_argument(
+        "--max-reposition-steps",
+        type=int,
+        default=3,
+        help="Maximum bounded reposition steps before mapped navigation.",
+    )
+    parser.add_argument(
+        "--reposition-settle-s",
+        type=float,
+        default=0.6,
+        help="Wait for fresh obstacle geometry after each reposition.",
+    )
+    parser.add_argument(
+        "--mobility-strategy-mode",
+        choices=["live", "deterministic"],
+        default="live",
+    )
+    parser.add_argument("--mobility-strategy-max-tokens", type=int, default=96)
+    parser.add_argument("--mobility-strategy-timeout-s", type=int, default=8)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument(
         "--communication-journal",

@@ -220,6 +220,11 @@ struct LocalObstacleSummary {
     double left_clearance_m{6.0};
     double right_clearance_m{6.0};
     double rear_clearance_m{6.0};
+    double primary_front_clearance_m{-1.0};
+    double secondary_front_clearance_m{-1.0};
+    std::string front_clearance_source{"unavailable"};
+    int secondary_front_block_confirmation_count{0};
+    bool secondary_front_block_confirmed{false};
     double body_front_clearance_m{-1.0};
     double body_left_clearance_m{-1.0};
     double body_right_clearance_m{-1.0};
@@ -255,7 +260,7 @@ struct LocalObstacleSummary {
         };
         return {
             {"type", "local_obstacle_summary"},
-            {"schema_version", 2},
+            {"schema_version", 3},
             {"timestamp_ms", timestamp_ms},
             {"frame_id", frame_id},
             {"source", source},
@@ -271,6 +276,13 @@ struct LocalObstacleSummary {
             {"left_clearance_m", left_clearance_m},
             {"right_clearance_m", right_clearance_m},
             {"rear_clearance_m", rear_clearance_m},
+            {"front_fusion", {
+                {"primary_clearance_m", optional_clearance(primary_front_clearance_m)},
+                {"secondary_clearance_m", optional_clearance(secondary_front_clearance_m)},
+                {"selected_source", front_clearance_source},
+                {"secondary_block_confirmation_count", secondary_front_block_confirmation_count},
+                {"secondary_block_confirmed", secondary_front_block_confirmed}
+            }},
             {"body_clearance_m", {
                 {"front", optional_clearance(body_front_clearance_m)},
                 {"left", optional_clearance(body_left_clearance_m)},

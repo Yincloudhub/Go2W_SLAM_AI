@@ -67,20 +67,18 @@ An uncalibrated or stale trusted XT16 summary fails closed for navigation
 unless the explicit supervised engineering release is active. Manual
 relocation remains available so localization can be recovered.
 
-The supervised release uses `planner_mobility_v3`. It does not ask whether
-every side of a stationary robot is empty. It asks whether fresh localization
-and perception show a usable forward departure corridor for Unitree
-`mode=0` pose navigation. Front clearance below `0.80 m` remains a hard pause.
-Side and rear proximity remain visible advisories and force the `0.1 m/s`
-speed cap, but do not globally deny planner-controlled movement. Formal
-calibrated mode keeps the stricter all-direction policy.
+The supervised release uses `semantic_mobility_v4`. Fresh XT16 geometry
+produces bounded forward, backward, left, and right reposition candidates.
+The local LLM selects a candidate from that set; `MissionDecisionEngine`
+validates the direction and distance, and the Gateway executes it with
+`SportClient::Move`, zero yaw rate, a 0.10 m/s speed cap, and continuous
+directional-clearance checks. Each step is capped at 0.50 m, stops, refreshes
+world state, and returns to the LLM before another reposition or mapped
+navigation decision.
 
-For a material initial heading change, v3 also checks the supported side/rear
-turning envelope. When turning is constrained but forward clearance is
-sufficient, the deterministic executor may issue one forward-only
-`supervised_departure` capped at 0.50 m and 0.10 m/s, pause, refresh world
-state, and then resubmit the registered topology target. This is not a general
-LLM relative-motion interface.
+This internal recovery loop does not expose general relative motion. A D435
+front hard stop is also required to persist across two distinct fresh frames
+when XT16 reports a clear front corridor; XT16 hard stops remain immediate.
 
 Build-map origin, relocation, and navigation use separate registry roles:
 

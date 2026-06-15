@@ -237,25 +237,27 @@ def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> d
                 "fallback": "record_semantic_keyframe_event",
             },
             {
-                "name": "bounded_supervised_departure",
+                "name": "bounded_supervised_reposition",
                 "tools": [],
                 "available": localized,
-                "status": "internal_deterministic_executor_only",
+                "status": "internal_llm_strategy_with_deterministic_guard",
                 "requires": [
                     "operator_present",
                     "supervised_release",
                     "initial_turn_constrained_or_side_rear_advisory",
-                    "front_escape_clearance",
+                    "directional_escape_clearance",
                 ],
                 "semantic_inputs": [
                     "initial_turn_constrained",
                     "side_rear_advisory_before_planner_control",
-                    "front_escape_available",
+                    "four_direction_clearance_candidates",
+                    "target_progress",
                 ],
                 "limits": {
-                    "direction": "forward_only",
+                    "directions": ["forward", "backward", "left", "right"],
                     "max_distance_m": 0.5,
                     "max_speed_mps": 0.1,
+                    "max_yaw_rate_rps": 0.0,
                 },
                 "fallback": "pause_and_request_human",
             },
@@ -396,7 +398,7 @@ def build_planner_context(
             "Use /slam_info ctrl_info is_arrived or stateMachine FINISHED as the arrival condition.",
             "Do not request dense pointcloud or raw video for weak-bandwidth planning.",
             "relative_motion_preview is dry-run only and must never produce a SLAM or raw base-control command.",
-            "The LLM may report that initial turning is constrained or side/rear clearance is advisory, but only the deterministic executor may authorize and execute a bounded supervised departure.",
+            "The LLM may select one bounded supervised reposition candidate, but MissionDecisionEngine and Gateway must validate every step and retain final motion authority.",
         ],
     }
 

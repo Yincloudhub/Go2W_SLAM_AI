@@ -571,6 +571,16 @@ def run_closed_loop(args: argparse.Namespace, command: str) -> dict[str, Any]:
             str(args.max_llm_feedback_events),
             "--gateway-error-limit",
             str(args.gateway_error_limit),
+            "--max-reposition-steps",
+            str(args.max_reposition_steps),
+            "--reposition-settle-s",
+            str(args.reposition_settle_s),
+            "--mobility-strategy-mode",
+            args.mobility_strategy_mode,
+            "--mobility-strategy-max-tokens",
+            str(args.mobility_strategy_max_tokens),
+            "--mobility-strategy-timeout-s",
+            str(args.mobility_strategy_timeout_s),
         ]
     )
     if args.llm_feedback_live_progress:
@@ -723,6 +733,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-feedback-events", type=int, default=120)
     parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
+    parser.add_argument("--max-reposition-steps", type=int, default=3)
+    parser.add_argument("--reposition-settle-s", type=float, default=0.6)
+    parser.add_argument(
+        "--mobility-strategy-mode",
+        choices=["live", "deterministic"],
+        default="live",
+    )
+    parser.add_argument("--mobility-strategy-max-tokens", type=int, default=96)
+    parser.add_argument("--mobility-strategy-timeout-s", type=int, default=8)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for queued capture_keyframe steps.")
     parser.add_argument(
         "--communication-journal",

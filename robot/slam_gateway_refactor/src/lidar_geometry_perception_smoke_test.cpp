@@ -1,11 +1,13 @@
 #include "slam_gateway/lidar_geometry_perception.hpp"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 #include <nlohmann/json.hpp>
 
@@ -197,15 +199,75 @@ int main()
 
     writeSummary(lidar_path, "lidar_pointcloud", false, 2.0, 2.0, 2.0, 0.8, 0.7, 0.6);
     writeSummary(stereo_path, "stereo_depth", false, 0.6, 3.0, 1.0, 0.95, 0.9, 0.85);
-    const auto fused = perception.getFusedSummaryOrFallback(lidar_path, 1000, stereo_path, 1000);
-    require(fused.source == "lidar_pointcloud+stereo_depth", "fresh sensors should be fused");
-    require(near(fused.front_clearance_m, 0.6), "fusion must keep the nearest front obstacle");
-    require(near(fused.front_confidence, 0.95), "front confidence must follow the selected clearance");
-    require(near(fused.left_clearance_m, 2.0), "fusion must retain the nearer XT16 left clearance");
-    require(near(fused.left_confidence, 0.7), "left confidence must remain owned by XT16");
-    require(near(fused.right_clearance_m, 2.0), "forward stereo must not overwrite robot-side clearance");
-    require(near(fused.right_confidence, 0.6), "right confidence must remain owned by XT16");
-    require(fused.recommended_action == "pause", "close fused obstacle must request pause");
+    const auto transient = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(
+        transient.source == "lidar_pointcloud+stereo_depth",
+        "fresh sensors should be fused");
+    require(
+        near(transient.front_clearance_m, 2.0),
+        "one stereo near frame must not override clear XT16 geometry");
+    require(
+        transient.secondary_front_block_confirmation_count == 1,
+        "first stereo near frame must start confirmation");
+    require(
+        !transient.secondary_front_block_confirmed,
+        "first stereo near frame must remain advisory");
+
+    const auto repeated = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(
+        repeated.secondary_front_block_confirmation_count == 1,
+        "re-reading one stereo frame must not advance confirmation");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    writeSummary(stereo_path, "stereo_depth", false, 0.6, 3.0, 1.0, 0.95, 0.9, 0.85);
+    const auto confirmed = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(
+        near(confirmed.front_clearance_m, 0.6),
+        "two fresh stereo near frames must confirm the nearer obstacle");
+    require(
+        confirmed.secondary_front_block_confirmed,
+        "second fresh stereo near frame must confirm the hard block");
+    require(
+        confirmed.front_clearance_source == "stereo_depth",
+        "confirmed stereo obstacle must own fused front clearance");
+    require(
+        near(confirmed.front_confidence, 0.95),
+        "front confidence must follow the selected clearance");
+    require(
+        near(confirmed.left_clearance_m, 2.0),
+        "fusion must retain XT16 left clearance");
+    require(
+        near(confirmed.right_clearance_m, 2.0),
+        "forward stereo must not overwrite robot-side clearance");
+    require(
+        confirmed.recommended_action == "pause",
+        "confirmed close fused obstacle must request pause");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    writeSummary(stereo_path, "stereo_depth", false, 2.5, 3.0, 1.0, 0.95, 0.9, 0.85);
+    const auto recovered = perception.getFusedSummaryOrFallback(
+        lidar_path,
+        1000,
+        stereo_path,
+        1000);
+    require(
+        recovered.secondary_front_block_confirmation_count == 0,
+        "clear stereo geometry must reset confirmation");
+    require(
+        near(recovered.front_clearance_m, 2.0),
+        "recovered fusion must select the nearer clear XT16 value");
 
     const auto stereo_only = perception.getFusedSummaryOrFallback(
         lidar_path + ".missing",

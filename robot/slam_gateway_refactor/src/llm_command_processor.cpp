@@ -68,6 +68,41 @@ bool isFreshEnoughForWaypoint(const LocalizationState& loc)
     return status_ok && loc.pose_age_ms >= 0 && loc.pose_age_ms <= 2000;
 }
 
+bool isRepositionDirection(const std::string& direction)
+{
+    return direction == "forward" || direction == "backward" ||
+        direction == "left" || direction == "right";
+}
+
+double directionalClearance(
+    const LocalObstacleSummary& obstacle,
+    const std::string& direction)
+{
+    if (direction == "forward") return obstacle.front_clearance_m;
+    if (direction == "backward") return obstacle.rear_clearance_m;
+    if (direction == "left") return obstacle.left_clearance_m;
+    if (direction == "right") return obstacle.right_clearance_m;
+    return -1.0;
+}
+
+void offsetPose(
+    PoseData& pose,
+    const std::string& direction,
+    double yaw,
+    double distance_m)
+{
+    double forward_m = 0.0;
+    double left_m = 0.0;
+    if (direction == "forward") forward_m = distance_m;
+    if (direction == "backward") forward_m = -distance_m;
+    if (direction == "left") left_m = distance_m;
+    if (direction == "right") left_m = -distance_m;
+    pose.x += static_cast<float>(
+        std::cos(yaw) * forward_m - std::sin(yaw) * left_m);
+    pose.y += static_cast<float>(
+        std::sin(yaw) * forward_m + std::cos(yaw) * left_m);
+}
+
 }  // namespace
 
 LlmCommandProcessor::LlmCommandProcessor(SlamGateway& gateway,
@@ -312,32 +347,40 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         return ok(action, gateway_.submitNavigationGoal(goal));
     }
 
-    if (action == "supervised_departure") {
+    if (action == "supervised_departure" || action == "supervised_reposition") {
+        const bool legacy_departure = action == "supervised_departure";
+        const std::string direction =
+            legacy_departure ? "forward" : cmd.value("direction", "");
         if (!hasNavigationSessionAuthority(cmd, navigation_session_token_)) {
             return reject("persistent_navigation_session_required");
         }
         if (!hasOperatorAck(cmd)) {
-            return reject("operator_ack_required_for_supervised_departure");
+            return reject("operator_ack_required_for_supervised_reposition");
+        }
+        if (!isRepositionDirection(direction)) {
+            return reject("supervised_reposition_direction_invalid");
         }
         if (!hasFiniteNumber(cmd, "distance_m")) {
-            return reject("supervised_departure_distance_required");
+            return reject("supervised_reposition_distance_required");
         }
         const double distance_m = cmd.at("distance_m").get<double>();
         const double requested_speed_mps = cmd.value(
             "speed_mps",
             obstacle_policy::kDepartureMaxSpeedMps);
         if (distance_m <= 0.0 ||
+            (!legacy_departure &&
+             distance_m < obstacle_policy::kRepositionMinDistanceM) ||
             distance_m > obstacle_policy::kDepartureMaxDistanceM) {
-            return reject("supervised_departure_distance_out_of_range");
+            return reject("supervised_reposition_distance_out_of_range");
         }
         if (!std::isfinite(requested_speed_mps) ||
             requested_speed_mps <= 0.0 ||
             requested_speed_mps > obstacle_policy::kDepartureMaxSpeedMps) {
-            return reject("supervised_departure_speed_out_of_range");
+            return reject("supervised_reposition_speed_out_of_range");
         }
         const auto obstacle = gateway_.getLocalObstacleSummary();
         if (!obstacle.supervised_release_active) {
-            return reject("supervised_departure_requires_engineering_release");
+            return reject("supervised_reposition_requires_engineering_release");
         }
         const auto safety = gateway_.getSafetyDecision();
         if (!safety.allow_navigation) {
@@ -349,13 +392,19 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
             };
         }
         const double required_front_m =
-            distance_m + obstacle_policy::kDepartureFrontReserveM;
-        if (obstacle.front_clearance_m < required_front_m) {
+            distance_m +
+            (legacy_departure
+                ? obstacle_policy::kDepartureFrontReserveM
+                : obstacle_policy::kRepositionReserveM);
+        const double observed_clearance_m =
+            directionalClearance(obstacle, direction);
+        if (observed_clearance_m < required_front_m) {
             return {
                 {"accepted", false},
-                {"reason", "supervised_departure_front_clearance_insufficient"},
-                {"required_front_clearance_m", required_front_m},
-                {"observed_front_clearance_m", obstacle.front_clearance_m},
+                {"reason", "supervised_reposition_clearance_insufficient"},
+                {"direction", direction},
+                {"required_directional_clearance_m", required_front_m},
+                {"observed_directional_clearance_m", observed_clearance_m},
                 {"world_state", gateway_.buildWorldStateJson()}
             };
         }
@@ -372,14 +421,22 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
             current.pose.q_z,
             current.pose.q_w);
         PoseData goal = current.pose;
-        goal.name = "__supervised_departure__";
-        goal.x += static_cast<float>(std::cos(current_yaw) * distance_m);
-        goal.y += static_cast<float>(std::sin(current_yaw) * distance_m);
+        goal.name = "__supervised_reposition_" + direction + "__";
+        offsetPose(goal, direction, current_yaw, distance_m);
         goal.mode = 0;
         goal.speed = static_cast<float>(requested_speed_mps);
-        auto result = ok(action, gateway_.submitNavigationGoal(goal));
+        auto result = ok(
+            action,
+            gateway_.submitSupervisedReposition(
+                direction,
+                distance_m,
+                requested_speed_mps));
         result["distance_m"] = distance_m;
-        result["departure_target_pose"] = goal.toJson();
+        result["direction"] = direction;
+        result["reposition_target_pose"] = goal.toJson();
+        if (legacy_departure) {
+            result["departure_target_pose"] = goal.toJson();
+        }
         return result;
     }
 

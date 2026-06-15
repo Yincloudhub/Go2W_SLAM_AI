@@ -107,6 +107,11 @@ void LidarGeometryPerception::setManualClearance(double front, double left, doub
     summary_.left_clearance_m = left;
     summary_.right_clearance_m = right;
     summary_.rear_clearance_m = rear;
+    summary_.primary_front_clearance_m = front;
+    summary_.secondary_front_clearance_m = -1.0;
+    summary_.front_clearance_source = "manual_stub";
+    summary_.secondary_front_block_confirmation_count = 0;
+    summary_.secondary_front_block_confirmed = false;
     summary_.body_front_clearance_m = front;
     summary_.body_left_clearance_m = left;
     summary_.body_right_clearance_m = right;
@@ -166,6 +171,8 @@ LocalObstacleSummary LidarGeometryPerception::getExternalSummaryOrFallback(const
         summary.left_clearance_m = numberOr(j, "left_clearance_m", -1.0);
         summary.right_clearance_m = numberOr(j, "right_clearance_m", -1.0);
         summary.rear_clearance_m = numberOr(j, "rear_clearance_m", 6.0);
+        summary.primary_front_clearance_m = summary.front_clearance_m;
+        summary.front_clearance_source = summary.source;
         summary.body_front_clearance_m = optionalNestedNumberOr(j, "body_clearance_m", "front", -1.0);
         summary.body_left_clearance_m = optionalNestedNumberOr(j, "body_clearance_m", "left", -1.0);
         summary.body_right_clearance_m = optionalNestedNumberOr(j, "body_clearance_m", "right", -1.0);
@@ -249,6 +256,9 @@ LocalObstacleSummary LidarGeometryPerception::getFusedSummaryOrFallback(
         return stereo;
     }
     if (!has_fresh_stereo) {
+        std::lock_guard<std::mutex> lock(fusion_state_mutex_);
+        last_stereo_block_timestamp_ms_ = 0;
+        secondary_front_block_confirmation_count_ = 0;
         return lidar;
     }
 
@@ -258,14 +268,50 @@ LocalObstacleSummary LidarGeometryPerception::getFusedSummaryOrFallback(
     fused.age_ms = std::max(lidar.age_ms, stereo.age_ms);
     fused.stale = false;
     fused.confidence = std::min(lidar.confidence, stereo.confidence);
+    fused.primary_front_clearance_m = lidar.front_clearance_m;
+    fused.secondary_front_clearance_m = stereo.front_clearance_m;
 
-    keepNearestClearance(
-        lidar.front_clearance_m,
-        lidar.front_confidence,
-        stereo.front_clearance_m,
-        stereo.front_confidence,
-        fused.front_clearance_m,
-        fused.front_confidence);
+    const bool secondary_requests_hard_block =
+        clearanceBelow(stereo.front_clearance_m, obstacle_policy::kFrontPauseM);
+    bool secondary_block_confirmed = false;
+    {
+        std::lock_guard<std::mutex> lock(fusion_state_mutex_);
+        if (!secondary_requests_hard_block) {
+            last_stereo_block_timestamp_ms_ = 0;
+            secondary_front_block_confirmation_count_ = 0;
+        } else if (stereo.timestamp_ms > 0 &&
+                   stereo.timestamp_ms != last_stereo_block_timestamp_ms_) {
+            last_stereo_block_timestamp_ms_ = stereo.timestamp_ms;
+            secondary_front_block_confirmation_count_ =
+                std::min(
+                    secondary_front_block_confirmation_count_ + 1,
+                    obstacle_policy::kSecondaryFrontBlockConfirmFrames);
+        }
+        fused.secondary_front_block_confirmation_count =
+            secondary_front_block_confirmation_count_;
+        secondary_block_confirmed =
+            secondary_front_block_confirmation_count_ >=
+            obstacle_policy::kSecondaryFrontBlockConfirmFrames;
+    }
+    fused.secondary_front_block_confirmed = secondary_block_confirmed;
+
+    if (!secondary_requests_hard_block || secondary_block_confirmed ||
+        clearanceBelow(lidar.front_clearance_m, obstacle_policy::kFrontPauseM)) {
+        keepNearestClearance(
+            lidar.front_clearance_m,
+            lidar.front_confidence,
+            stereo.front_clearance_m,
+            stereo.front_confidence,
+            fused.front_clearance_m,
+            fused.front_confidence);
+    } else {
+        fused.front_clearance_m = lidar.front_clearance_m;
+        fused.front_confidence = lidar.front_confidence;
+    }
+    fused.front_clearance_source =
+        fused.front_clearance_m == stereo.front_clearance_m
+            ? "stereo_depth"
+            : "lidar_pointcloud";
     // Stereo left/right are image sectors inside the forward field of view,
     // not robot-side clearances. XT16 remains authoritative for lateral,
     // rear, body, and low-hazard geometry.

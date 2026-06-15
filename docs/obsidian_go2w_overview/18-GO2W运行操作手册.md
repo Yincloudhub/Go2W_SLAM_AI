@@ -434,21 +434,19 @@ side:  <0.60 m conservative, <0.20 m pause
 rear:  <0.50 m conservative, <0.30 m pause
 ```
 
-上表仍是 XT16 几何摘要的方向分级，不再直接等同于受监督导航许可。
-`planner_mobility_v3` 在显式工程放行时判断当前是否具有 Unitree `mode=0`
-规划可移动性：前向出发走廊 `<0.80 m` 才是运动硬暂停；侧向和后向近物体继续
-显示在 `blocked_directions` 中，但作为保守告警处理，将速度限制到 `0.10 m/s`，
-不再因为静止状态旁边有墙、箱体或线缆就全局否决导航。任何 stale、低置信度、
-缺失 ROI、定位失效或非 `mode=0` 目标仍直接阻断。
+上表仍是 XT16 几何摘要的方向分级，不直接等同于受监督导航许可。
+`semantic_mobility_v4` 把转向脱困改为逐步语义闭环：
 
-v3 进一步区分直行出发与起步转向。目标方位相对当前朝向超过 `0.20 rad` 时，
-Gateway 要求左右至少 `0.35 m`、后方至少 `0.30 m` 的受支持转向空间。由于
-Unitree 内部路径可能在目标方位已对齐时仍先转向，只要目标仍较远且侧/后处于
-保守告警，确定性执行器也会优先插入一次 `supervised_departure`：仅前进、
-最多 `0.50 m`、最多 `0.10 m/s`，完成并暂停后重新提交原拓扑目标。LLM 只消费
-和解释 `initial_turn_constrained`、
-`side_rear_advisory_before_planner_control`、`front_escape_available` 语义，
-不直接生成相对位姿或底盘速度。
+1. XT16 根据前、后、左、右净空生成不超过 `0.50 m` 的有界候选。
+2. 本地 LLM 只从候选中选择下一步，或选择进入注册点导航、保持停止。
+3. `MissionDecisionEngine` 复核候选、距离和当前是否仍需脱困。
+4. Gateway 使用 `SportClient::Move(vx, vy, 0)` 保持零角速度平移，速度不超过
+   `0.10 m/s`，并持续检查定位、全局安全和所选方向的 XT16 净空。
+5. 每一步结束后停止并刷新世界状态，再返回 LLM 决策；最多默认三步。
+
+这不是通用相对运动接口。LLM 不得输出任意速度或绕过候选边界，Gateway 仍是
+最终运动权威。D435 前向近点在 XT16 前方清晰时必须由两张不同的新鲜帧确认后
+才触发硬停；XT16 自身前向硬停仍立即生效。
 
 Unitree 绕障调用位于 `robot/slam_gateway_refactor/src/slam_gateway.cpp` 的
 `ROBOT_API_ID_POSE_NAV_PL (1102)`；目标 `mode=0` 表示避障模式。

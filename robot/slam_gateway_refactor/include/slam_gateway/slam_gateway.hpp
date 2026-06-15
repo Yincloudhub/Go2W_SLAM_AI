@@ -8,6 +8,7 @@
 
 #include <unitree/robot/client/client.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
+#include <unitree/robot/go2/sport/sport_client.hpp>
 #include <unitree/idl/ros2/String_.hpp>
 #include <json.hpp>
 
@@ -50,6 +51,9 @@ public:
     ServiceResult startRelocation(const std::string& map_path = "/home/unitree/test.pcd",
                                   const PoseData& init_pose = PoseData{});
     ServiceResult submitNavigationGoal(const PoseData& goal);
+    ServiceResult submitSupervisedReposition(const std::string& direction,
+                                             double distance_m,
+                                             double speed_mps);
     ServiceResult pauseNavigation();
     ServiceResult resumeNavigation();
     ServiceResult stopNode();
@@ -81,6 +85,11 @@ private:
     void slamKeyInfoHandler(const void* message);
 
     ServiceResult callApi(int32_t api_id, const std::string& parameter);
+    void supervisedRepositionLoop(std::string direction,
+                                  double distance_m,
+                                  double speed_mps,
+                                  CurrentPose start_pose);
+    int32_t stopSupervisedReposition();
     void taskLoop(bool loop_patrol);
     void updateDistanceToGoalLocked();
 
@@ -97,8 +106,14 @@ private:
     TopologyManager topology_;
     LidarGeometryPerception lidar_perception_;
     SafetySupervisor safety_supervisor_;
+    unitree::robot::go2::SportClient sport_client_;
+    mutable std::mutex sport_mutex_;
+    bool sport_initialized_{false};
 
     std::atomic<bool> is_arrived_{false};
+    std::atomic<bool> reposition_active_{false};
+    std::atomic<bool> reposition_stop_requested_{false};
+    std::thread reposition_thread_;
     std::atomic<bool> thread_control_{false};
     std::thread task_thread_;
 };

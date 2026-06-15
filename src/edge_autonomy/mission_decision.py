@@ -13,6 +13,9 @@ EXECUTION_CHAIN = [
     "unitree_sdk",
 ]
 
+MOBILITY_ACTIONS = {"reposition", "navigate", "hold"}
+REPOSITION_DIRECTIONS = {"forward", "backward", "left", "right"}
+
 
 def build_gateway_decision_record(
     gateway_state: dict[str, Any] | None,
@@ -154,4 +157,94 @@ def build_mission_decision(
             "topology": {"allowed": bool(topology_allowed), "reason": topology_reason},
             "gateway": gateway_record,
         },
+    }
+
+
+def build_mobility_decision(
+    mobility_analysis: dict[str, Any],
+    strategy_proposal: dict[str, Any],
+    *,
+    timestamp_ms: int | None = None,
+) -> dict[str, Any]:
+    now_ms = int(timestamp_ms if timestamp_ms is not None else time.time() * 1000)
+    required = mobility_analysis.get("required") is True
+    candidates = {
+        str(item.get("direction")): item
+        for item in mobility_analysis.get("candidates", [])
+        if isinstance(item, dict)
+        and str(item.get("direction")) in REPOSITION_DIRECTIONS
+    }
+    action = str(strategy_proposal.get("action") or "")
+    direction = str(strategy_proposal.get("direction") or "")
+    reason = str(strategy_proposal.get("reason") or "")
+    accepted = False
+    decision = "hold"
+    reason_code = "invalid_mobility_strategy"
+    authorized_command = None
+
+    if action not in MOBILITY_ACTIONS:
+        reason = reason or f"unsupported mobility action: {action or 'missing'}"
+    elif action == "hold":
+        accepted = True
+        decision = "hold"
+        reason_code = "strategy_requested_hold"
+        reason = reason or "mobility strategy requested hold"
+    elif action == "navigate":
+        if required:
+            reason_code = "turning_envelope_still_constrained"
+            reason = "mapped navigation denied while reposition remains required"
+        else:
+            accepted = True
+            decision = "execute_navigation"
+            reason_code = "turning_envelope_ready"
+            reason = reason or "mobility strategy selected mapped navigation"
+    elif direction not in candidates:
+        reason_code = "reposition_direction_not_in_candidates"
+        reason = f"reposition direction {direction!r} is not authorized"
+    elif not required:
+        reason_code = "reposition_not_required"
+        reason = "reposition denied because turning envelope is already ready"
+    else:
+        candidate = candidates[direction]
+        try:
+            requested_distance_m = float(strategy_proposal.get("distance_m"))
+            max_distance_m = float(candidate.get("distance_m"))
+        except (TypeError, ValueError):
+            requested_distance_m = -1.0
+            max_distance_m = -1.0
+        if requested_distance_m < 0.20 or requested_distance_m > max_distance_m:
+            reason_code = "reposition_distance_outside_candidate"
+            reason = (
+                f"requested reposition distance {requested_distance_m:.3f} "
+                f"exceeds candidate range 0.20..{max_distance_m:.3f}"
+            )
+        else:
+            accepted = True
+            decision = "execute_reposition"
+            reason_code = "bounded_reposition_authorized"
+            reason = reason or "bounded reposition authorized"
+            authorized_command = {
+                "action": "supervised_reposition",
+                "direction": direction,
+                "distance_m": requested_distance_m,
+                "speed_mps": 0.10,
+                "operator_ack": True,
+            }
+
+    return {
+        "schema_version": 1,
+        "schema": "go2w_mobility_decision_v1",
+        "decision_id": f"mobility_{now_ms}",
+        "timestamp_ms": now_ms,
+        "authority": "mission_decision_engine",
+        "accepted": accepted,
+        "decision": decision,
+        "reason_code": reason_code,
+        "reason": reason,
+        "strategy_source": strategy_proposal.get("source"),
+        "strategy_proposal": strategy_proposal,
+        "turning_envelope_reposition_required": required,
+        "authorized_command": authorized_command,
+        "gateway_final_authority": True,
+        "llm_direct_motion": False,
     }

@@ -42,32 +42,6 @@ std::string makeSessionToken()
     return token.str();
 }
 
-class NavigationPauseClient : public unitree::robot::Client {
-public:
-    NavigationPauseClient()
-        : unitree::robot::Client(slam_gateway::TEST_SERVICE_NAME, false)
-    {
-    }
-
-    void Init() override
-    {
-        SetApiVersion(slam_gateway::TEST_API_VERSION);
-        UT_ROBOT_CLIENT_REG_API_NO_PROI(slam_gateway::ROBOT_API_ID_PAUSE_NAV);
-        SetTimeout(2.0f);
-    }
-
-    slam_gateway::ServiceResult pause()
-    {
-        nlohmann::json request;
-        request["data"] = nlohmann::json::object();
-        slam_gateway::ServiceResult result;
-        result.status_code =
-            Call(slam_gateway::ROBOT_API_ID_PAUSE_NAV, request.dump(), result.data);
-        result.ok = result.status_code == 0;
-        return result;
-    }
-};
-
 struct NavigationLease {
     std::mutex mutex;
     bool active{false};
@@ -86,15 +60,15 @@ struct PauseOutcome {
 };
 
 PauseOutcome pauseWithRetries(
-    NavigationPauseClient& client,
-    std::mutex& client_mutex,
+    slam_gateway::SlamGateway& gateway,
+    std::mutex& gateway_mutex,
     int max_attempts = 3)
 {
     PauseOutcome outcome;
-    std::lock_guard<std::mutex> lock(client_mutex);
+    std::lock_guard<std::mutex> lock(gateway_mutex);
     for (int attempt = 1; attempt <= max_attempts; ++attempt) {
         outcome.attempts = attempt;
-        outcome.result = client.pause();
+        outcome.result = gateway.pauseNavigation();
         if (outcome.result.ok) break;
         if (attempt < max_attempts) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -103,32 +77,51 @@ PauseOutcome pauseWithRetries(
     return outcome;
 }
 
-std::string runtimeSessionBlockReason(
+struct RuntimeSessionCheck {
+    std::string reason;
+    nlohmann::json world_state;
+};
+
+RuntimeSessionCheck runtimeSessionCheck(
     const slam_gateway::SlamGateway& gateway,
     const std::string& session_map_id,
     const std::string& session_map_path)
 {
-    const auto pose = gateway.getCurrentPose();
-    const auto localization = gateway.getLocalizationState();
-    if (pose.map_id != session_map_id || pose.map_path != session_map_path) {
-        return "navigation_session_map_identity_changed";
+    RuntimeSessionCheck check;
+    check.world_state = gateway.buildWorldStateJson();
+    const auto pose =
+        check.world_state.value("current_pose", nlohmann::json::object());
+    const auto localization =
+        check.world_state.value("localization", nlohmann::json::object());
+    if (pose.value("map_id", "") != session_map_id ||
+        pose.value("map_path", "") != session_map_path) {
+        check.reason = "navigation_session_map_identity_changed";
+        return check;
     }
-    if (localization.status != "localized") {
-        return "navigation_session_localization_invalid";
+    if (localization.value("status", "") != "localized") {
+        check.reason = "navigation_session_localization_invalid";
+        return check;
     }
-    if (localization.pose_age_ms < 0 || localization.pose_age_ms > 500) {
-        return "navigation_session_localization_stale";
+    const int64_t pose_age_ms = localization.value("pose_age_ms", int64_t{-1});
+    if (pose_age_ms < 0 || pose_age_ms > 500) {
+        check.reason = "navigation_session_localization_stale";
+        return check;
     }
-    const auto safety = gateway.getSafetyDecision();
-    if (!safety.allow_navigation) {
-        return "navigation_session_safety_blocked:" + safety.reason;
+    const auto safety =
+        check.world_state.value("safety", nlohmann::json::object());
+    if (!safety.value("allow_navigation", false)) {
+        check.reason =
+            "navigation_session_safety_blocked:" +
+            safety.value("reason", "unknown");
     }
-    return "";
+    return check;
 }
 
 bool isNavigationMotionAction(const std::string& action)
 {
-    return action == "navigate_to_pose" || action == "supervised_departure";
+    return action == "navigate_to_pose" ||
+        action == "supervised_departure" ||
+        action == "supervised_reposition";
 }
 
 void writeJsonLine(const nlohmann::json& value, std::mutex& output_mutex)
@@ -164,10 +157,6 @@ int main(int argc, const char** argv)
     slam_gateway::NavigationTargetAuthorizer target_authorizer(
         kDefaultMapRegistry,
         kDefaultRegistryMapId);
-    NavigationPauseClient pause_client;
-    pause_client.Init();
-    std::mutex pause_client_mutex;
-
     std::atomic<bool> monitor_running{persistent_navigation_session};
     std::mutex gateway_mutex;
     std::mutex output_mutex;
@@ -261,7 +250,7 @@ int main(int argc, const char** argv)
                     }
                 }
                 if (retry_pending_pause) {
-                    const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                    const auto paused = pauseWithRetries(gateway, gateway_mutex);
                     int attempts_total = 0;
                     {
                         std::lock_guard<std::mutex> lock(lease.mutex);
@@ -293,8 +282,9 @@ int main(int argc, const char** argv)
                 }
 
                 const int64_t now_ms = loop_now_ms;
-                std::string reason =
-                    runtimeSessionBlockReason(gateway, session_map_id, session_map_path);
+                const auto runtime_check =
+                    runtimeSessionCheck(gateway, session_map_id, session_map_path);
+                std::string reason = runtime_check.reason;
                 uint64_t generation = 0;
                 int64_t heartbeat_age_ms = 0;
                 {
@@ -322,7 +312,7 @@ int main(int argc, const char** argv)
                     lease.next_pause_retry_ms = monotonicNowMs() + 1000;
                     lease.invalid_reason = reason;
                 }
-                const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                const auto paused = pauseWithRetries(gateway, gateway_mutex);
                 int attempts_total = 0;
                 {
                     std::lock_guard<std::mutex> lock(lease.mutex);
@@ -337,6 +327,7 @@ int main(int argc, const char** argv)
                         {"accepted", paused.result.ok},
                         {"action", "pause_navigation"},
                         {"reason", reason},
+                        {"world_state", runtime_check.world_state},
                         {"heartbeat_age_ms", heartbeat_age_ms},
                         {"pause_attempts", paused.attempts},
                         {"pause_attempts_total", attempts_total},
@@ -402,8 +393,9 @@ int main(int argc, const char** argv)
                         output_mutex);
                     continue;
                 }
-                const std::string runtime_reason =
-                    runtimeSessionBlockReason(gateway, session_map_id, session_map_path);
+                const auto runtime_check =
+                    runtimeSessionCheck(gateway, session_map_id, session_map_path);
+                const std::string runtime_reason = runtime_check.reason;
                 bool lease_ok = false;
                 bool pause_for_runtime_block = false;
                 std::string lease_reason;
@@ -427,7 +419,7 @@ int main(int argc, const char** argv)
                     }
                 }
                 if (pause_for_runtime_block) {
-                    const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                    const auto paused = pauseWithRetries(gateway, gateway_mutex);
                     std::lock_guard<std::mutex> lock(lease.mutex);
                     lease.pause_attempts_total += paused.attempts;
                     if (paused.result.ok) lease.pause_pending = false;
@@ -438,7 +430,8 @@ int main(int argc, const char** argv)
                             {"accepted", false},
                             {"action", action},
                             {"request_id", request_id},
-                            {"reason", lease_reason}
+                            {"reason", lease_reason},
+                            {"world_state", runtime_check.world_state}
                         },
                         output_mutex);
                     continue;
@@ -503,7 +496,7 @@ int main(int argc, const char** argv)
                     }
                 }
                 if (must_pause) {
-                    const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+                    const auto paused = pauseWithRetries(gateway, gateway_mutex);
                     int attempts_total = 0;
                     {
                         std::lock_guard<std::mutex> lock(lease.mutex);
@@ -555,7 +548,7 @@ int main(int argc, const char** argv)
         lease.pause_pending = false;
     }
     if (pause_on_close) {
-        const auto paused = pauseWithRetries(pause_client, pause_client_mutex);
+        const auto paused = pauseWithRetries(gateway, gateway_mutex);
         writeJsonLine(
             {
                 {"type", "navigation_session_closed"},

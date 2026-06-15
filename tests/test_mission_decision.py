@@ -5,7 +5,10 @@ from pathlib import Path
 from jsonschema import Draft202012Validator
 
 from edge_autonomy.gateway_safety import gateway_allows_navigation
-from edge_autonomy.mission_decision import build_mission_decision
+from edge_autonomy.mission_decision import (
+    build_mission_decision,
+    build_mobility_decision,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -143,6 +146,50 @@ class MissionDecisionTests(unittest.TestCase):
         self.assertEqual(decision["decision"], "reject")
         self.assertEqual(decision["reason_code"], "invalid_task_queue")
         self.assertFalse(decision["motion_allowed"])
+
+    def test_mobility_decision_bounds_llm_reposition(self) -> None:
+        analysis = {
+            "required": True,
+            "candidates": [
+                {"direction": "left", "distance_m": 0.5},
+            ],
+        }
+        accepted = build_mobility_decision(
+            analysis,
+            {
+                "action": "reposition",
+                "direction": "left",
+                "distance_m": 0.3,
+                "confidence": 0.9,
+                "reason": "create turning room",
+                "source": "local_llm",
+            },
+            timestamp_ms=123,
+        )
+        rejected = build_mobility_decision(
+            analysis,
+            {
+                "action": "navigate",
+                "direction": "",
+                "distance_m": 0.0,
+                "confidence": 0.9,
+                "reason": "navigate now",
+                "source": "local_llm",
+            },
+            timestamp_ms=124,
+        )
+
+        self.assertEqual(accepted["decision"], "execute_reposition")
+        self.assertEqual(
+            accepted["authorized_command"]["direction"],
+            "left",
+        )
+        self.assertFalse(accepted["llm_direct_motion"])
+        self.assertFalse(rejected["accepted"])
+        self.assertEqual(
+            rejected["reason_code"],
+            "turning_envelope_still_constrained",
+        )
 
 
 if __name__ == "__main__":

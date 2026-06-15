@@ -104,6 +104,7 @@ Allowed high-level actions:
 - `relocate`
 - `navigate_to_pose`
 - `supervised_departure`
+- `supervised_reposition`
 - `pause_navigation`
 - `resume_navigation`
 - `stop_slam`
@@ -145,14 +146,14 @@ The machine-readable path is intentionally stricter than the keyboard path:
 ## Important notes
 
 1. This code does not modify official `unitree_slam` internals.
-2. `LidarGeometryPerception` treats XT16 as the primary safety source. A present but stale or uncalibrated XT16 summary remains fail-closed and cannot be hidden by D435. When both sources are fresh, directional clearance is conservatively fused by keeping the nearer obstacle. D435 is used alone only when no XT16 summary exists.
+2. `LidarGeometryPerception` treats XT16 as the primary safety source. A present but stale or uncalibrated XT16 summary remains fail-closed and cannot be hidden by D435. A D435 front reading below the hard-stop threshold must be confirmed by two distinct fresh frames before it overrides a clear XT16 front reading. The world state exposes both source readings, confirmation count, and the selected source.
 3. The keyboard path and LLM path are intentionally separated:
    - `slam_keyboard_client`: original manual operation.
    - `slam_llm_command_client`: structured command input for LLM/task executor.
 4. LLM commands are validated and routed through `SafetySupervisor` before navigation.
 5. Navigation obstacle mode follows Unitree SLAM API semantics: `mode=0` means obstacle avoidance, `mode=1` means stop for obstacle. LLM navigation and manually recorded waypoints default to `mode=0`.
 6. Short-lived command clients must not stop the SLAM backend when they exit. Use the explicit `stop_slam` action or the keyboard stop path when the backend should really stop.
-7. `navigate_to_pose` is rejected unless the near-field summary is sensor-backed, fresh, sufficiently confident, and complete in the front, left, and right ROIs. Formal mode keeps the strict all-direction clearance policy. Explicit supervised release uses `planner_mobility_v3`: Unitree obstacle-avoidance `mode=0` requires a front departure corridor of at least `0.80 m`; side/rear proximity is advisory for aligned travel, while a material initial heading change additionally requires a clear turning envelope.
-8. `supervised_departure` is an internal deterministic recovery action, not general relative motion. It is forward-only, limited to `0.50 m` and `0.10 m/s`, requires operator acknowledgement and a supervised release, and requires front clearance equal to the requested distance plus `0.50 m`.
+7. Explicit supervised release uses `semantic_mobility_v4`. The local LLM may select one of the deterministic forward/backward/left/right clearance candidates. `MissionDecisionEngine` verifies the choice and the Gateway remains final authority.
+8. `supervised_reposition` is an internal recovery action, not a general relative-motion interface. It uses `SportClient::Move` with zero yaw rate, is limited to `0.50 m` and `0.10 m/s`, continuously checks directional XT16 clearance, and stops after every step to refresh world state. The legacy `supervised_departure` action remains a forward-only compatibility alias.
 9. `navigate_to_pose` requires `map_path`, and it must match the map path reported by the active SLAM localization stream.
 10. Stereo depth is forward-facing. Its image-left/image-right sectors may tighten the front view for diagnostics, but they never replace XT16 lateral or rear clearance. Stereo-only data cannot authorize navigation.

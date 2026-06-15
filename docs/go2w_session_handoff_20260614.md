@@ -123,6 +123,31 @@ XT16 正式标定 promotion、低速运动验收、TI/NX live transport 和 IMU/
 Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不授权继续 XT16
 复测、SLAM/Gateway 启动或真实运动。
 
+### 2026-06-15 semantic mobility v4 correction
+
+- Two field failures exposed separate policy defects: one fixed forward
+  departure did not guarantee a turning envelope, and one transient D435
+  near return could invalidate the navigation lease immediately.
+- `semantic_mobility_v4` replaces fixed forward-only escape planning. XT16
+  produces bounded forward/backward/left/right candidates. The local LLM
+  selects the next candidate after every world-state refresh.
+- `MissionDecisionEngine` validates that the LLM selected an existing
+  candidate and bounded distance. Gateway remains final motion authority.
+- Internal `supervised_reposition` uses GO2 `SportClient::Move(vx, vy, 0)`
+  so lateral recovery does not masquerade as a pose-navigation target and
+  does not request yaw motion. Each step is at most 0.50 m and 0.10 m/s.
+- The Gateway continuously checks localization, global safety, and the XT16
+  clearance in the selected direction. Pause, lease timeout, disconnect, or
+  runtime block all converge on `StopMove`.
+- A D435 front hard stop must be confirmed by two distinct fresh frames when
+  XT16 reports a clear front corridor. XT16 hard stops remain immediate.
+- Heartbeat rejection now carries the exact world-state evidence used for
+  the decision.
+- General user-requested `relative_motion` remains not wired. This controller
+  is internal to the supervised recovery loop.
+- Implementation and no-motion build/tests must complete before any new
+  field movement. This section does not authorize motion.
+
 ### 2026-06-14 启动与受监督闭环整理
 
 - P0-4 已完成，不再回退重做；当前主线是降低重启后的操作复杂度并准备受监督

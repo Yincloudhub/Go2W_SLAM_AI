@@ -10,10 +10,12 @@ from edge_autonomy.map_registry import MapRegistry
 from scripts.run_robot_closed_loop import (
     PersistentNavigationSession,
     gateway_rejection_reason,
+    generate_mobility_strategy_proposal,
     generate_llm_feedback_result,
     operator_feedback_message,
     run_supervised_navigation_session,
     supervised_departure_decision,
+    supervised_reposition_decision,
     wait_for_arrival,
 )
 from scripts.run_robot_closed_loop import execute_task_queue
@@ -25,6 +27,18 @@ REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w
 class FailingBackend:
     def generate(self, prompt: str, *, system_prompt: str, max_tokens: int, timeout_s: int) -> str:
         raise AssertionError("live LLM should not run for progress feedback by default")
+
+class MobilityBackend:
+    def generate(self, prompt: str, *, system_prompt: str, max_tokens: int, timeout_s: int) -> str:
+        return json.dumps(
+            {
+                "action": "reposition",
+                "direction": "left",
+                "distance_m": 0.3,
+                "confidence": 0.9,
+                "reason": "left side creates turning room",
+            }
+        )
 
 
 class QueueFeedbackTests(unittest.TestCase):
@@ -120,6 +134,69 @@ class QueueFeedbackTests(unittest.TestCase):
         self.assertFalse(decision["required"])
         self.assertFalse(decision["available"])
         self.assertEqual(decision["trigger"], "not_required")
+
+    def test_reposition_selects_lateral_space_for_constrained_side(self) -> None:
+        state = {
+            "world_state": {
+                "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
+                "local_obstacle": {
+                    "front_clearance_m": 0.9,
+                    "left_clearance_m": 2.0,
+                    "right_clearance_m": 0.1,
+                    "rear_clearance_m": 1.0,
+                    "supervised_release": {"active": True},
+                },
+            }
+        }
+
+        decision = supervised_reposition_decision(
+            state,
+            {"target_pose": {"x": 2.0, "y": 0.0}},
+        )
+
+        self.assertTrue(decision["required"])
+        self.assertTrue(decision["available"])
+        self.assertEqual(decision["direction"], "left")
+        self.assertEqual(decision["distance_m"], 0.5)
+
+    def test_live_mobility_strategy_selects_only_candidate_action(self) -> None:
+        proposal = generate_mobility_strategy_proposal(
+            {
+                "required": True,
+                "trigger": "initial_turn_constrained",
+                "bearing_error_rad": 1.0,
+                "clearance_m": {
+                    "front": 0.9,
+                    "left": 2.0,
+                    "right": 0.1,
+                    "rear": 1.0,
+                },
+                "candidates": [
+                    {
+                        "direction": "left",
+                        "distance_m": 0.5,
+                        "clearance_m": 2.0,
+                        "turning_relief_m": 0.25,
+                        "goal_progress_m": 0.0,
+                    }
+                ],
+            },
+            {
+                "target_node": "wp_a",
+                "target_pose": {"x": 2.0, "y": 0.0},
+            },
+            SimpleNamespace(
+                mobility_strategy_mode="live",
+                local_command="unused",
+                mobility_strategy_max_tokens=96,
+                mobility_strategy_timeout_s=2,
+            ),
+            backend=MobilityBackend(),
+        )
+
+        self.assertEqual(proposal["source"], "local_llm")
+        self.assertEqual(proposal["action"], "reposition")
+        self.assertEqual(proposal["direction"], "left")
 
     def test_gateway_rejection_preserves_safety_reason(self) -> None:
         reason = gateway_rejection_reason(

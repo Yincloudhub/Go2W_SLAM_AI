@@ -101,10 +101,52 @@ artifact 台账，要求测量值、哈希、地图和 Git 记录齐全。
 XT16 正式标定 promotion、低速运动验收、TI/NX live transport 和 IMU/里程计
 摘要继续作为 deferred issues，不与 P0-4 混成一个巨型提交。
 
+### 2026-06-14 导航消费链最新纠偏
+
+- RViz2 与现实姿态现场确认一致；本次错误位于 GO2W 自身目标注册/消费链。
+- XT16 几何只使用 `/unitree/slam_lidar/points`；头部旋转雷达
+  `/utlidar/cloud*` 有自身回波，不得套用 XT16 坐标映射。
+- Unitree 1102 请求结构已与自带 `keyDemo.cpp` 对齐，不是本次主因。
+- `yin_siyuan_station` 在 `a6c9a64` 被普通 PCD 点击值覆盖，现场确认值来自
+  `3b02102` 和 `artifacts/real_site_pcd/yin_siyuan_calibration_20260522.json`：
+  `x=1.5974299907684326, y=0.3592859208583832`，保留完整四元数。
+- 修复必须保证 PCD 标注不能默认覆盖现场校准或已验证节点，CLI 现场校准必须
+  写入可保护的来源元数据，并用回归测试固定该优先级。
+- 无 SLAM 时可继续读取 XT16 局部障碍几何；IMU 只能提供姿态/角速度。当前短采样
+  未证明 `/utlidar/robot_odom` 等候选里程计持续输出，因此不得启用 odom-only
+  拓扑导航。只有明确的地图定位可执行注册点导航。
+- 本次诊断和修复不授权真实运动；完成提交、机器人 fast-forward 和无运动测试后，
+  再由现场人员明确决定是否进行下一次低速导航验证。
+
 2026-06-14 后续执行状态：P0-4 已完成实现、提交、推送、机器人 fast-forward
 和本地/机器人纯 journal/dry-run 无运动验收。实现提交为 `c53f9a8`，机器人
 Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不授权继续 XT16
 复测、SLAM/Gateway 启动或真实运动。
+
+### 2026-06-15 semantic mobility v4 correction
+
+- Two field failures exposed separate policy defects: one fixed forward
+  departure did not guarantee a turning envelope, and one transient D435
+  near return could invalidate the navigation lease immediately.
+- `semantic_mobility_v4` replaces fixed forward-only escape planning. XT16
+  produces bounded forward/backward/left/right candidates. The local LLM
+  selects the next candidate after every world-state refresh.
+- `MissionDecisionEngine` validates that the LLM selected an existing
+  candidate and bounded distance. Gateway remains final motion authority.
+- Internal `supervised_reposition` uses GO2 `SportClient::Move(vx, vy, 0)`
+  so lateral recovery does not masquerade as a pose-navigation target and
+  does not request yaw motion. Each step is at most 0.50 m and 0.10 m/s.
+- The Gateway continuously checks localization, global safety, and the XT16
+  clearance in the selected direction. Pause, lease timeout, disconnect, or
+  runtime block all converge on `StopMove`.
+- A D435 front hard stop must be confirmed by two distinct fresh frames when
+  XT16 reports a clear front corridor. XT16 hard stops remain immediate.
+- Heartbeat rejection now carries the exact world-state evidence used for
+  the decision.
+- General user-requested `relative_motion` remains not wired. This controller
+  is internal to the supervised recovery loop.
+- Implementation and no-motion build/tests must complete before any new
+  field movement. This section does not authorize motion.
 
 ### 2026-06-14 启动与受监督闭环整理
 

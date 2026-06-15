@@ -64,13 +64,16 @@ class LlmContextTests(unittest.TestCase):
         departure = next(
             item
             for item in context["capability_contract"]["conditional"]
-            if item["name"] == "bounded_supervised_departure"
+            if item["name"] == "bounded_supervised_reposition"
         )
         self.assertIn(
             "side_rear_advisory_before_planner_control",
             departure["semantic_inputs"],
         )
-        self.assertEqual(departure["status"], "internal_deterministic_executor_only")
+        self.assertEqual(
+            departure["status"],
+            "internal_llm_strategy_with_deterministic_guard",
+        )
         for edge in context["world_state_summary"]["topology"]["edges"]:
             self.assertFalse(edge["distance_verified"])
             self.assertIsNone(edge["expected_distance_m"])
