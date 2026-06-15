@@ -1,0 +1,577 @@
+{
+  "version": 1,
+  "default_map_id": "go2w_real_site",
+  "robot": {
+    "host": "192.168.123.18",
+    "ssh_user": "unitree",
+    "network_interface": "eth0",
+    "slam_gateway_client": "/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor/build/slam_llm_command_client",
+    "unitree_slam_dir": "/unitree/module/unitree_slam"
+  },
+  "maps": [
+    {
+      "map_id": "go2w_real_site",
+      "name": "GO2W 真实现场拓扑",
+      "status": "real",
+      "pcd_path": "/home/unitree/test.pcd",
+      "topology_path": "/home/unitree/topology_points.json",
+      "frame_id": "map",
+      "description": "真实现场 PCD 与人工标注拓扑点，供机器狗本地 LLM 闭环使用。",
+      "topology_nodes": [
+        {
+          "node_id": "initial_point",
+          "name": "初始点",
+          "node_type": "recorded_waypoint",
+          "aliases": [
+            "初始点",
+            "起始点",
+            "回到初始点",
+            "回起点",
+            "回来",
+            "返回",
+            "initial_point"
+          ],
+          "tags": [
+            "real_site",
+            "recorded",
+            "startup",
+            "safe_return",
+            "live_verified",
+            "ui_verified"
+          ],
+          "pose": {
+            "x": -0.39,
+            "y": 0.18,
+            "z": 0.0,
+            "yaw": -0.11,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.05497227502706773,
+            "q_w": 0.9984878812375985,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "来自早期 /home/unitree/topology_points.json 的 wp_0，保留为真实初始返回点。 calibrated from current live pose. UI verified at 2026-06-02T21:39:35+0800 distance_m=0.130. UI verified at 2026-06-02T21:41:26+0800 distance_m=0.032. UI verified at 2026-06-02T21:44:04+0800 distance_m=0.091. UI verified at 2026-06-02T21:45:44+0800 distance_m=0.213.",
+          "verification": {
+            "verified_at": "2026-06-02T21:45:44+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.213,
+            "current_pose": {
+              "x": -0.39,
+              "y": 0.18,
+              "yaw": -0.11
+            },
+            "previous_pose": {
+              "x": -0.25,
+              "y": 0.02,
+              "z": 0.0,
+              "yaw": -0.04,
+              "q_x": 0.0,
+              "q_y": 0.0,
+              "q_z": -0.01999866669333308,
+              "q_w": 0.9998000066665778,
+              "speed": 0.3,
+              "mode": 0
+            }
+          }
+        },
+        {
+          "node_id": "yin_siyuan_station",
+          "name": "尹思园工位",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "尹思园工位",
+            "尹思园",
+            "尹思园位置",
+            "yin_siyuan_station"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "workstation",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "pose": {
+            "x": 1.5974299907684326,
+            "y": 0.3592859208583832,
+            "z": -0.010628879070281982,
+            "q_x": 0.014545116573572159,
+            "q_y": 0.01697041466832161,
+            "q_z": -0.003139750799164176,
+            "q_w": 0.99974524974823,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "现场导航后用 SLAM 当前位姿校准的尹思园工位。原 PCD 点击点与校准点约相差 0.192m。",
+          "calibration": {
+            "confirmed_at": "2026-05-22",
+            "source": "artifacts/real_site_pcd/yin_siyuan_calibration_20260522.json",
+            "method": "field_navigation_current_slam_pose",
+            "pcd_delta_m": 0.1923085248321673
+          }
+        },
+        {
+          "node_id": "chen_jiayu_station",
+          "name": "陈嘉瑜工位",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "陈嘉瑜工位",
+            "陈嘉瑜",
+            "陈嘉瑜位置",
+            "chen_jiayu_station"
+          ],
+          "tags": [
+            "real_site",
+            "workstation",
+            "live_calibrated",
+            "prone_observed",
+            "standard_prone_pose",
+            "live_verified",
+            "ui_verified",
+            "needs_standing_verification"
+          ],
+          "pose": {
+            "x": -1.1047908067703247,
+            "y": -0.6664881110191345,
+            "z": 0.0,
+            "yaw": 1.5275480012859097,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.6916520640112973,
+            "q_w": 0.7222308649932598,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "Live-calibrated from a localized gateway world-state sample while robot was prone at the standard workstation position on 2026-06-01. The raw prone pose is retained under calibration_observation; navigation pose keeps precise x/y/yaw with flattened z/roll/pitch. Keep standing verification before enabling real navigation to this target. UI verified at 2026-06-01T20:12:00+0800 distance_m=0.223.",
+          "calibration_observation": {
+            "captured_at": "2026-06-01T14:57:00+08:00",
+            "source": "gateway_world_state.rt/slam_info",
+            "robot_posture": "prone",
+            "localization_status": "localized",
+            "slam_health": "ok",
+            "pose": {
+              "x": -1.1047908067703247,
+              "y": -0.6664881110191345,
+              "z": 0.04458674043416977,
+              "yaw": 1.5275480012859097,
+              "q_x": 0.015116733498871326,
+              "q_y": 0.00804204773157835,
+              "q_z": 0.6916059851646423,
+              "q_w": 0.7220719456672668,
+              "speed": 0.800000011920929,
+              "mode": 0
+            }
+          },
+          "verification": {
+            "verified_at": "2026-06-01T20:12:00+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.223,
+            "current_pose": {
+              "x": -1.16,
+              "y": -0.45,
+              "yaw": 1.55
+            }
+          }
+        },
+        {
+          "node_id": "yang_shuyang_station",
+          "name": "杨书洋工位",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "杨书洋工位",
+            "杨书洋",
+            "杨书洋位置",
+            "yang_shuyang_station"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "workstation",
+            "live_verified",
+            "ui_verified"
+          ],
+          "pose": {
+            "x": 0.07719039916992188,
+            "y": -4.940850067138673,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "annotated on test.pcd; needs live calibration UI verified at 2026-06-01T20:15:51+0800 distance_m=0.219.",
+          "verification": {
+            "verified_at": "2026-06-01T20:15:51+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.219,
+            "current_pose": {
+              "x": -0.01,
+              "y": -4.74,
+              "yaw": 3.1
+            }
+          }
+        },
+        {
+          "node_id": "zhao_bo_office_front",
+          "name": "赵博办公室门口",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "赵博办公室门口",
+            "赵博老师办公室门口",
+            "赵博办公室",
+            "赵博门口",
+            "赵博",
+            "赵博老师",
+            "zhao_bo_office_front"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "office",
+            "photo_required",
+            "live_verified",
+            "ui_verified"
+          ],
+          "pose": {
+            "x": 3.077190399169922,
+            "y": -5.528350067138671,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "annotated on test.pcd; photo required; needs live calibration UI verified at 2026-06-01T20:15:04+0800 distance_m=0.130.",
+          "verification": {
+            "verified_at": "2026-06-01T20:15:04+0800",
+            "source": "operator_ui_current_pose",
+            "distance_m": 0.13,
+            "current_pose": {
+              "x": 3.17,
+              "y": -5.62,
+              "yaw": -0.02
+            }
+          }
+        },
+        {
+          "node_id": "room_701_corridor",
+          "name": "701门外走廊",
+          "node_type": "annotated_waypoint",
+          "aliases": [
+            "701门外走廊",
+            "701门口",
+            "701走廊",
+            "room_701_corridor"
+          ],
+          "tags": [
+            "real_site",
+            "pcd_annotated",
+            "701",
+            "corridor",
+            "photo_required",
+            "needs_calibration"
+          ],
+          "pose": {
+            "x": -4.210309600830078,
+            "y": -0.19085006713867259,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "annotated on test.pcd; photo required; needs live calibration"
+        },
+        {
+          "node_id": "nie_guoli_office_front",
+          "name": "聂国篱办公室门口",
+          "node_type": "recorded_waypoint",
+          "aliases": [
+            "聂国篱办公室门口",
+            "聂国篱办公室",
+            "聂国篱门口",
+            "聂国篱",
+            "nie_guoli_office_front",
+            "wp_1"
+          ],
+          "tags": [
+            "real_site",
+            "recorded",
+            "office",
+            "doorway",
+            "needs_calibration"
+          ],
+          "pose": {
+            "x": 3.258938789367676,
+            "y": -2.2877299785614014,
+            "z": -0.03357435762882233,
+            "q_x": 0.01912033185362816,
+            "q_y": 0.016667384654283524,
+            "q_z": -0.722239077091217,
+            "q_w": 0.6914089918136597,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "来自 /home/unitree/topology_points.json 的 wp_1。现场确认该点是聂国篱办公室门口，仍保留 needs_calibration 直到重新标点校准。"
+        }
+      ],
+      "topology_edges": [
+        {
+          "from": "initial_point",
+          "to": "yin_siyuan_station",
+          "bidirectional": true,
+          "expected_distance_m": 0.7,
+          "description": "初始点到尹思园工位的候选路径。"
+        },
+        {
+          "from": "initial_point",
+          "to": "zhao_bo_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 4.6,
+          "description": "初始点到赵博办公室门口的候选路径。"
+        },
+        {
+          "from": "initial_point",
+          "to": "room_701_corridor",
+          "bidirectional": true,
+          "expected_distance_m": 4.7,
+          "description": "初始点到 701门外走廊 的候选路径。"
+        },
+        {
+          "from": "yin_siyuan_station",
+          "to": "zhao_bo_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 5.0,
+          "description": "尹思园工位到赵博办公室门口的候选路径。"
+        },
+        {
+          "from": "yin_siyuan_station",
+          "to": "room_701_corridor",
+          "bidirectional": true,
+          "expected_distance_m": 5.1,
+          "description": "尹思园工位到 701门外走廊 的候选路径。"
+        },
+        {
+          "from": "initial_point",
+          "to": "nie_guoli_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 2.9,
+          "description": "录制点 wp_1 候选路径，现场确认为聂国篱办公室门口。"
+        },
+        {
+          "from": "yin_siyuan_station",
+          "to": "nie_guoli_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 3.1,
+          "description": "录制点 wp_1 候选路径，现场确认为聂国篱办公室门口。"
+        },
+        {
+          "from": "initial_point",
+          "to": "yang_shuyang_station",
+          "bidirectional": true,
+          "expected_distance_m": 5.2,
+          "description": "PCD test513 候选路径：初始点到杨书洋工位。"
+        },
+        {
+          "from": "yang_shuyang_station",
+          "to": "zhao_bo_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 2.9,
+          "description": "PCD test513 候选路径：杨书洋工位到赵博办公室门口。"
+        },
+        {
+          "from": "yang_shuyang_station",
+          "to": "nie_guoli_office_front",
+          "bidirectional": true,
+          "expected_distance_m": 3.5,
+          "description": "PCD test513 候选路径：杨书洋工位到聂国篱办公室门口。"
+        }
+      ],
+      "relocalization_anchors": [
+        {
+          "anchor_id": "mapping_origin",
+          "name": "mapping_origin",
+          "status": "verified_startup_relocalization_20260601",
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "yaw": 0.0,
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "Startup relocalization anchor verified on 2026-06-01 after SLAM restart; ICP Score 0.0165342 and relocation succeeded."
+        }
+      ],
+      "archived_relocalization_anchors": [
+        {
+          "anchor_id": "initial_point",
+          "name": "初始点",
+          "pose": {
+            "x": 1.1544053554534912,
+            "y": -0.1470528244972229,
+            "z": -0.04239395260810852,
+            "q_x": 0.02094786986708641,
+            "q_y": 0.011112436652183533,
+            "q_z": -0.015046637505292892,
+            "q_w": 0.9996055960655212,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.2,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate_failed_icp509_20260601",
+          "description": "Candidate initial_point anchor failed startup relocalization on 2026-06-01 with ICP 0.0372128/errorCode 509; use mapping_origin for restart recovery."
+        },
+        {
+          "anchor_id": "zhao_bo_office_front",
+          "name": "赵博办公室门口",
+          "pose": {
+            "x": 2.9771903991699222,
+            "y": -5.670015716552735,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "PCD test513 重新标注后的赵博办公室门口候选重定位锚点。"
+        },
+        {
+          "anchor_id": "yin_siyuan_station",
+          "name": "尹思园工位",
+          "pose": {
+            "x": 1.5974299907684326,
+            "y": 0.3592859208583832,
+            "z": -0.010628879070281982,
+            "q_x": 0.014545116573572159,
+            "q_y": 0.01697041466832161,
+            "q_z": -0.003139750799164176,
+            "q_w": 0.99974524974823,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.2,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "候选重定位锚点：尹思园工位。"
+        },
+        {
+          "anchor_id": "room_701_corridor",
+          "name": "701门外走廊",
+          "pose": {
+            "x": -3.472809600830078,
+            "y": 0.15498428344726634,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "候选重定位锚点：701门外走廊。"
+        },
+        {
+          "anchor_id": "nie_guoli_office_front",
+          "name": "聂国篱办公室门口",
+          "pose": {
+            "x": 3.258938789367676,
+            "y": -2.2877299785614014,
+            "z": -0.03357435762882233,
+            "q_x": 0.01912033185362816,
+            "q_y": 0.016667384654283524,
+            "q_z": -0.722239077091217,
+            "q_w": 0.6914089918136597,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "录制点 wp_1 候选重定位锚点，现场确认为聂国篱办公室门口，需重新标点后校准。"
+        },
+        {
+          "anchor_id": "yang_shuyang_station",
+          "name": "杨书洋工位",
+          "pose": {
+            "x": 0.17719039916992152,
+            "y": -4.970015716552734,
+            "z": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "candidate",
+          "description": "PCD test513 标注的杨书洋工位候选重定位锚点。"
+        },
+        {
+          "anchor_id": "chen_jiayu_station",
+          "name": "陈嘉瑜工位",
+          "allowed_radius_m": 1.2,
+          "allowed_yaw_error_deg": 45.0,
+          "status": "standard_prone_pose_needs_standing_verification",
+          "pose": {
+            "x": -1.1047908067703247,
+            "y": -0.6664881110191345,
+            "z": 0.0,
+            "yaw": 1.5275480012859097,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.6916520640112973,
+            "q_w": 0.7222308649932598,
+            "speed": 0.3,
+            "mode": 0
+          },
+          "description": "Candidate relocalization anchor refreshed from the standard workstation prone pose on 2026-06-01. Raw gateway observation is retained; verify while standing before promoting this anchor for startup recovery.",
+          "calibration_observation": {
+            "captured_at": "2026-06-01T14:57:00+08:00",
+            "source": "gateway_world_state.rt/slam_info",
+            "robot_posture": "prone",
+            "localization_status": "localized",
+            "slam_health": "ok",
+            "pose": {
+              "x": -1.1047908067703247,
+              "y": -0.6664881110191345,
+              "z": 0.04458674043416977,
+              "yaw": 1.5275480012859097,
+              "q_x": 0.015116733498871326,
+              "q_y": 0.00804204773157835,
+              "q_z": 0.6916059851646423,
+              "q_w": 0.7220719456672668,
+              "speed": 0.800000011920929,
+              "mode": 0
+            }
+          }
+        }
+      ],
+      "mapping_origin_anchor_id": "mapping_origin"
+    }
+  ]
+}

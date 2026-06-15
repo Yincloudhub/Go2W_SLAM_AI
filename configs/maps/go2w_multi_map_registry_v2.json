@@ -1,0 +1,190 @@
+{
+  "version": 2,
+  "comment": "Multi-PCD map registry V2. Each map is independently built to minimize odometry drift. Transition anchors connect adjacent maps for seamless switching.",
+  "default_map_id": "map_701_left",
+  "build_settings": {
+    "gait_mode": "standard",
+    "speed_mps": 0.2,
+    "climbing_mode": false,
+    "recorded_by": "",
+    "recorded_date": "",
+    "note": "Standard gait, no climbing mode. Fill recorded_by/date after build."
+  },
+  "robot": {
+    "host": "192.168.123.18",
+    "ssh_user": "unitree",
+    "network_interface": "eth0",
+    "slam_gateway_client": "/home/unitree/Go2W_SLAM_AI/robot/slam_gateway_refactor/build/slam_llm_command_client"
+  },
+  "maps": [
+    {
+      "map_id": "map_701_left",
+      "name": "701左侧（大门进入方向）",
+      "status": "real",
+      "pcd_path": "/home/unitree/maps/map_701_left.pcd",
+      "topology_path": "/home/unitree/maps/map_701_left_topology.json",
+      "frame_id": "map",
+      "mapping_origin_anchor_id": "mapping_origin_701_left",
+      "description": "覆盖701左侧区域：initial_point, chen_jiayu, room_701_corridor。",
+      "build_date": "",
+      "build_gait": "standard",
+      "relocalization_anchors": [
+        {
+          "anchor_id": "mapping_origin_701_left",
+          "name": "701左侧建图原点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_701_left", "speed": 0.0, "mode": 0},
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "candidate",
+          "description": "建图原点。建图时机器狗的起始物理位置。"
+        }
+      ],
+      "transition_anchors": [
+        {
+          "anchor_id": "transition_701_left_to_right",
+          "name": "701左→右过渡点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
+          "connects_to": "map_701_right",
+          "note": "填坐标：在701左右重叠区域（走廊交界），两侧点云对齐后记录pose。"
+        }
+      ],
+      "topology_nodes": [
+        {
+          "node_id": "initial_point",
+          "name": "初始点",
+          "node_type": "recorded_waypoint",
+          "aliases": ["初始点", "起始点", "回起点", "回来", "返回", "initial_point"],
+          "tags": ["real_site", "recorded", "startup", "safe_return", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "initial_point", "speed": 0.5, "mode": 0},
+          "description": "TODO: 建图后推车到位，RViz2确认点云对齐，运行 go2w_accept.sh snapshot initial_point 填入坐标"
+        },
+        {
+          "node_id": "chen_jiayu_station",
+          "name": "陈家宇工位",
+          "node_type": "recorded_waypoint",
+          "aliases": ["陈家宇工位", "陈家宇", "chen_jiayu"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "chen_jiayu_station", "speed": 0.5, "mode": 0},
+          "description": "TODO: 建图后推车到位，运行 go2w_accept.sh snapshot chen_jiayu 填入坐标"
+        },
+        {
+          "node_id": "room_701_corridor",
+          "name": "701室走廊",
+          "node_type": "recorded_waypoint",
+          "aliases": ["701走廊", "701室走廊", "701_corridor"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "room_701_corridor", "speed": 0.5, "mode": 0},
+          "description": "TODO: 建图后推车到位，运行 go2w_accept.sh snapshot room_701_corridor 填入坐标"
+        }
+      ],
+      "topology_edges": []
+    },
+    {
+      "map_id": "map_701_right",
+      "name": "701右侧（大门进入方向）",
+      "status": "real",
+      "pcd_path": "/home/unitree/maps/map_701_right.pcd",
+      "topology_path": "/home/unitree/maps/map_701_right_topology.json",
+      "frame_id": "map",
+      "mapping_origin_anchor_id": "mapping_origin_701_right",
+      "description": "覆盖701右侧区域：yin_siyuan, zhao_bo, nie_guoli。",
+      "build_date": "",
+      "build_gait": "standard",
+      "relocalization_anchors": [
+        {
+          "anchor_id": "mapping_origin_701_right",
+          "name": "701右侧建图原点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_701_right", "speed": 0.0, "mode": 0},
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "candidate",
+          "description": "从 transition_701_left_to_right 位置开始建图。"
+        },
+        {
+          "anchor_id": "transition_701_right_to_left",
+          "name": "701右→左返回过渡点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "candidate",
+          "description": "和 transition_701_left_to_right 是同一物理位置。在两图切换时用于重定位。"
+        }
+      ],
+      "transition_anchors": [
+        {
+          "anchor_id": "transition_701_right_to_702",
+          "name": "701右→702过渡点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
+          "connects_to": "map_702",
+          "note": "填坐标。"
+        }
+      ],
+      "topology_nodes": [
+        {
+          "node_id": "yin_siyuan_station",
+          "name": "尹思园工位",
+          "node_type": "recorded_waypoint",
+          "aliases": ["尹思园工位", "尹思园", "yin_siyuan"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "yin_siyuan_station", "speed": 0.5, "mode": 0},
+          "description": "TODO: 建图后推车到位，RViz2确认点云对齐，运行 go2w_accept.sh snapshot yin_siyuan 填入坐标。含完整四元数。"
+        },
+        {
+          "node_id": "zhao_bo_office_front",
+          "name": "赵波办公室前",
+          "node_type": "recorded_waypoint",
+          "aliases": ["赵波办公室", "赵波", "zhao_bo"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "zhao_bo_office_front", "speed": 0.5, "mode": 0},
+          "description": "TODO"
+        },
+        {
+          "node_id": "nie_guoli_office_front",
+          "name": "聂国力办公室前",
+          "node_type": "recorded_waypoint",
+          "aliases": ["聂国力办公室", "聂国力", "nie_guoli"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "nie_guoli_office_front", "speed": 0.5, "mode": 0},
+          "description": "TODO"
+        }
+      ],
+      "topology_edges": []
+    },
+    {
+      "map_id": "map_702",
+      "name": "702区域",
+      "status": "real",
+      "pcd_path": "/home/unitree/maps/map_702.pcd",
+      "topology_path": "/home/unitree/maps/map_702_topology.json",
+      "frame_id": "map",
+      "mapping_origin_anchor_id": "mapping_origin_702",
+      "description": "覆盖702区域：yang_shuyang。",
+      "build_date": "",
+      "build_gait": "standard",
+      "relocalization_anchors": [
+        {
+          "anchor_id": "mapping_origin_702",
+          "name": "702建图原点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_702", "speed": 0.0, "mode": 0},
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "candidate",
+          "description": "从 transition_701_right_to_702 位置开始建图。"
+        }
+      ],
+      "transition_anchors": [],
+      "topology_nodes": [
+        {
+          "node_id": "yang_shuyang_station",
+          "name": "杨书阳工位",
+          "node_type": "recorded_waypoint",
+          "aliases": ["杨书阳工位", "杨书阳", "yang_shuyang"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "yang_shuyang_station", "speed": 0.5, "mode": 0},
+          "description": "TODO"
+        }
+      ],
+      "topology_edges": []
+    }
+  ]
+}
