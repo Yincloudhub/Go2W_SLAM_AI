@@ -105,6 +105,40 @@ def check_path(
     }
 
 
+def build_adaptive_coarse_map(*, grid_size: int = 40, margin_m: float = 3.0) -> Dict[str, Any]:
+    """Build coarse map with range auto-fitted to topology nodes + margin."""
+    with open(REGISTRY_PATH) as f:
+        reg = json.load(f)
+    
+    xs, ys = [], []
+    for m in reg["maps"]:
+        if m["map_id"] == "go2w_real_site":
+            for n in m["topology_nodes"]:
+                p = n["pose"]
+                xs.extend([p["x"], p["x"]])
+                ys.extend([p["y"], p["y"]])
+    
+    if not xs:
+        return build_coarse_map(grid_size=grid_size)
+    
+    x_min = min(xs) - margin_m
+    x_max = max(xs) + margin_m
+    y_min = min(ys) - margin_m
+    y_max = max(ys) + margin_m
+    
+    # Ensure integer bounds for clean grid alignment
+    x_min = math.floor(x_min)
+    x_max = math.ceil(x_max)
+    y_min = math.floor(y_min)
+    y_max = math.ceil(y_max)
+    
+    return build_coarse_map(
+        grid_size=grid_size,
+        x_range=(x_min, x_max),
+        y_range=(y_min, y_max),
+    )
+
+
 def build_coarse_map(
     *,
     grid_size: int = 30,

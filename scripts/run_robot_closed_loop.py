@@ -1153,6 +1153,38 @@ def build_recovery_translation_analysis(
     candidates.sort(key=lambda item: item["score"], reverse=True)
     selected = candidates[0] if candidates else None
     available = selected is not None
+
+    # Rotation fallback: if all four directions blocked, try turning
+    if not available:
+        rotation_candidates = []
+        for yaw_offset_deg, label in [(90, 'right'), (-90, 'left'), (180, 'back')]:
+            yaw_offset = math.radians(yaw_offset_deg)
+            check_dir = 'right' if yaw_offset_deg > 0 else 'left'
+            check_clearance = clearances.get(check_dir, 0)
+            if check_clearance >= 0.35:
+                rotation_candidates.append({
+                    'direction': 'rotate_' + label,
+                    'yaw_offset_deg': yaw_offset_deg,
+                    'side_clearance_m': check_clearance,
+                    'reason': 'translation blocked; rotate ' + label + ' to find exit',
+                })
+        if rotation_candidates:
+            best = rotation_candidates[0]
+            selected = {
+                'direction': best['direction'],
+                'clearance_m': 0,
+                'distance_m': 0,
+                'goal_progress_m': 0,
+                'score': 0.5,
+                'rotation': True,
+                'yaw_offset_deg': best['yaw_offset_deg'],
+            }
+            available = True
+            reason = (
+                'rotation recovery ' + best['direction'] + ' after translation blocked; '
+                'side clearance ' + str(round(best['side_clearance_m'], 2)) + 'm'
+            )
+    # End rotation fallback
     if available:
         reason = (
             f"bounded {selected['direction']} translation is available after "

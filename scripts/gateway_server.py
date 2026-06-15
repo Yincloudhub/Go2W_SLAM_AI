@@ -38,7 +38,9 @@ def run_gateway(action: str, **kwargs) -> dict:
 
 
 def get_status() -> dict:
-    result = run_gateway("get_world_state")
+    result = run_gateway("get_world_state",
+                         map_id="go2w_real_site",
+                         map_path="/home/unitree/test.pcd")
     ws = result.get("world_state", {})
     summary = {
         "accepted": result.get("accepted"),
@@ -159,12 +161,12 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
 
 def main():
+    global INTERFACE
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--interface", default=INTERFACE)
     args = parser.parse_args()
-    global INTERFACE
     INTERFACE = args.interface
     server = HTTPServer(("0.0.0.0", args.port), GatewayHandler)
     print(f"GO2W Gateway HTTP on port {args.port}")
