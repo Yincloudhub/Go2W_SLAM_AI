@@ -1265,28 +1265,9 @@ def apply_context_policy_overrides(plan: dict[str, Any], planner_context: dict[s
                 except Exception:
                     pass
             if all_blocked:
-                # Try auto-hop: find intermediate node
-                candidate_ids = [c.get("node_id") for c in light_context.get("candidates", []) if isinstance(c, dict)]
-                found = False
-                for hop_id in candidate_ids:
-                    if hop_id in (current_node, *nav_targets):
-                        continue
-                    try:
-                        r1 = check_path_between_nodes(current_node, hop_id)
-                        r2 = check_path_between_nodes(hop_id, nav_targets[0])
-                        if r1.get("passable") and r2.get("passable"):
-                            hop_step = {"step_id": "nav_hop", "tool": "create_navigation_subgoal", "arguments": {"map_id": _dig_value(planner_context, "map_id") or "go2w_real_site", "target_node": hop_id}}
-                            wait_step = {"step_id": "wait_hop", "tool": "wait_until", "arguments": {"condition": "arrived"}}
-                            fixed["steps"] = [hop_step, wait_step] + fixed["steps"]
-                            fixed["reason"] = "auto-routed via " + hop_id + ": " + fixed.get("reason", "")
-                            found = True
-                            break
-                    except Exception:
-                        continue
-                if not found:
-                    reason = "all direct paths from " + str(current_node) + " blocked by walls"
-                    fixed.update({"mode": "human_confirm", "reason": reason, "requires_human_ack": True, "steps": _with_communication_prefix([{"step_id": "ask_1", "tool": "request_human_confirm", "arguments": {"reason": reason, "coarse_map_blocked": True, "current_node": current_node, "targets": nav_targets}}], fixed["communication_policy"], weak_link=weak_link)})
-                    return fixed
+                # Advisory: wall detected but Unitree planner may route around it.
+                if fixed.get("reason"):
+                    fixed["reason"] += " (coarse_map advisory: wall detected)"
 
     if light_context.get("ambiguous_target"):
         candidates = [
