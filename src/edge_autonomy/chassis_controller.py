@@ -184,7 +184,6 @@ class PersistentGatewaySession:
         )
         if action in {
             "navigate_to_pose",
-            "supervised_departure",
             "supervised_reposition",
         } and result.get("accepted") is True:
             self.active = True

@@ -5,7 +5,7 @@
 
 namespace slam_gateway::obstacle_policy {
 
-inline constexpr const char* kPolicyVersion = "semantic_mobility_v6";
+inline constexpr const char* kPolicyVersion = "safe_guard";
 inline constexpr double kFrontPauseM = 0.80;
 inline constexpr double kFrontSlowM = 1.50;
 inline constexpr double kSidePauseM = 0.20;
@@ -14,9 +14,8 @@ inline constexpr double kRearPauseM = 0.30;
 inline constexpr double kRearSlowM = 0.50;
 inline constexpr double kConservativeSpeedMps = 0.20;
 inline constexpr double kNativeNavigationMinSpeedMps = 0.20;
-inline constexpr double kDepartureMaxDistanceM = 0.50;
-inline constexpr double kDepartureMaxSpeedMps = 0.10;
-inline constexpr double kDepartureFrontReserveM = 0.50;
+inline constexpr double kRecoveryMaxDistanceM = 0.50;
+inline constexpr double kRecoveryMaxSpeedMps = 0.10;
 inline constexpr double kRepositionForwardReserveM = 0.50;
 inline constexpr double kRepositionSideReserveM = 0.35;
 inline constexpr double kRepositionRearReserveM = 0.30;

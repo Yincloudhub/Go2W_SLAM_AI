@@ -3,8 +3,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 
-POLICY_VERSION = "corridor_clearance_v1"
-
 FRONT_PAUSE_M = 0.80
 FRONT_SLOW_M = 1.50
 SIDE_PAUSE_M = 0.20

@@ -120,7 +120,6 @@ RuntimeSessionCheck runtimeSessionCheck(
 bool isNavigationMotionAction(const std::string& action)
 {
     return action == "navigate_to_pose" ||
-        action == "supervised_departure" ||
         action == "supervised_reposition";
 }
 

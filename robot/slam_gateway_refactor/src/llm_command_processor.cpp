@@ -331,10 +331,8 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         return ok(action, gateway_.submitNavigationGoal(goal));
     }
 
-    if (action == "supervised_departure" || action == "supervised_reposition") {
-        const bool legacy_departure = action == "supervised_departure";
-        const std::string direction =
-            legacy_departure ? "forward" : cmd.value("direction", "");
+    if (action == "supervised_reposition") {
+        const std::string direction = cmd.value("direction", "");
         if (!hasNavigationSessionAuthority(cmd, navigation_session_token_)) {
             return reject("persistent_navigation_session_required");
         }
@@ -350,16 +348,15 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         const double distance_m = cmd.at("distance_m").get<double>();
         const double requested_speed_mps = cmd.value(
             "speed_mps",
-            obstacle_policy::kDepartureMaxSpeedMps);
+            obstacle_policy::kRecoveryMaxSpeedMps);
         if (distance_m <= 0.0 ||
-            (!legacy_departure &&
-             distance_m < obstacle_policy::kRepositionMinDistanceM) ||
-            distance_m > obstacle_policy::kDepartureMaxDistanceM) {
+            distance_m < obstacle_policy::kRepositionMinDistanceM ||
+            distance_m > obstacle_policy::kRecoveryMaxDistanceM) {
             return reject("supervised_reposition_distance_out_of_range");
         }
         if (!std::isfinite(requested_speed_mps) ||
             requested_speed_mps <= 0.0 ||
-            requested_speed_mps > obstacle_policy::kDepartureMaxSpeedMps) {
+            requested_speed_mps > obstacle_policy::kRecoveryMaxSpeedMps) {
             return reject("supervised_reposition_speed_out_of_range");
         }
         const auto obstacle = gateway_.getLocalObstacleSummary();
@@ -377,9 +374,7 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         }
         const double required_front_m =
             distance_m +
-            (legacy_departure
-                ? obstacle_policy::kDepartureFrontReserveM
-                : obstacle_policy::repositionReserveM(direction));
+            obstacle_policy::repositionReserveM(direction);
         const double observed_clearance_m =
             directionalClearance(obstacle, direction);
         if (observed_clearance_m < required_front_m) {
@@ -418,9 +413,6 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         result["distance_m"] = distance_m;
         result["direction"] = direction;
         result["reposition_target_pose"] = goal.toJson();
-        if (legacy_departure) {
-            result["departure_target_pose"] = goal.toJson();
-        }
         return result;
     }
 

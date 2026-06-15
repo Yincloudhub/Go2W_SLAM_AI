@@ -123,7 +123,7 @@ XT16 正式标定 promotion、低速运动验收、TI/NX live transport 和 IMU/
 Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不授权继续 XT16
 复测、SLAM/Gateway 启动或真实运动。
 
-### 2026-06-15 semantic mobility v4 correction
+### 历史归档：2026-06-15 semantic mobility v4
 
 - Two field failures exposed separate policy defects: one fixed forward
   departure did not guarantee a turning envelope, and one transient D435
@@ -178,7 +178,7 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
   位于侧/后方就断言机器人不可移动；受监督导航应由前向出发走廊、Unitree 本地
   规划状态和运行时前向安全门共同决定。
 
-### 2026-06-15 semantic mobility v5 native-navigation handoff
+### 历史归档：2026-06-15 semantic mobility v5
 
 - The field run to `yin_siyuan_station` proved that GO2W, not Unitree SLAM,
   stopped the task. After a successful bounded forward reposition, XT16
@@ -208,6 +208,61 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
 - The ordinary freshness rule remains `1 s`. Only explicit supervised release
   at `0.10 m/s` may use a previously valid XT16 summary up to `2 s`; older,
   missing, or untrusted data still fails closed.
+- The next field retry showed that Unitree accepted API 1102 and returned a
+  valid path, but the robot did not move. GO2W had paused the persistent SLAM
+  backend after the previous run and a new short-lived client did not issue
+  API 1202. New pose goals now use plan-then-resume semantics and only report
+  `running` after both calls succeed.
+- The old fixed 25-second monitor was also shorter than the theoretical
+  straight-line travel time for a 2.85 m target at 0.10 m/s. The monitor
+  budget now scales with start distance and commanded speed.
+- Sustained no-progress detection observes both translation and yaw. An
+  in-place turn therefore refreshes progress and is not blocked merely because
+  target distance has not decreased. These observation epsilons are not
+  left/right clearance rules and do not estimate the rotational swept body.
+
+### 历史归档：2026-06-15 semantic mobility v6
+
+- Field evidence showed API 1102 path planning and API 1202 resume both
+  succeeded, but x/y/yaw did not change. Unitree's official GO2 SLAM contract
+  defines the pose-navigation speed range as `0.2-1.0 m/s`; the previous
+  supervised `0.1 m/s` request was outside the supported range.
+- Supervised Unitree `mode=0` navigation is now normalized to exactly
+  `0.20 m/s`. The internal bounded `SportClient::Move` recovery controller
+  remains separately capped at `0.10 m/s`.
+- Because native navigation is now twice the previous requested speed, the
+  supervised XT16 freshness grace is reduced from `2.0 s` to `1.5 s`. Relative
+  to the ordinary `1.0 s` rule, the additional possible travel remains
+  `0.10 m`.
+- This correction does not add a fixed left/right turning threshold. Unitree's
+  local planner still owns the rotational footprint and obstacle avoidance.
+- A second 0.20 m/s field run still produced no physical motion. The previous
+  `0.03 m` progress threshold was below observed SLAM jitter and delayed the
+  diagnosis until the trip timeout. Progress observation is now `0.08 m`
+  translation or `0.12 rad` yaw within 20 seconds.
+- `native_navigation_no_progress` now enters one bounded recovery cycle:
+  pause, refresh world state, LLM candidate selection, MissionDecision
+  validation, one zero-yaw reposition at at most 0.10 m/s, refresh, then retry
+  the original Unitree target. The thresholds detect motion only; they do not
+  authorize turning from scalar left/right clearance.
+
+### 2026-06-15 当前机制：safe_guard
+
+- v4-v6 只保留为历史演进记录，不再作为运行时策略名或可调用兼容层。
+- 当前唯一运行时策略名是 `safe_guard`。Gateway 是唯一运行时运动安全权威；
+  `MissionDecisionEngine` 只负责任务授权和恢复候选边界校验。
+- 删除导航前的转向包络预判、多步前置挪位循环和第二次 LLM 导航交接。
+- 注册目标通过一次 Gateway 预检后直接交给 Unitree `mode=0`。转向与绕障由
+  Unitree 局部规划器和占据栅格负责，GO2W 不用固定左右距离推断旋转可行性。
+- `supervised_departure` 兼容入口已删除。唯一内部恢复动作是
+  `supervised_reposition`，且只在 `native_navigation_no_progress` 后允许一次。
+- 恢复候选只是前/后/左/右零 yaw 直线平移。方向余量只限制该次平移距离，不代表
+  或估算转向空间；成功后原目标直接重试原生导航。
+- 2026-06-15 现场只读证据：MotionSwitcher 为 `form=1, name=ai-w`，即
+  `wheeled_sport(go2W)` 已激活。Unitree SLAM 日志在全局 A* 找到路径后报告
+  `Initial QP could not be solved due to infeasibility`，随后出现 `Invalid start!`。
+  因此当前原生导航不动的直接原因是局部规划起点不可行，不是 GO2W 固定侧向门，
+  也不是运动模式未开启。
 
 ## 7. 新 Session 可直接使用的提示词
 

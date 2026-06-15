@@ -351,7 +351,7 @@ void SlamGateway::supervisedRepositionLoop(
             std::lock_guard<std::mutex> lock(sport_mutex_);
             status = sport_client_.Move(vx, vy, 0.0f);
         }
-        if (status < 0) {
+        if (status != 0) {
             failure_reason = "sport_move_rejected:" + std::to_string(status);
             break;
         }

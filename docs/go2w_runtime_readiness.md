@@ -68,7 +68,7 @@ An uncalibrated or stale trusted XT16 summary fails closed for navigation
 unless the explicit supervised engineering release is active. Manual
 relocation remains available so localization can be recovered.
 
-The supervised release uses `semantic_mobility_v6`. Registered targets pass
+The runtime safety policy is named `safe_guard`. Registered targets pass
 directly to Unitree `mode=0` navigation and its native obstacle avoidance.
 GO2W does not approximate the robot's rotational swept footprint from a fixed
 left/right clearance threshold. Only after native navigation reports failure
@@ -77,8 +77,9 @@ backward, left, and right recovery candidates. The local LLM selects a
 candidate from that set; `MissionDecisionEngine` validates the direction and
 distance, and the Gateway executes it with
 `SportClient::Move`, zero yaw rate, a 0.10 m/s speed cap, and direction-specific
-clearance reserves. Each step is capped at 0.50 m, stops, refreshes world state,
-and returns to the LLM before another reposition or mapped navigation decision.
+clearance reserves. The recovery translation is attempted at most once. After
+it stops, the original target returns directly to Unitree navigation without a
+second LLM handoff decision.
 
 This internal recovery loop does not expose general relative motion. A D435
 front hard stop is also required to persist across two distinct fresh frames
@@ -103,9 +104,9 @@ and do not approximate whether the body can turn.
 The default progress observation is `0.08 m` translation or `0.12 rad` yaw
 within 20 seconds. This is deliberately above the measured SLAM pose jitter.
 When native navigation has no real progress, the supervisor pauses, refreshes
-world state, asks the mobility strategy layer to select one bounded candidate,
-executes that single zero-yaw reposition at at most `0.10 m/s`, refreshes again,
-and returns the original target to Unitree navigation. It does not chain blind
+world state, asks the recovery strategy layer to select one bounded candidate,
+executes that single zero-yaw reposition at at most `0.10 m/s`, and returns the
+original target to Unitree navigation. It does not chain blind
 relative moves without a native-navigation retry.
 
 The ordinary obstacle freshness limit remains 1 second. During explicit

@@ -13,7 +13,7 @@ EXECUTION_CHAIN = [
     "unitree_sdk",
 ]
 
-MOBILITY_ACTIONS = {"reposition", "navigate", "hold"}
+RECOVERY_ACTIONS = {"reposition", "hold"}
 REPOSITION_DIRECTIONS = {"forward", "backward", "left", "right"}
 
 
@@ -160,17 +160,16 @@ def build_mission_decision(
     }
 
 
-def build_mobility_decision(
-    mobility_analysis: dict[str, Any],
+def build_recovery_decision(
+    recovery_analysis: dict[str, Any],
     strategy_proposal: dict[str, Any],
     *,
     timestamp_ms: int | None = None,
 ) -> dict[str, Any]:
     now_ms = int(timestamp_ms if timestamp_ms is not None else time.time() * 1000)
-    required = mobility_analysis.get("required") is True
     candidates = {
         str(item.get("direction")): item
-        for item in mobility_analysis.get("candidates", [])
+        for item in recovery_analysis.get("candidates", [])
         if isinstance(item, dict)
         and str(item.get("direction")) in REPOSITION_DIRECTIONS
     }
@@ -179,31 +178,19 @@ def build_mobility_decision(
     reason = str(strategy_proposal.get("reason") or "")
     accepted = False
     decision = "hold"
-    reason_code = "invalid_mobility_strategy"
+    reason_code = "invalid_recovery_strategy"
     authorized_command = None
 
-    if action not in MOBILITY_ACTIONS:
-        reason = reason or f"unsupported mobility action: {action or 'missing'}"
+    if action not in RECOVERY_ACTIONS:
+        reason = reason or f"unsupported recovery action: {action or 'missing'}"
     elif action == "hold":
         accepted = True
         decision = "hold"
         reason_code = "strategy_requested_hold"
-        reason = reason or "mobility strategy requested hold"
-    elif action == "navigate":
-        if required:
-            reason_code = "turning_envelope_still_constrained"
-            reason = "mapped navigation denied while reposition remains required"
-        else:
-            accepted = True
-            decision = "execute_navigation"
-            reason_code = "turning_envelope_ready"
-            reason = reason or "mobility strategy selected mapped navigation"
+        reason = reason or "recovery strategy requested hold"
     elif direction not in candidates:
         reason_code = "reposition_direction_not_in_candidates"
         reason = f"reposition direction {direction!r} is not authorized"
-    elif not required:
-        reason_code = "reposition_not_required"
-        reason = "reposition denied because turning envelope is already ready"
     else:
         candidate = candidates[direction]
         try:
@@ -233,8 +220,8 @@ def build_mobility_decision(
 
     return {
         "schema_version": 1,
-        "schema": "go2w_mobility_decision_v1",
-        "decision_id": f"mobility_{now_ms}",
+        "schema": "go2w_recovery_decision_v1",
+        "decision_id": f"recovery_{now_ms}",
         "timestamp_ms": now_ms,
         "authority": "mission_decision_engine",
         "accepted": accepted,
@@ -243,7 +230,7 @@ def build_mobility_decision(
         "reason": reason,
         "strategy_source": strategy_proposal.get("source"),
         "strategy_proposal": strategy_proposal,
-        "turning_envelope_reposition_required": required,
+        "recovery_translation_required": recovery_analysis.get("required") is True,
         "authorized_command": authorized_command,
         "gateway_final_authority": True,
         "llm_direct_motion": False,

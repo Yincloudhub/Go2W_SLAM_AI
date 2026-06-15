@@ -7,7 +7,7 @@ from jsonschema import Draft202012Validator
 from edge_autonomy.gateway_safety import gateway_allows_navigation
 from edge_autonomy.mission_decision import (
     build_mission_decision,
-    build_mobility_decision,
+    build_recovery_decision,
 )
 
 
@@ -147,33 +147,33 @@ class MissionDecisionTests(unittest.TestCase):
         self.assertEqual(decision["reason_code"], "invalid_task_queue")
         self.assertFalse(decision["motion_allowed"])
 
-    def test_mobility_decision_bounds_llm_reposition(self) -> None:
+    def test_recovery_decision_bounds_llm_reposition(self) -> None:
         analysis = {
             "required": True,
             "candidates": [
                 {"direction": "left", "distance_m": 0.5},
             ],
         }
-        accepted = build_mobility_decision(
+        accepted = build_recovery_decision(
             analysis,
             {
                 "action": "reposition",
                 "direction": "left",
                 "distance_m": 0.3,
                 "confidence": 0.9,
-                "reason": "create turning room",
+                "reason": "left has usable translation clearance",
                 "source": "local_llm",
             },
             timestamp_ms=123,
         )
-        rejected = build_mobility_decision(
+        rejected = build_recovery_decision(
             analysis,
             {
-                "action": "navigate",
-                "direction": "",
-                "distance_m": 0.0,
+                "action": "reposition",
+                "direction": "right",
+                "distance_m": 0.3,
                 "confidence": 0.9,
-                "reason": "navigate now",
+                "reason": "move right",
                 "source": "local_llm",
             },
             timestamp_ms=124,
@@ -188,7 +188,7 @@ class MissionDecisionTests(unittest.TestCase):
         self.assertFalse(rejected["accepted"])
         self.assertEqual(
             rejected["reason_code"],
-            "turning_envelope_still_constrained",
+            "reposition_direction_not_in_candidates",
         )
 
 

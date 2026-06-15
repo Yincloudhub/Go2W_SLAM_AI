@@ -44,7 +44,7 @@ from edge_autonomy.local_llm_planner import (  # noqa: E402
 from edge_autonomy.map_registry import MapProfile, MapRegistry  # noqa: E402
 from edge_autonomy.mission_decision import (  # noqa: E402
     build_mission_decision,
-    build_mobility_decision,
+    build_recovery_decision,
 )
 from edge_autonomy.operator_display import build_operator_display_state  # noqa: E402
 from edge_autonomy.perception_context import load_perception_context_file  # noqa: E402
@@ -87,13 +87,13 @@ FEEDBACK_SYSTEM_PROMPT = (
     "只输出一句自然中文，面向现场操作者，说明当前去哪、是否到达、是否需要人工介入。"
     "不要输出 JSON、Markdown、解释或多余前后缀。"
 )
-MOBILITY_STRATEGY_SYSTEM_PROMPT = (
-    "You are the bounded mobility strategy layer for a Unitree GO2W robot. "
+RECOVERY_STRATEGY_SYSTEM_PROMPT = (
+    "You select one bounded straight recovery translation for a Unitree GO2W robot "
+    "after native navigation has stalled. "
     "Return exactly one JSON object with keys action, direction, distance_m, "
-    "confidence, reason. action must be reposition, navigate, or hold. "
+    "confidence, reason. action must be reposition or hold. "
     "For reposition, choose only a listed candidate direction and choose "
     "distance_m between 0.20 and that candidate's distance_m. "
-    "Use navigate only when reposition_required is false. "
     "Keep reason to 12 words or fewer. "
     "Never output velocity, yaw rate, raw API ids, shell commands, or extra keys."
 )
@@ -1004,14 +1004,8 @@ def run_supervised_navigation_session(
             if result.get("accepted") is not True:
                 return result, None
             monitor_command = command
-            if command.get("action") in {
-                "supervised_departure",
-                "supervised_reposition",
-            }:
-                target_pose = (
-                    result.get("reposition_target_pose")
-                    or result.get("departure_target_pose")
-                )
+            if command.get("action") == "supervised_reposition":
+                target_pose = result.get("reposition_target_pose")
                 if isinstance(target_pose, dict):
                     monitor_command = {
                         **command,
@@ -1039,7 +1033,7 @@ def run_supervised_navigation_session(
         )
 
 
-def supervised_reposition_decision(
+def build_recovery_translation_analysis(
     preflight_state: dict[str, Any] | None,
     slam_command: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1075,21 +1069,22 @@ def supervised_reposition_decision(
             "reason": "mobility geometry is incomplete",
         }
     target_distance_m = math.hypot(dx, dy)
-    recovery_requested = slam_command.get("recovery_requested") is True
-    required = target_distance_m > 0.75 and recovery_requested
-    trigger = "native_navigation_recovery_requested" if required else "not_required"
+    if target_distance_m <= 0.75:
+        return {
+            "required": False,
+            "available": False,
+            "reason": "target is too close to justify a recovery translation",
+            "trigger": "native_navigation_no_progress",
+            "target_distance_m": target_distance_m,
+            "native_navigation_first": True,
+            "candidates": [],
+        }
 
     clearances = {
         "forward": front,
         "backward": rear,
         "left": left,
         "right": right,
-    }
-    relief = {
-        "forward": max(0.0, 0.30 - rear),
-        "backward": max(0.0, 0.80 - front),
-        "left": max(0.0, 0.35 - right),
-        "right": max(0.0, 0.35 - left),
     }
     offsets = {
         "forward": (math.cos(yaw), math.sin(yaw)),
@@ -1098,7 +1093,7 @@ def supervised_reposition_decision(
         "right": (math.sin(yaw), -math.cos(yaw)),
     }
     candidates = []
-    directional_reserve_m = {
+    translation_reserve_m = {
         "forward": 0.50,
         "backward": 0.30,
         "left": 0.35,
@@ -1108,7 +1103,7 @@ def supervised_reposition_decision(
         clearance = clearances[direction]
         distance_m = min(
             0.50,
-            max(0.0, clearance - directional_reserve_m[direction]),
+            max(0.0, clearance - translation_reserve_m[direction]),
         )
         if distance_m < 0.20:
             continue
@@ -1120,7 +1115,6 @@ def supervised_reposition_decision(
         goal_progress_m = target_distance_m - candidate_distance_to_target
         score = (
             min(clearance, 2.0) * 0.20
-            + relief[direction] * 3.0
             + goal_progress_m * 0.50
         )
         candidates.append(
@@ -1128,34 +1122,28 @@ def supervised_reposition_decision(
                 "direction": direction,
                 "clearance_m": clearance,
                 "distance_m": distance_m,
-                "turning_relief_m": relief[direction],
                 "goal_progress_m": goal_progress_m,
                 "score": score,
             }
         )
     candidates.sort(key=lambda item: item["score"], reverse=True)
-    selected = candidates[0] if required and candidates else None
+    selected = candidates[0] if candidates else None
     available = selected is not None
     if available:
         reason = (
-            f"bounded {selected['direction']} reposition selected to create "
-            "turning space"
+            f"bounded {selected['direction']} translation is available after "
+            "native planner stall"
         )
-    elif required:
-        reason = "no direction has enough clearance for bounded reposition"
-    elif target_distance_m <= 0.75:
-        reason = "target is too close to justify a reposition maneuver"
     else:
-        reason = "native mode-0 navigation owns initial turning and obstacle avoidance"
+        reason = "no direction has enough clearance for bounded reposition"
     return {
-        "required": required,
+        "required": True,
         "available": available,
         "reason": reason,
-        "trigger": trigger,
+        "trigger": "native_navigation_no_progress",
         "bearing_error_rad": bearing_error,
         "target_distance_m": target_distance_m,
         "native_navigation_first": True,
-        "recovery_requested": recovery_requested,
         "clearance_m": {
             "front": front,
             "left": left,
@@ -1167,13 +1155,6 @@ def supervised_reposition_decision(
         "speed_mps": 0.10,
         "candidates": candidates,
     }
-
-
-def supervised_departure_decision(
-    preflight_state: dict[str, Any] | None,
-    slam_command: dict[str, Any],
-) -> dict[str, Any]:
-    return supervised_reposition_decision(preflight_state, slam_command)
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -1190,11 +1171,11 @@ def _extract_json_object(text: str) -> dict[str, Any]:
             objects.append(value)
     if objects:
         return objects[-1]
-    raise ValueError("mobility strategy returned no JSON object")
+    raise ValueError("recovery strategy returned no JSON object")
 
 
-def generate_mobility_strategy_proposal(
-    mobility_analysis: dict[str, Any],
+def generate_recovery_strategy_proposal(
+    recovery_analysis: dict[str, Any],
     slam_command: dict[str, Any],
     args: argparse.Namespace,
     *,
@@ -1205,15 +1186,14 @@ def generate_mobility_strategy_proposal(
             "direction": item.get("direction"),
             "max_distance_m": item.get("distance_m"),
             "clearance_m": item.get("clearance_m"),
-            "turning_relief_m": item.get("turning_relief_m"),
             "goal_progress_m": item.get("goal_progress_m"),
         }
-        for item in mobility_analysis.get("candidates", [])
+        for item in recovery_analysis.get("candidates", [])
         if isinstance(item, dict)
     ]
 
     def deterministic(source: str, error: str = "") -> dict[str, Any]:
-        if mobility_analysis.get("required") and candidates:
+        if candidates:
             selected = candidates[0]
             proposal = {
                 "action": "reposition",
@@ -1223,7 +1203,7 @@ def generate_mobility_strategy_proposal(
                 "reason": "deterministic fallback selected highest ranked candidate",
                 "source": source,
             }
-        elif mobility_analysis.get("required"):
+        else:
             proposal = {
                 "action": "hold",
                 "direction": "",
@@ -1232,43 +1212,33 @@ def generate_mobility_strategy_proposal(
                 "reason": "no bounded reposition candidate is available",
                 "source": source,
             }
-        else:
-            proposal = {
-                "action": "navigate",
-                "direction": "",
-                "distance_m": 0.0,
-                "confidence": 0.8,
-                "reason": "turning envelope is ready for mapped navigation",
-                "source": source,
-            }
         if error:
             proposal["fallback_error"] = error
         return proposal
 
-    mode = str(getattr(args, "mobility_strategy_mode", "live"))
+    mode = str(getattr(args, "recovery_strategy_mode", "live"))
     if mode == "deterministic":
         return deterministic("deterministic_configured")
 
     request = {
         "target_node": slam_command.get("target_node"),
-        "reposition_required": mobility_analysis.get("required"),
-        "trigger": mobility_analysis.get("trigger"),
-        "bearing_error_rad": mobility_analysis.get("bearing_error_rad"),
-        "current_clearance_m": mobility_analysis.get("clearance_m"),
+        "trigger": recovery_analysis.get("trigger"),
+        "bearing_error_rad": recovery_analysis.get("bearing_error_rad"),
+        "current_clearance_m": recovery_analysis.get("clearance_m"),
         "candidates": candidates,
     }
     prompt = (
-        "Select the next bounded mobility strategy from this current world "
-        "state. Return JSON only.\n"
+        "Select one bounded straight recovery translation or hold. "
+        "Return JSON only.\n"
         + json.dumps(request, ensure_ascii=False, separators=(",", ":"))
     )
     try:
         llm_backend = backend or LocalCommandBackend(args.local_command)
         raw_answer = llm_backend.generate(
             prompt,
-            system_prompt=MOBILITY_STRATEGY_SYSTEM_PROMPT,
-            max_tokens=int(getattr(args, "mobility_strategy_max_tokens", 160)),
-            timeout_s=int(getattr(args, "mobility_strategy_timeout_s", 20)),
+            system_prompt=RECOVERY_STRATEGY_SYSTEM_PROMPT,
+            max_tokens=int(getattr(args, "recovery_strategy_max_tokens", 160)),
+            timeout_s=int(getattr(args, "recovery_strategy_timeout_s", 20)),
         )
         proposal = _extract_json_object(raw_answer)
         required_keys = {
@@ -1279,9 +1249,9 @@ def generate_mobility_strategy_proposal(
             "reason",
         }
         if set(proposal) != required_keys:
-            raise ValueError("mobility strategy keys do not match contract")
-        if proposal.get("action") not in {"reposition", "navigate", "hold"}:
-            raise ValueError("mobility strategy action is invalid")
+            raise ValueError("recovery strategy keys do not match contract")
+        if proposal.get("action") not in {"reposition", "hold"}:
+            raise ValueError("recovery strategy action is invalid")
         proposal["source"] = "local_llm"
         proposal["raw_answer"] = raw_answer
         return proposal
@@ -1296,37 +1266,36 @@ def run_post_navigation_recovery(
     *,
     target_name: str,
 ) -> dict[str, Any]:
-    recovery_command = {**slam_command, "recovery_requested": True}
-    mobility_analysis = supervised_reposition_decision(
+    recovery_analysis = build_recovery_translation_analysis(
         preflight_state,
-        recovery_command,
+        slam_command,
     )
-    strategy = generate_mobility_strategy_proposal(
-        mobility_analysis,
-        recovery_command,
+    strategy = generate_recovery_strategy_proposal(
+        recovery_analysis,
+        slam_command,
         args,
     )
-    mobility_decision = build_mobility_decision(
-        mobility_analysis,
+    recovery_decision = build_recovery_decision(
+        recovery_analysis,
         strategy,
     )
     result: dict[str, Any] = {
         "ok": False,
-        "mobility_semantics": mobility_analysis,
-        "mobility_decision": mobility_decision,
+        "recovery_analysis": recovery_analysis,
+        "recovery_decision": recovery_decision,
     }
     if (
-        mobility_decision.get("accepted") is not True
-        or mobility_decision.get("decision") != "execute_reposition"
+        recovery_decision.get("accepted") is not True
+        or recovery_decision.get("decision") != "execute_reposition"
     ):
         result["reason"] = str(
-            mobility_decision.get("reason")
-            or mobility_analysis.get("reason")
+            recovery_decision.get("reason")
+            or recovery_analysis.get("reason")
             or "post-navigation recovery was not authorized"
         )
         return result
 
-    reposition_command = dict(mobility_decision["authorized_command"])
+    reposition_command = dict(recovery_decision["authorized_command"])
     reposition_args = copy.copy(args)
     reposition_args.arrival_distance_m = min(
         0.10,
@@ -1361,50 +1330,6 @@ def run_post_navigation_recovery(
         result["reason"] = str(
             (arrival or {}).get("reason")
             or gateway_rejection_reason(send_result)
-        )
-        return result
-
-    settle_s = max(
-        0.0,
-        float(getattr(args, "reposition_settle_s", 0.6)),
-    )
-    if settle_s > 0.0:
-        time.sleep(settle_s)
-    try:
-        refreshed_state = run_gateway_command(
-            {"action": "get_world_state"},
-            client_path=args.gateway_client,
-            network_interface=args.network_interface,
-            timeout_s=args.timeout_s,
-            startup_wait_s=args.gateway_startup_wait_s,
-        )
-    except Exception as exc:
-        result["reason"] = (
-            "failed to refresh world state after supervised "
-            f"reposition: {exc}"
-        )
-        return result
-
-    handoff_analysis = supervised_reposition_decision(
-        refreshed_state,
-        slam_command,
-    )
-    handoff_strategy = generate_mobility_strategy_proposal(
-        handoff_analysis,
-        slam_command,
-        args,
-    )
-    handoff_decision = build_mobility_decision(
-        handoff_analysis,
-        handoff_strategy,
-    )
-    result["refreshed_state"] = refreshed_state
-    result["handoff_semantics"] = handoff_analysis
-    result["handoff_decision"] = handoff_decision
-    if handoff_decision.get("decision") != "execute_navigation":
-        result["reason"] = str(
-            handoff_decision.get("reason")
-            or "mobility strategy did not hand control back to navigation"
         )
         return result
 
@@ -1695,206 +1620,6 @@ def execute_task_queue(
             )
             continue
 
-        reposition_failed = False
-        max_reposition_steps = max(
-            1,
-            int(getattr(args, "max_reposition_steps", 3)),
-        )
-        reposition_step = 0
-        while True:
-            reposition = supervised_reposition_decision(
-                preflight_state,
-                slam_command,
-            )
-            if not reposition.get("required"):
-                if reposition_step > 0:
-                    strategy = generate_mobility_strategy_proposal(
-                        reposition,
-                        slam_command,
-                        args,
-                    )
-                    mobility_decision = build_mobility_decision(
-                        reposition,
-                        strategy,
-                    )
-                    append_queue_event(
-                        {
-                            "task_id": f"{task_id}_planner_handoff",
-                            "action": "mobility_strategy",
-                            "status": (
-                                "ok"
-                                if mobility_decision.get("decision")
-                                == "execute_navigation"
-                                else "blocked"
-                            ),
-                            "target_node": target_node,
-                            "mobility_semantics": reposition,
-                            "mobility_decision": mobility_decision,
-                        }
-                    )
-                    if (
-                        mobility_decision.get("decision")
-                        != "execute_navigation"
-                    ):
-                        blocked_reason = str(
-                            mobility_decision.get("reason")
-                            or "mobility strategy did not authorize navigation"
-                        )
-                        failed_step = task_id
-                        reposition_failed = True
-                break
-            if reposition_step >= max_reposition_steps:
-                blocked_reason = (
-                    "turning envelope remains constrained after "
-                    f"{max_reposition_steps} supervised reposition steps"
-                )
-                failed_step = task_id
-                append_queue_event(
-                    {
-                        "task_id": f"{task_id}_reposition_limit",
-                        "action": "supervised_reposition",
-                        "status": "blocked",
-                        "target_node": target_node,
-                        "mobility_semantics": reposition,
-                        "blocked_reason": blocked_reason,
-                    }
-                )
-                reposition_failed = True
-                break
-            slam_command = {**slam_command, "recovery_requested": False}
-
-            strategy = generate_mobility_strategy_proposal(
-                reposition,
-                slam_command,
-                args,
-            )
-            mobility_decision = build_mobility_decision(
-                reposition,
-                strategy,
-            )
-            if mobility_decision.get("decision") == "hold":
-                blocked_reason = str(
-                    mobility_decision.get("reason")
-                    or reposition.get("reason")
-                )
-                failed_step = task_id
-                append_queue_event(
-                    {
-                        "task_id": f"{task_id}_reposition_{reposition_step + 1}",
-                        "action": "mobility_strategy",
-                        "status": "blocked",
-                        "target_node": target_node,
-                        "mobility_semantics": reposition,
-                        "mobility_decision": mobility_decision,
-                        "blocked_reason": blocked_reason,
-                    }
-                )
-                reposition_failed = True
-                break
-            if (
-                mobility_decision.get("accepted") is not True
-                or mobility_decision.get("decision") != "execute_reposition"
-            ):
-                blocked_reason = str(
-                    mobility_decision.get("reason")
-                    or "MissionDecisionEngine rejected mobility strategy"
-                )
-                failed_step = task_id
-                append_queue_event(
-                    {
-                        "task_id": f"{task_id}_reposition_{reposition_step + 1}",
-                        "action": "mobility_strategy",
-                        "status": "blocked",
-                        "target_node": target_node,
-                        "mobility_semantics": reposition,
-                        "mobility_decision": mobility_decision,
-                        "blocked_reason": blocked_reason,
-                    }
-                )
-                reposition_failed = True
-                break
-
-            reposition_step += 1
-            reposition_command = dict(
-                mobility_decision["authorized_command"]
-            )
-            reposition_args = copy.copy(args)
-            reposition_args.arrival_distance_m = min(
-                0.10,
-                max(
-                    0.05,
-                    float(reposition_command["distance_m"]) * 0.20,
-                ),
-            )
-            reposition_args.arrival_monitor_s = max(
-                15.0,
-                float(reposition_command["distance_m"])
-                / float(reposition_command["speed_mps"])
-                + 10.0,
-            )
-            reposition_result, reposition_arrival = (
-                run_supervised_navigation_session(
-                    reposition_command,
-                    reposition_args,
-                    target_name=(
-                        "supervised "
-                        f"{reposition_command['direction']} reposition"
-                    ),
-                )
-            )
-            reposition_ok = bool(
-                reposition_result.get("accepted")
-                and isinstance(reposition_arrival, dict)
-                and reposition_arrival.get("arrived")
-                and reposition_arrival.get("paused")
-            )
-            append_queue_event(
-                {
-                    "task_id": f"{task_id}_reposition_{reposition_step}",
-                    "action": "supervised_reposition",
-                    "status": "ok" if reposition_ok else "failed",
-                    "target_node": target_node,
-                    "mobility_semantics": reposition,
-                    "mobility_decision": mobility_decision,
-                    "send_result": reposition_result,
-                    "arrival": reposition_arrival,
-                }
-            )
-            if not reposition_ok:
-                blocked_reason = str(
-                    (reposition_arrival or {}).get("reason")
-                    or gateway_rejection_reason(reposition_result)
-                )
-                failed_step = task_id
-                reposition_failed = True
-                break
-
-            settle_s = max(
-                0.0,
-                float(getattr(args, "reposition_settle_s", 0.6)),
-            )
-            if settle_s > 0.0:
-                time.sleep(settle_s)
-            try:
-                preflight_state = run_gateway_command(
-                    {"action": "get_world_state"},
-                    client_path=args.gateway_client,
-                    network_interface=args.network_interface,
-                    timeout_s=args.timeout_s,
-                    startup_wait_s=args.gateway_startup_wait_s,
-                )
-            except Exception as exc:
-                blocked_reason = (
-                    "failed to refresh world state after supervised "
-                    f"reposition: {exc}"
-                )
-                failed_step = task_id
-                reposition_failed = True
-                break
-
-        if reposition_failed:
-            break
-
         departing_feedback = operator_feedback_message(
             "departing",
             f"正在前往{target_name}。",
@@ -1999,14 +1724,21 @@ def execute_task_queue(
                     target_name=target_name,
                 )
                 accepted = bool(result.get("accepted", False))
-                arrival = session_arrival or {
-                    "arrived": False,
-                    "paused": True,
-                    "reason": (
-                        "persistent navigation session returned no "
-                        "arrival result after recovery"
-                    ),
-                }
+                if accepted:
+                    arrival = session_arrival or {
+                        "arrived": False,
+                        "paused": True,
+                        "reason": (
+                            "persistent navigation session returned no "
+                            "arrival result after recovery"
+                        ),
+                    }
+                else:
+                    arrival = {
+                        "arrived": False,
+                        "paused": True,
+                        "reason": gateway_rejection_reason(result),
+                    }
             else:
                 arrival = {
                     "arrived": False,
@@ -2128,24 +1860,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-llm-feedback-events", type=int, default=40)
     parser.add_argument("--gateway-error-limit", type=int, default=3)
     parser.add_argument(
-        "--max-reposition-steps",
-        type=int,
-        default=3,
-        help="Maximum bounded reposition steps before mapped navigation.",
-    )
-    parser.add_argument(
-        "--reposition-settle-s",
-        type=float,
-        default=0.6,
-        help="Wait for fresh obstacle geometry after each reposition.",
-    )
-    parser.add_argument(
-        "--mobility-strategy-mode",
+        "--recovery-strategy-mode",
         choices=["live", "deterministic"],
         default="live",
     )
-    parser.add_argument("--mobility-strategy-max-tokens", type=int, default=160)
-    parser.add_argument("--mobility-strategy-timeout-s", type=int, default=20)
+    parser.add_argument("--recovery-strategy-max-tokens", type=int, default=160)
+    parser.add_argument("--recovery-strategy-timeout-s", type=int, default=20)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument(
         "--communication-journal",

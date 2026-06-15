@@ -104,8 +104,8 @@ INDEX_BLOCK = f"""{START}
 - P0-3 已完成机器人无运动验收：所有计划先进入 TaskQueue，MissionDecisionEngine
   是唯一决定层，Python supervisor 是唯一比赛上层执行 owner。
 - P0-3 完成标记为 `p0-3-mission-decision-chain-accepted-20260613`。
-- `corridor_clearance_v1` 保留为 XT16 四向几何摘要分级；显式工程放行使用
-  `semantic_mobility_v6`，注册目标直接交给 Unitree `mode=0` 原生规划和绕障。
+- XT16 四向净空只作为几何摘要；当前运行时安全策略统一命名为 `safe_guard`，
+  注册目标直接交给 Unitree `mode=0` 原生规划和绕障。
   GO2W 不用固定左/右净空近似转向包络；原生导航失败或持续无进展后才生成
   有界平移恢复候选。
 - XT16 名义 footprint 为前后/半宽 `0.30 m`；静止成对场景确认只保留前后
