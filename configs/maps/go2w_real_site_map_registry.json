@@ -49,7 +49,7 @@
             "q_z": -0.05497227502706773,
             "q_w": 0.9984878812375985,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "description": "实验室入口初始位置，走廊与办公区交界处，四面开阔",
           "verification": {
@@ -71,7 +71,7 @@
               "q_z": -0.01999866669333308,
               "q_w": 0.9998000066665778,
               "speed": 0.3,
-              "mode": 0
+              "mode": 1
             }
           },
           "area": "701入口走廊"
@@ -103,7 +103,7 @@
             "q_z": -0.003139750799164176,
             "q_w": 0.99974524974823,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "description": "701左侧区域靠墙工位，三面被隔断包围，出口朝西通向走廊",
           "calibration": {
@@ -145,7 +145,7 @@
             "q_z": 0.6916520640112973,
             "q_w": 0.7222308649932598,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "description": "701左侧区域居中工位，面向走廊方向",
           "calibration_observation": {
@@ -164,7 +164,7 @@
               "q_z": 0.6916059851646423,
               "q_w": 0.7220719456672668,
               "speed": 0.800000011920929,
-              "mode": 0
+              "mode": 1
             }
           },
           "verification": {
@@ -205,7 +205,7 @@
             "q_z": 0.0,
             "q_w": 1.0,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "description": "702区域工位，需经走廊南下再西转",
           "verification": {
@@ -250,7 +250,7 @@
             "q_z": 0.0,
             "q_w": 1.0,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "description": "赵博办公室门口，701右侧尽头，需经走廊再南下聂国力办公室到达",
           "verification": {
@@ -292,7 +292,7 @@
             "q_z": 0.0,
             "q_w": 1.0,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "description": "701门外走廊，连接电梯间与701办公区的主通道",
           "area": "走廊"
@@ -326,7 +326,7 @@
             "q_z": -0.722239077091217,
             "q_w": 0.6914089918136597,
             "speed": 0.3,
-            "mode": 0,
+            "mode": 1,
             "yaw": -1.6228
           },
           "description": "聂国篱办公室门口，701右侧走廊中途，通往赵博办公室的必经点",
@@ -422,7 +422,7 @@
             "q_w": 1.0,
             "yaw": 0.0,
             "speed": 0.0,
-            "mode": 0
+            "mode": 1
           },
           "description": "Startup relocalization anchor verified on 2026-06-01 after SLAM restart; ICP Score 0.0165342 and relocation succeeded."
         }
@@ -440,7 +440,7 @@
             "q_z": -0.015046637505292892,
             "q_w": 0.9996055960655212,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "allowed_radius_m": 1.2,
           "allowed_yaw_error_deg": 45.0,
@@ -459,7 +459,7 @@
             "q_z": 0.0,
             "q_w": 1.0,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 45.0,
@@ -478,7 +478,7 @@
             "q_z": -0.003139750799164176,
             "q_w": 0.99974524974823,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "allowed_radius_m": 1.2,
           "allowed_yaw_error_deg": 45.0,
@@ -497,7 +497,7 @@
             "q_z": 0.0,
             "q_w": 1.0,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 45.0,
@@ -516,7 +516,7 @@
             "q_z": -0.722239077091217,
             "q_w": 0.6914089918136597,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 45.0,
@@ -535,7 +535,7 @@
             "q_z": 0.0,
             "q_w": 1.0,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 45.0,
@@ -558,7 +558,7 @@
             "q_z": 0.6916520640112973,
             "q_w": 0.7222308649932598,
             "speed": 0.3,
-            "mode": 0
+            "mode": 1
           },
           "description": "Candidate relocalization anchor refreshed from the standard workstation prone pose on 2026-06-01. Raw gateway observation is retained; verify while standing before promoting this anchor for startup recovery.",
           "calibration_observation": {
@@ -577,7 +577,7 @@
               "q_z": 0.6916059851646423,
               "q_w": 0.7220719456672668,
               "speed": 0.800000011920929,
-              "mode": 0
+              "mode": 1
             }
           }
         }
