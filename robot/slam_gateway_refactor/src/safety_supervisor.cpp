@@ -37,7 +37,13 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
         d.reason = "local_obstacle_source_not_trusted";
         return d;
     }
-    if (trusted_obstacle_source && (obstacle.stale || obstacle.age_ms < 0)) {
+    const bool supervised_stale_grace =
+        obstacle.supervised_release_active &&
+        obstacle.stale &&
+        obstacle.age_ms >= 0 &&
+        obstacle.age_ms <= obstacle_policy::kSupervisedObstacleMaxAgeMs;
+    if (trusted_obstacle_source &&
+        (obstacle.age_ms < 0 || (obstacle.stale && !supervised_stale_grace))) {
         d.allow_navigation = false;
         d.should_pause = true;
         d.recommended_mode = "hold";
@@ -54,9 +60,11 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
         d.reason = "supervised_release_invalid";
         return d;
     }
-    const bool fresh_obstacle =
-        trusted_obstacle_source && !obstacle.stale && obstacle.age_ms >= 0;
-    if (fresh_obstacle) {
+    const bool usable_obstacle =
+        trusted_obstacle_source &&
+        obstacle.age_ms >= 0 &&
+        (!obstacle.stale || supervised_stale_grace);
+    if (usable_obstacle) {
         if (obstacle.recommended_action == "stop" || obstacle.recommended_action == "emergency_stop") {
             d.allow_navigation = false;
             d.should_pause = true;
@@ -109,9 +117,11 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             d.should_pause = false;
             d.recommended_mode = "conservative";
             d.motion_direction = "unitree_pose_navigation_mode_0";
-            d.reason = local_obstacle_advisory
-                ? "supervised_unitree_avoidance_available_with_local_obstacle_advisory"
-                : "supervised_unitree_avoidance_available";
+            d.reason = supervised_stale_grace
+                ? "supervised_unitree_avoidance_available_with_sensor_delay_advisory"
+                : (local_obstacle_advisory
+                    ? "supervised_unitree_avoidance_available_with_local_obstacle_advisory"
+                    : "supervised_unitree_avoidance_available");
             d.speed_limit_mps = obstacle.supervised_max_speed_mps;
             return d;
         }
@@ -162,7 +172,7 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
     }
 
     const bool corridor_conservative =
-        fresh_obstacle &&
+        usable_obstacle &&
         ((obstacle.front_clearance_m >= 0.0 &&
           obstacle.front_clearance_m < obstacle_policy::kFrontSlowM) ||
          (obstacle.left_clearance_m >= 0.0 &&
@@ -171,7 +181,7 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
           obstacle.right_clearance_m < obstacle_policy::kSideSlowM) ||
          (obstacle.rear_clearance_m >= 0.0 &&
           obstacle.rear_clearance_m < obstacle_policy::kRearSlowM));
-    if (fresh_obstacle &&
+    if (usable_obstacle &&
         (obstacle.recommended_action == "go_slow" || corridor_conservative)) {
         d.allow_navigation = true;
         d.should_pause = false;

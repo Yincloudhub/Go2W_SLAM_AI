@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 
 namespace slam_gateway::obstacle_policy {
@@ -20,6 +21,7 @@ inline constexpr double kRepositionSideReserveM = 0.35;
 inline constexpr double kRepositionRearReserveM = 0.30;
 inline constexpr double kRepositionMinDistanceM = 0.20;
 inline constexpr int kSecondaryFrontBlockConfirmFrames = 2;
+inline constexpr int64_t kSupervisedObstacleMaxAgeMs = 2000;
 
 inline double repositionReserveM(std::string_view direction)
 {

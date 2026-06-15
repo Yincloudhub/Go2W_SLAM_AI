@@ -134,6 +134,26 @@ int main()
     require(invalid_supervised_decision.reason == "supervised_release_invalid",
             "invalid supervised engineering release reason mismatch");
 
+    auto supervised_delayed = supervised_release;
+    supervised_delayed.stale = true;
+    supervised_delayed.age_ms = 1500;
+    const auto supervised_delayed_decision =
+        supervisor.evaluate(health, localization, supervised_delayed);
+    require(supervised_delayed_decision.allow_navigation,
+            "brief supervised sensor delay should remain navigable");
+    require(
+        supervised_delayed_decision.reason ==
+            "supervised_unitree_avoidance_available_with_sensor_delay_advisory",
+        "brief supervised sensor delay reason mismatch");
+
+    supervised_delayed.age_ms = 2100;
+    const auto supervised_too_stale_decision =
+        supervisor.evaluate(health, localization, supervised_delayed);
+    require(!supervised_too_stale_decision.allow_navigation,
+            "sustained supervised sensor delay must fail closed");
+    require(supervised_too_stale_decision.reason == "local_obstacle_not_fresh",
+            "sustained supervised sensor delay reason mismatch");
+
     supervised_release.right_clearance_m = 0.1;
     supervised_release.rear_clearance_m = 0.1;
     supervised_release.recommended_action = "pause";

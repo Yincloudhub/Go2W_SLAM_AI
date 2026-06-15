@@ -201,6 +201,13 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
 - Internal `supervised_reposition` remains bounded and separate from native
   navigation. It now preserves direction-specific clearance reserves:
   forward `0.50 m`, side `0.35 m`, and rear `0.30 m`.
+- The first v5 field retry exposed a timing fault rather than a geometry fault.
+  XT16 remained online at about 5 Hz, but effective summary age normally ranged
+  from roughly `420-821 ms` and preflight reached `966 ms`. One missed update
+  crossed the old `1000 ms` threshold and permanently invalidated the lease.
+- The ordinary freshness rule remains `1 s`. Only explicit supervised release
+  at `0.10 m/s` may use a previously valid XT16 summary up to `2 s`; older,
+  missing, or untrusted data still fails closed.
 
 ## 7. 新 Session 可直接使用的提示词
 

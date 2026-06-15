@@ -86,6 +86,12 @@ ordinary local proximity remains an advisory to avoid overriding Unitree's
 planner; health, localization, sensor validity, lease loss, and explicit
 emergency-stop conditions remain hard stops.
 
+The ordinary obstacle freshness limit remains 1 second. During the explicit
+0.10 m/s supervised release only, a previously valid XT16 summary has a
+2-second maximum age. This tolerates one short producer delay while limiting
+additional travel during the grace interval to at most 0.10 m. Older data,
+invalid sources, and missing timestamps still fail closed.
+
 Build-map origin, relocation, and navigation use separate registry roles:
 
 - `mapping_origin_anchor_id` identifies exactly one build-map coordinate origin.
