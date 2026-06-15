@@ -236,6 +236,15 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
   `0.10 m`.
 - This correction does not add a fixed left/right turning threshold. Unitree's
   local planner still owns the rotational footprint and obstacle avoidance.
+- A second 0.20 m/s field run still produced no physical motion. The previous
+  `0.03 m` progress threshold was below observed SLAM jitter and delayed the
+  diagnosis until the trip timeout. Progress observation is now `0.08 m`
+  translation or `0.12 rad` yaw within 20 seconds.
+- `native_navigation_no_progress` now enters one bounded recovery cycle:
+  pause, refresh world state, LLM candidate selection, MissionDecision
+  validation, one zero-yaw reposition at at most 0.10 m/s, refresh, then retry
+  the original Unitree target. The thresholds detect motion only; they do not
+  authorize turning from scalar left/right clearance.
 
 ## 7. 新 Session 可直接使用的提示词
 

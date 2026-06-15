@@ -16,6 +16,7 @@ from scripts.run_robot_closed_loop import (
     navigation_motion_progressed,
     normalize_unitree_navigation_speed,
     operator_feedback_message,
+    run_post_navigation_recovery,
     run_supervised_navigation_session,
     supervised_departure_decision,
     supervised_reposition_decision,
@@ -409,10 +410,79 @@ class QueueFeedbackTests(unittest.TestCase):
             )
         )
 
+    def test_navigation_motion_progress_ignores_localization_jitter(self) -> None:
+        self.assertFalse(
+            navigation_motion_progressed(
+                {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                {"x": 0.03, "y": 0.02, "yaw": 0.05},
+                distance_threshold_m=0.08,
+                yaw_threshold_rad=0.12,
+            )
+        )
+
     def test_mode_zero_navigation_speed_uses_unitree_minimum(self) -> None:
         self.assertEqual(normalize_unitree_navigation_speed(0.1, 0), 0.2)
         self.assertEqual(normalize_unitree_navigation_speed(0.3, 0), 0.3)
         self.assertEqual(normalize_unitree_navigation_speed(0.1, 1), 0.1)
+
+    def test_post_navigation_recovery_repositions_then_hands_back(self) -> None:
+        state = {
+            "world_state": {
+                "current_pose": {
+                    "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}
+                },
+                "local_obstacle": {
+                    "front_clearance_m": 1.2,
+                    "left_clearance_m": 0.1,
+                    "right_clearance_m": 0.1,
+                    "rear_clearance_m": 0.1,
+                    "supervised_release": {"active": True},
+                },
+            }
+        }
+        args = SimpleNamespace(
+            mobility_strategy_mode="deterministic",
+            reposition_settle_s=0.0,
+            gateway_client="gateway",
+            network_interface="eth0",
+            timeout_s=3,
+            gateway_startup_wait_s=0.0,
+            arrival_distance_m=0.25,
+        )
+        command = {
+            "action": "navigate_to_pose",
+            "target_node": "wp_a",
+            "target_pose": {"x": 2.0, "y": 0.0},
+        }
+
+        with patch(
+            "scripts.run_robot_closed_loop.run_supervised_navigation_session",
+            return_value=(
+                {"accepted": True},
+                {"arrived": True, "paused": True, "reason": ""},
+            ),
+        ) as reposition:
+            with patch(
+                "scripts.run_robot_closed_loop.run_gateway_command",
+                return_value=state,
+            ):
+                result = run_post_navigation_recovery(
+                    state,
+                    command,
+                    args,
+                    target_name="A",
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            result["mobility_decision"]["authorized_command"]["action"],
+            "supervised_reposition",
+        )
+        self.assertEqual(
+            result["handoff_decision"]["decision"],
+            "execute_navigation",
+        )
+        reposition.assert_called_once()
 
     def test_navigation_stall_requests_pause(self) -> None:
         state = {

@@ -100,6 +100,14 @@ motion. The small translation/yaw values are observation thresholds for
 detecting a stationary backend; they are not obstacle-clearance thresholds
 and do not approximate whether the body can turn.
 
+The default progress observation is `0.08 m` translation or `0.12 rad` yaw
+within 20 seconds. This is deliberately above the measured SLAM pose jitter.
+When native navigation has no real progress, the supervisor pauses, refreshes
+world state, asks the mobility strategy layer to select one bounded candidate,
+executes that single zero-yaw reposition at at most `0.10 m/s`, refreshes again,
+and returns the original target to Unitree navigation. It does not chain blind
+relative moves without a native-navigation retry.
+
 The ordinary obstacle freshness limit remains 1 second. During explicit
 supervised native navigation at 0.20 m/s, a previously valid XT16 summary has a
 1.5-second maximum age. This tolerates one short producer delay while limiting

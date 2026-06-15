@@ -590,11 +590,11 @@ def wait_for_arrival(
     )
     progress_distance_m = max(
         0.0,
-        float(getattr(args, "navigation_progress_distance_m", 0.03)),
+        float(getattr(args, "navigation_progress_distance_m", 0.08)),
     )
     progress_yaw_rad = max(
         0.0,
-        float(getattr(args, "navigation_progress_yaw_rad", 0.08)),
+        float(getattr(args, "navigation_progress_yaw_rad", 0.12)),
     )
     last_motion_progress = monitor_started
     progress_pose: dict[str, Any] | None = None
@@ -777,6 +777,12 @@ def wait_for_arrival(
         sample = {
             "timestamp_ms": world.get("timestamp_ms") if isinstance(world, dict) else None,
             "distance_to_target_m": distance_m,
+            "current_pose": (
+                world.get("current_pose", {}).get("pose")
+                if isinstance(world, dict)
+                and isinstance(world.get("current_pose"), dict)
+                else None
+            ),
             "navigation": world.get("navigation") if isinstance(world, dict) else None,
             "localization": world.get("localization") if isinstance(world, dict) else None,
             "safety": world.get("safety") if isinstance(world, dict) else None,
@@ -1283,6 +1289,130 @@ def generate_mobility_strategy_proposal(
         return deterministic("deterministic_fallback", str(exc))
 
 
+def run_post_navigation_recovery(
+    preflight_state: dict[str, Any],
+    slam_command: dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    target_name: str,
+) -> dict[str, Any]:
+    recovery_command = {**slam_command, "recovery_requested": True}
+    mobility_analysis = supervised_reposition_decision(
+        preflight_state,
+        recovery_command,
+    )
+    strategy = generate_mobility_strategy_proposal(
+        mobility_analysis,
+        recovery_command,
+        args,
+    )
+    mobility_decision = build_mobility_decision(
+        mobility_analysis,
+        strategy,
+    )
+    result: dict[str, Any] = {
+        "ok": False,
+        "mobility_semantics": mobility_analysis,
+        "mobility_decision": mobility_decision,
+    }
+    if (
+        mobility_decision.get("accepted") is not True
+        or mobility_decision.get("decision") != "execute_reposition"
+    ):
+        result["reason"] = str(
+            mobility_decision.get("reason")
+            or mobility_analysis.get("reason")
+            or "post-navigation recovery was not authorized"
+        )
+        return result
+
+    reposition_command = dict(mobility_decision["authorized_command"])
+    reposition_args = copy.copy(args)
+    reposition_args.arrival_distance_m = min(
+        0.10,
+        max(
+            0.05,
+            float(reposition_command["distance_m"]) * 0.20,
+        ),
+    )
+    reposition_args.arrival_monitor_s = max(
+        15.0,
+        float(reposition_command["distance_m"])
+        / float(reposition_command["speed_mps"])
+        + 10.0,
+    )
+    send_result, arrival = run_supervised_navigation_session(
+        reposition_command,
+        reposition_args,
+        target_name=(
+            "supervised "
+            f"{reposition_command['direction']} reposition"
+        ),
+    )
+    result["send_result"] = send_result
+    result["arrival"] = arrival
+    reposition_ok = bool(
+        send_result.get("accepted")
+        and isinstance(arrival, dict)
+        and arrival.get("arrived")
+        and arrival.get("paused")
+    )
+    if not reposition_ok:
+        result["reason"] = str(
+            (arrival or {}).get("reason")
+            or gateway_rejection_reason(send_result)
+        )
+        return result
+
+    settle_s = max(
+        0.0,
+        float(getattr(args, "reposition_settle_s", 0.6)),
+    )
+    if settle_s > 0.0:
+        time.sleep(settle_s)
+    try:
+        refreshed_state = run_gateway_command(
+            {"action": "get_world_state"},
+            client_path=args.gateway_client,
+            network_interface=args.network_interface,
+            timeout_s=args.timeout_s,
+            startup_wait_s=args.gateway_startup_wait_s,
+        )
+    except Exception as exc:
+        result["reason"] = (
+            "failed to refresh world state after supervised "
+            f"reposition: {exc}"
+        )
+        return result
+
+    handoff_analysis = supervised_reposition_decision(
+        refreshed_state,
+        slam_command,
+    )
+    handoff_strategy = generate_mobility_strategy_proposal(
+        handoff_analysis,
+        slam_command,
+        args,
+    )
+    handoff_decision = build_mobility_decision(
+        handoff_analysis,
+        handoff_strategy,
+    )
+    result["refreshed_state"] = refreshed_state
+    result["handoff_semantics"] = handoff_analysis
+    result["handoff_decision"] = handoff_decision
+    if handoff_decision.get("decision") != "execute_navigation":
+        result["reason"] = str(
+            handoff_decision.get("reason")
+            or "mobility strategy did not hand control back to navigation"
+        )
+        return result
+
+    result["ok"] = True
+    result["reason"] = ""
+    return result
+
+
 def run_capture_keyframe(task: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
     target_node = str(task.get("target_node") or "")
     target_name = str(task.get("target_name") or target_node)
@@ -1631,6 +1761,7 @@ def execute_task_queue(
                 )
                 reposition_failed = True
                 break
+            slam_command = {**slam_command, "recovery_requested": False}
 
             strategy = generate_mobility_strategy_proposal(
                 reposition,
@@ -1817,6 +1948,74 @@ def execute_task_queue(
                 "llm_feedback_requests": rejected_llm_requests,
                 "llm_feedback_results": rejected_llm_results,
             }
+        if (
+            accepted
+            and not arrival.get("arrived")
+            and arrival.get("reason") == "native_navigation_no_progress"
+        ):
+            append_queue_event(
+                {
+                    "task_id": f"{task_id}_native_attempt_1",
+                    "action": action,
+                    "status": "recoverable_failure",
+                    "target_node": target_node,
+                    "slam_command": guarded_slam_command,
+                    "send_result": result,
+                    "arrival": arrival,
+                }
+            )
+            try:
+                recovery_state = run_gateway_command(
+                    {"action": "get_world_state"},
+                    client_path=args.gateway_client,
+                    network_interface=args.network_interface,
+                    timeout_s=args.timeout_s,
+                    startup_wait_s=args.gateway_startup_wait_s,
+                )
+                recovery = run_post_navigation_recovery(
+                    recovery_state,
+                    slam_command,
+                    args,
+                    target_name=target_name,
+                )
+            except Exception as exc:
+                recovery = {
+                    "ok": False,
+                    "reason": f"post-navigation recovery failed: {exc}",
+                }
+            append_queue_event(
+                {
+                    "task_id": f"{task_id}_recovery_1",
+                    "action": "supervised_reposition",
+                    "status": "ok" if recovery.get("ok") else "failed",
+                    "target_node": target_node,
+                    **recovery,
+                }
+            )
+            if recovery.get("ok"):
+                result, session_arrival = run_supervised_navigation_session(
+                    guarded_slam_command,
+                    args,
+                    target_name=target_name,
+                )
+                accepted = bool(result.get("accepted", False))
+                arrival = session_arrival or {
+                    "arrived": False,
+                    "paused": True,
+                    "reason": (
+                        "persistent navigation session returned no "
+                        "arrival result after recovery"
+                    ),
+                }
+            else:
+                arrival = {
+                    "arrived": False,
+                    "paused": True,
+                    "reason": str(
+                        recovery.get("reason")
+                        or "post-navigation recovery failed"
+                    ),
+                }
         status = "ok" if accepted and arrival.get("arrived") and arrival.get("paused") else "failed"
         append_queue_event(
             {
@@ -1912,8 +2111,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--navigation-monitor-travel-factor", type=float, default=1.8)
     parser.add_argument("--navigation-monitor-startup-margin-s", type=float, default=15.0)
     parser.add_argument("--navigation-stall-s", type=float, default=20.0)
-    parser.add_argument("--navigation-progress-distance-m", type=float, default=0.03)
-    parser.add_argument("--navigation-progress-yaw-rad", type=float, default=0.08)
+    parser.add_argument("--navigation-progress-distance-m", type=float, default=0.08)
+    parser.add_argument("--navigation-progress-yaw-rad", type=float, default=0.12)
     parser.add_argument("--arrival-monitor-interval-s", type=float, default=1.0)
     parser.add_argument("--slam-poll-interval-s", type=float, default=1.0)
     parser.add_argument("--ui-refresh-interval-s", type=float, default=1.0)
