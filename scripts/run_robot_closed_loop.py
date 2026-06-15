@@ -1123,8 +1123,12 @@ def build_recovery_translation_analysis(
         "left": 0.35,
         "right": 0.35,
     }
+    SELF_OCCLUSION_RADIUS_M = 0.15  # robot body radius; closer = self-occlusion
     for direction in ("forward", "left", "right", "backward"):
         clearance = clearances[direction]
+        # Treat self-occlusion (XT16 seeing robot body) as no valid measurement
+        if clearance < SELF_OCCLUSION_RADIUS_M:
+            clearance = 2.0
         distance_m = min(
             0.50,
             max(0.0, clearance - translation_reserve_m[direction]),
@@ -1160,6 +1164,8 @@ def build_recovery_translation_analysis(
         for yaw_offset_deg, label, check_dir in [(90, 'right', 'right'), (-90, 'left', 'left'), (180, 'back', 'rear')]:
             yaw_offset = math.radians(yaw_offset_deg)
             check_clearance = clearances.get(check_dir, 0)
+            if check_clearance < SELF_OCCLUSION_RADIUS_M:
+                check_clearance = 2.0  # self-occlusion, actually open
             if check_clearance >= 0.35:
                 rotation_candidates.append({
                     'direction': 'rotate_' + label,
