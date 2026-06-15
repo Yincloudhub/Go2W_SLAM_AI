@@ -263,6 +263,13 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
   `Initial QP could not be solved due to infeasibility`，随后出现 `Invalid start!`。
   因此当前原生导航不动的直接原因是局部规划起点不可行，不是 GO2W 固定侧向门，
   也不是运动模式未开启。
+- 减法重构提交为 `6eab6ea`，local、origin、robot 已同步。验证结果：
+  本地 `368 passed, 2 skipped`；机器人 `370 passed`；Gateway C++ 全量编译通过，
+  三个 smoke 可执行程序均通过。当前 CMake 未注册 CTest，因此不能把
+  `No tests were found` 误记为测试通过。
+- 本次提交还修正 `SportClient::Move()` 非零状态码被误当成功的问题，并在恢复后
+  第二次导航被拒绝时保留 Gateway 原始拒绝原因。这两项是错误处理修正，不增加
+  新安全判定。
 
 ## 7. 新 Session 可直接使用的提示词
 
@@ -290,12 +297,11 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
 - pending_field_measurement 仅表示正式 measured ledger 尚未签发；
 - D435 只补前向，不能覆盖机腹、左右和后方。
 
-P0-1、P0-2、P0-3 已完成。下一步唯一任务是实现 P0-4：
-CommunicationPolicyExecutor、append-only journal、ack sequence 和断线重连补传。
-必须保证弱网不阻塞本地闭环，补传不导致任务重复执行，远端不能绕过
-MissionDecisionEngine，Gateway 仍是最终运动权威。
+P0-1、P0-2、P0-3、P0-4 均已完成，不重复实现。当前唯一主线是验证
+`safe_guard -> Unitree mode=0 原生导航 -> native_navigation_no_progress ->
+一次 supervised_reposition -> 原目标重试` 的现场闭环。
 
-先审阅现有弱网/任务状态代码和测试，给出小步实施计划，然后直接实现、测试、
-同步 Obsidian、独立提交并推送。机器人只能 git fast-forward 到提交。
-未经我明确允许，不进行真实运动验收。
+不要恢复 v4-v6、`supervised_departure`、导航前转向包络预判、多步挪位循环或
+第二次 LLM 导航交接。先核对提交和运行状态；需要真实导航或恢复运动时先明确
+告知现场操作者，由现场操作者确认环境和急停后再执行。
 ```
