@@ -1141,10 +1141,12 @@ def build_recovery_translation_analysis(
             dy - offset_y * distance_m,
         )
         goal_progress_m = target_distance_m - candidate_distance_to_target
-        score = (
-            min(clearance, 2.0) * 0.20
-            + goal_progress_m * 0.50
-        )
+        # Balanced scoring: clearance + progress + avoid oscillation
+        clearance_bonus = min(clearance, 2.0) * 0.35
+        progress_bonus = max(0.0, goal_progress_m / max(target_distance_m, 0.1)) * 2.0 * 0.35
+        # Penalize returning to the direction we just came from
+        novelty = 0.3 if direction not in (_RECOVERY_HISTORY or []) else 0.0
+        score = clearance_bonus + progress_bonus + novelty
         candidates.append(
             {
                 "direction": direction,
@@ -1161,7 +1163,7 @@ def build_recovery_translation_analysis(
     # Rotation fallback: if all four directions blocked, try turning
     if not available:
         rotation_candidates = []
-        for yaw_offset_deg, label, check_dir in [(90, 'right', 'right'), (-90, 'left', 'left'), (180, 'back', 'rear')]:
+        for yaw_offset_deg, label, check_dir in [(45, 'right', 'right'), (-45, 'left', 'left'), (90, 'back', 'rear')]:
             yaw_offset = math.radians(yaw_offset_deg)
             check_clearance = clearances.get(check_dir, 0)
             if check_clearance < SELF_OCCLUSION_RADIUS_M:
