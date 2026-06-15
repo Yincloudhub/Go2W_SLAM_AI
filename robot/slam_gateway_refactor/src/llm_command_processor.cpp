@@ -300,35 +300,6 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
                 {"world_state", gateway_.buildWorldStateJson()}
             };
         }
-        const auto obstacle = gateway_.getLocalObstacleSummary();
-        const double current_yaw = quaternionToYaw(
-            current_pose.pose.q_x,
-            current_pose.pose.q_y,
-            current_pose.pose.q_z,
-            current_pose.pose.q_w);
-        const double bearing_error_rad = obstacle_policy::targetBearingError(
-            current_pose.pose.x,
-            current_pose.pose.y,
-            current_yaw,
-            authorization.authorized_pose.x,
-            authorization.authorized_pose.y);
-        if (obstacle.supervised_release_active &&
-            obstacle_policy::requiresInitialTurn(bearing_error_rad) &&
-            !obstacle_policy::turningEnvelopeClear(
-                obstacle.left_clearance_m,
-                obstacle.right_clearance_m,
-                obstacle.rear_clearance_m)) {
-            return {
-                {"accepted", false},
-                {"reason", "initial_turning_envelope_constrained"},
-                {"bearing_error_rad", bearing_error_rad},
-                {"required_clearance_m", {
-                    {"side", obstacle_policy::kTurningSideClearanceM},
-                    {"rear", obstacle_policy::kTurningRearClearanceM}
-                }},
-                {"world_state", gateway_.buildWorldStateJson()}
-            };
-        }
         if (navigation_execution_guard_) {
             const std::string guard_reason = navigation_execution_guard_();
             if (!guard_reason.empty()) {
@@ -395,7 +366,7 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
             distance_m +
             (legacy_departure
                 ? obstacle_policy::kDepartureFrontReserveM
-                : obstacle_policy::kRepositionReserveM);
+                : obstacle_policy::repositionReserveM(direction));
         const double observed_clearance_m =
             directionalClearance(obstacle, direction);
         if (observed_clearance_m < required_front_m) {

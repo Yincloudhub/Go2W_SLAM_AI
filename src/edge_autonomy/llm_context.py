@@ -244,12 +244,11 @@ def build_capability_contract(*, localized: bool, snapshot: dict[str, Any]) -> d
                 "requires": [
                     "operator_present",
                     "supervised_release",
-                    "initial_turn_constrained_or_side_rear_advisory",
+                    "native_navigation_reported_no_progress",
                     "directional_escape_clearance",
                 ],
                 "semantic_inputs": [
-                    "initial_turn_constrained",
-                    "side_rear_advisory_before_planner_control",
+                    "native_navigation_failure_or_stall",
                     "four_direction_clearance_candidates",
                     "target_progress",
                 ],

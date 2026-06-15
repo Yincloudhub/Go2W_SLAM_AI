@@ -87,15 +87,6 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             return d;
         }
 
-        if (obstacle.front_clearance_m >= 0.0 &&
-            obstacle.front_clearance_m < obstacle_policy::kFrontPauseM) {
-            d.allow_navigation = false;
-            d.should_pause = true;
-            d.recommended_mode = "pause";
-            d.reason = "front_obstacle_too_close";
-            return d;
-        }
-
         if (obstacle.supervised_release_active) {
             if (health.status == "degraded") {
                 d.allow_navigation = false;
@@ -104,7 +95,10 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
                 d.reason = "slam_health_degraded";
                 return d;
             }
-            const bool lateral_or_rear_advisory =
+            const bool local_obstacle_advisory =
+                obstacle.recommended_action == "pause" ||
+                (obstacle.front_clearance_m >= 0.0 &&
+                 obstacle.front_clearance_m < obstacle_policy::kFrontPauseM) ||
                 (obstacle.left_clearance_m >= 0.0 &&
                  obstacle.left_clearance_m < obstacle_policy::kSideSlowM) ||
                 (obstacle.right_clearance_m >= 0.0 &&
@@ -115,10 +109,19 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             d.should_pause = false;
             d.recommended_mode = "conservative";
             d.motion_direction = "unitree_pose_navigation_mode_0";
-            d.reason = lateral_or_rear_advisory
-                ? "supervised_planner_mobility_available_with_lateral_rear_advisory"
-                : "supervised_planner_mobility_available";
+            d.reason = local_obstacle_advisory
+                ? "supervised_unitree_avoidance_available_with_local_obstacle_advisory"
+                : "supervised_unitree_avoidance_available";
             d.speed_limit_mps = obstacle.supervised_max_speed_mps;
+            return d;
+        }
+
+        if (obstacle.front_clearance_m >= 0.0 &&
+            obstacle.front_clearance_m < obstacle_policy::kFrontPauseM) {
+            d.allow_navigation = false;
+            d.should_pause = true;
+            d.recommended_mode = "pause";
+            d.reason = "front_obstacle_too_close";
             return d;
         }
 

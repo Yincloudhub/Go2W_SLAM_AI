@@ -49,19 +49,6 @@ slam_gateway::LocalObstacleSummary lidarObstacle()
 
 int main()
 {
-    require(
-        slam_gateway::obstacle_policy::requiresInitialTurn(0.35),
-        "material target bearing change must require an initial turn");
-    require(
-        !slam_gateway::obstacle_policy::requiresInitialTurn(0.05),
-        "aligned target must not require an initial turn");
-    require(
-        !slam_gateway::obstacle_policy::turningEnvelopeClear(0.8, 0.1, 0.1),
-        "close side or rear clearance must constrain an initial turn");
-    require(
-        slam_gateway::obstacle_policy::turningEnvelopeClear(0.8, 0.6, 0.4),
-        "supported side and rear clearance should allow an initial turn");
-
     slam_gateway::SafetySupervisor supervisor;
     const auto health = healthySlam();
     const auto localization = localized();
@@ -112,7 +99,7 @@ int main()
     require(corridor_decision.speed_limit_mps == 0.2,
             "conservative corridor mode must expose a real speed limit");
     const auto corridor_json = corridor_decision.toJson();
-    require(corridor_json.value("policy_version", std::string{}) == "semantic_mobility_v4",
+    require(corridor_json.value("policy_version", std::string{}) == "semantic_mobility_v5",
             "safety JSON must identify the active clearance policy");
     require(corridor_json.value("motion_direction", std::string{}) == "planner_controlled",
             "safety JSON must keep direction under planner control");
@@ -156,7 +143,7 @@ int main()
             "supervised pose navigation should remain movable with side/rear advisory");
     require(
         supervised_side_advisory.reason ==
-            "supervised_planner_mobility_available_with_lateral_rear_advisory",
+            "supervised_unitree_avoidance_available_with_local_obstacle_advisory",
         "side/rear proximity should be reported as a supervised advisory");
     require(supervised_side_advisory.motion_direction == "unitree_pose_navigation_mode_0",
             "supervised mobility must identify the Unitree planner mode");
@@ -164,12 +151,14 @@ int main()
             "side/rear advisory must retain the supervised speed cap");
 
     supervised_release.front_clearance_m = 0.6;
-    const auto supervised_front_block =
+    const auto supervised_front_advisory =
         supervisor.evaluate(health, localization, supervised_release);
-    require(!supervised_front_block.allow_navigation,
-            "supervised pose navigation must still stop for a blocked departure corridor");
-    require(supervised_front_block.reason == "front_obstacle_too_close",
-            "front departure block reason mismatch");
+    require(supervised_front_advisory.allow_navigation,
+            "native mode-0 obstacle avoidance must retain control near ordinary obstacles");
+    require(
+        supervised_front_advisory.reason ==
+            "supervised_unitree_avoidance_available_with_local_obstacle_advisory",
+        "front proximity should remain a supervised advisory");
 
     auto stub = clear;
     stub.source = "manual_stub";

@@ -917,22 +917,10 @@ def supervised_reposition_decision(
             "available": False,
             "reason": "mobility geometry is incomplete",
         }
-    requires_turn = abs(bearing_error) > 0.20
-    turning_clear = left >= 0.35 and right >= 0.35 and rear >= 0.30
     target_distance_m = math.hypot(dx, dy)
-    side_rear_advisory = left < 0.60 or right < 0.60 or rear < 0.50
-    constrained_turn = requires_turn and not turning_clear
-    required = (
-        target_distance_m > 0.75
-        and (constrained_turn or side_rear_advisory)
-    )
-    trigger = "not_required"
-    if required:
-        trigger = (
-            "initial_turn_constrained"
-            if constrained_turn
-            else "side_rear_advisory_before_planner_control"
-        )
+    recovery_requested = slam_command.get("recovery_requested") is True
+    required = target_distance_m > 0.75 and recovery_requested
+    trigger = "native_navigation_recovery_requested" if required else "not_required"
 
     clearances = {
         "forward": front,
@@ -953,9 +941,18 @@ def supervised_reposition_decision(
         "right": (math.sin(yaw), -math.cos(yaw)),
     }
     candidates = []
+    directional_reserve_m = {
+        "forward": 0.50,
+        "backward": 0.30,
+        "left": 0.35,
+        "right": 0.35,
+    }
     for direction in ("forward", "left", "right", "backward"):
         clearance = clearances[direction]
-        distance_m = min(0.50, max(0.0, clearance - 0.35))
+        distance_m = min(
+            0.50,
+            max(0.0, clearance - directional_reserve_m[direction]),
+        )
         if distance_m < 0.20:
             continue
         offset_x, offset_y = offsets[direction]
@@ -992,7 +989,7 @@ def supervised_reposition_decision(
     elif target_distance_m <= 0.75:
         reason = "target is too close to justify a reposition maneuver"
     else:
-        reason = "turning envelope and side or rear clearance are clear"
+        reason = "native mode-0 navigation owns initial turning and obstacle avoidance"
     return {
         "required": required,
         "available": available,
@@ -1000,6 +997,8 @@ def supervised_reposition_decision(
         "trigger": trigger,
         "bearing_error_rad": bearing_error,
         "target_distance_m": target_distance_m,
+        "native_navigation_first": True,
+        "recovery_requested": recovery_requested,
         "clearance_m": {
             "front": front,
             "left": left,

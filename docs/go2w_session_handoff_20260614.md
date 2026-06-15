@@ -178,6 +178,30 @@ Python `327/327` 通过；验收前后相关 GO2W 进程均为空。此归档不
   位于侧/后方就断言机器人不可移动；受监督导航应由前向出发走廊、Unitree 本地
   规划状态和运行时前向安全门共同决定。
 
+### 2026-06-15 semantic mobility v5 native-navigation handoff
+
+- The field run to `yin_siyuan_station` proved that GO2W, not Unitree SLAM,
+  stopped the task. After a successful bounded forward reposition, XT16
+  reported front `0.787 m`, left `0.527 m`, right `0.011 m`, and rear
+  `0.030 m`. The persistent heartbeat revoked the session at the old
+  `0.80 m` front threshold before Unitree obstacle avoidance could continue.
+- `semantic_mobility_v5` removes the fixed turn-clearance preflight. A scalar
+  left/right minimum cannot represent the robot body's rotational swept
+  footprint or the planner's local occupancy model.
+- Registered targets are handed directly to Unitree navigation with `mode=0`.
+  Side/rear advisory proximity does not trigger a pre-navigation reposition.
+- Reposition is a post-failure recovery action only. It may be considered
+  after native navigation reports failure or sustained no progress, using the
+  refreshed four-direction world state rather than a guessed turn envelope.
+- During explicit supervised `mode=0` navigation, ordinary XT16/D435 proximity
+  remains observable advisory evidence and no longer causes the GO2W heartbeat
+  to preempt Unitree's native planner. SLAM health, localization freshness, map
+  identity, trusted sensor validity, lease loss, disconnect, and explicit
+  emergency-stop conditions remain hard stops.
+- Internal `supervised_reposition` remains bounded and separate from native
+  navigation. It now preserves direction-specific clearance reserves:
+  forward `0.50 m`, side `0.35 m`, and rear `0.30 m`.
+
 ## 7. 新 Session 可直接使用的提示词
 
 ```text

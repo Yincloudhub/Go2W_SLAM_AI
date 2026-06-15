@@ -67,18 +67,24 @@ An uncalibrated or stale trusted XT16 summary fails closed for navigation
 unless the explicit supervised engineering release is active. Manual
 relocation remains available so localization can be recovered.
 
-The supervised release uses `semantic_mobility_v4`. Fresh XT16 geometry
-produces bounded forward, backward, left, and right reposition candidates.
-The local LLM selects a candidate from that set; `MissionDecisionEngine`
-validates the direction and distance, and the Gateway executes it with
-`SportClient::Move`, zero yaw rate, a 0.10 m/s speed cap, and continuous
-directional-clearance checks. Each step is capped at 0.50 m, stops, refreshes
-world state, and returns to the LLM before another reposition or mapped
-navigation decision.
+The supervised release uses `semantic_mobility_v5`. Registered targets pass
+directly to Unitree `mode=0` navigation and its native obstacle avoidance.
+GO2W does not approximate the robot's rotational swept footprint from a fixed
+left/right clearance threshold. Only after native navigation reports failure
+or sustained no progress can fresh XT16 geometry produce bounded forward,
+backward, left, and right recovery candidates. The local LLM selects a
+candidate from that set; `MissionDecisionEngine` validates the direction and
+distance, and the Gateway executes it with
+`SportClient::Move`, zero yaw rate, a 0.10 m/s speed cap, and direction-specific
+clearance reserves. Each step is capped at 0.50 m, stops, refreshes world state,
+and returns to the LLM before another reposition or mapped navigation decision.
 
 This internal recovery loop does not expose general relative motion. A D435
 front hard stop is also required to persist across two distinct fresh frames
-when XT16 reports a clear front corridor; XT16 hard stops remain immediate.
+when XT16 reports a clear front corridor. During supervised native navigation,
+ordinary local proximity remains an advisory to avoid overriding Unitree's
+planner; health, localization, sensor validity, lease loss, and explicit
+emergency-stop conditions remain hard stops.
 
 Build-map origin, relocation, and navigation use separate registry roles:
 

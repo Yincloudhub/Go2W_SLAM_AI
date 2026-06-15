@@ -58,13 +58,13 @@ class EchoingMobilityBackend:
 
 
 class QueueFeedbackTests(unittest.TestCase):
-    def test_constrained_initial_turn_requests_bounded_departure(self) -> None:
+    def test_initial_turn_is_owned_by_native_navigation(self) -> None:
         state = {
             "world_state": {
                 "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
                 "local_obstacle": {
                     "front_clearance_m": 2.0,
-                    "left_clearance_m": 1.0,
+                    "left_clearance_m": 0.1,
                     "right_clearance_m": 0.1,
                     "rear_clearance_m": 0.1,
                     "supervised_release": {"active": True},
@@ -77,10 +77,10 @@ class QueueFeedbackTests(unittest.TestCase):
             {"target_pose": {"x": 2.0, "y": 1.0}},
         )
 
-        self.assertTrue(decision["required"])
-        self.assertTrue(decision["available"])
-        self.assertEqual(decision["distance_m"], 0.5)
-        self.assertEqual(decision["speed_mps"], 0.1)
+        self.assertFalse(decision["required"])
+        self.assertFalse(decision["available"])
+        self.assertTrue(decision["native_navigation_first"])
+        self.assertEqual(decision["trigger"], "not_required")
 
     def test_aligned_target_does_not_request_departure(self) -> None:
         state = {
@@ -103,7 +103,7 @@ class QueueFeedbackTests(unittest.TestCase):
 
         self.assertFalse(decision["required"])
 
-    def test_side_rear_advisory_requests_departure_even_when_aligned(self) -> None:
+    def test_side_rear_proximity_does_not_preempt_native_navigation(self) -> None:
         state = {
             "world_state": {
                 "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
@@ -122,11 +122,9 @@ class QueueFeedbackTests(unittest.TestCase):
             {"target_pose": {"x": 2.0, "y": 0.0}},
         )
 
-        self.assertTrue(decision["required"])
-        self.assertEqual(
-            decision["trigger"],
-            "side_rear_advisory_before_planner_control",
-        )
+        self.assertFalse(decision["required"])
+        self.assertTrue(decision["native_navigation_first"])
+        self.assertEqual(decision["trigger"], "not_required")
 
     def test_side_rear_advisory_does_not_depart_when_target_is_close(self) -> None:
         state = {
@@ -151,13 +149,13 @@ class QueueFeedbackTests(unittest.TestCase):
         self.assertFalse(decision["available"])
         self.assertEqual(decision["trigger"], "not_required")
 
-    def test_reposition_selects_lateral_space_for_constrained_side(self) -> None:
+    def test_explicit_native_navigation_recovery_builds_bounded_candidate(self) -> None:
         state = {
             "world_state": {
                 "current_pose": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}},
                 "local_obstacle": {
                     "front_clearance_m": 0.9,
-                    "left_clearance_m": 2.0,
+                    "left_clearance_m": 0.1,
                     "right_clearance_m": 0.1,
                     "rear_clearance_m": 1.0,
                     "supervised_release": {"active": True},
@@ -167,19 +165,46 @@ class QueueFeedbackTests(unittest.TestCase):
 
         decision = supervised_reposition_decision(
             state,
-            {"target_pose": {"x": 2.0, "y": 0.0}},
+            {
+                "target_pose": {"x": 2.0, "y": 1.0},
+                "recovery_requested": True,
+            },
         )
 
         self.assertTrue(decision["required"])
         self.assertTrue(decision["available"])
-        self.assertEqual(decision["direction"], "left")
-        self.assertEqual(decision["distance_m"], 0.5)
+        self.assertEqual(decision["direction"], "forward")
+        self.assertEqual(decision["distance_m"], 0.4)
+
+    def test_field_state_does_not_use_fixed_turn_clearance_gate(self) -> None:
+        state = {
+            "world_state": {
+                "current_pose": {
+                    "pose": {"x": -1.05, "y": -0.57, "yaw": 1.53}
+                },
+                "local_obstacle": {
+                    "front_clearance_m": 0.787,
+                    "left_clearance_m": 0.527,
+                    "right_clearance_m": 0.011,
+                    "rear_clearance_m": 0.030,
+                    "supervised_release": {"active": True},
+                },
+            }
+        }
+
+        decision = supervised_reposition_decision(
+            state,
+            {"target_pose": {"x": 1.597, "y": 0.359}},
+        )
+
+        self.assertFalse(decision["required"])
+        self.assertTrue(decision["native_navigation_first"])
 
     def test_live_mobility_strategy_selects_only_candidate_action(self) -> None:
         proposal = generate_mobility_strategy_proposal(
             {
                 "required": True,
-                "trigger": "initial_turn_constrained",
+                "trigger": "native_navigation_recovery_requested",
                 "bearing_error_rad": 1.0,
                 "clearance_m": {
                     "front": 0.9,
@@ -217,7 +242,7 @@ class QueueFeedbackTests(unittest.TestCase):
     def test_mobility_strategy_uses_last_json_after_echoed_prompt(self) -> None:
         analysis = {
             "required": True,
-            "trigger": "initial_turn_constrained",
+            "trigger": "native_navigation_recovery_requested",
             "bearing_error_rad": 1.0,
             "clearance_m": {"front": 1.0, "left": 2.0, "right": 0.1, "rear": 0.5},
             "candidates": [

@@ -67,7 +67,7 @@ class LlmContextTests(unittest.TestCase):
             if item["name"] == "bounded_supervised_reposition"
         )
         self.assertIn(
-            "side_rear_advisory_before_planner_control",
+            "native_navigation_failure_or_stall",
             departure["semantic_inputs"],
         )
         self.assertEqual(

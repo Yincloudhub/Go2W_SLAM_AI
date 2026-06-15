@@ -286,7 +286,7 @@ void SlamGateway::supervisedRepositionLoop(
             break;
         }
         if (directionalClearance(obstacle, direction) <
-            obstacle_policy::kRepositionReserveM) {
+            obstacle_policy::repositionReserveM(direction)) {
             failure_reason = "reposition_directional_clearance_exhausted";
             break;
         }
