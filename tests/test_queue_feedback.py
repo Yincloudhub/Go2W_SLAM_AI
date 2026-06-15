@@ -40,6 +40,22 @@ class MobilityBackend:
             }
         )
 
+class EchoingMobilityBackend:
+    def generate(self, prompt: str, *, system_prompt: str, max_tokens: int, timeout_s: int) -> str:
+        return (
+            prompt
+            + "\n"
+            + json.dumps(
+                {
+                    "action": "reposition",
+                    "direction": "left",
+                    "distance_m": 0.3,
+                    "confidence": 0.9,
+                    "reason": "left creates turning room",
+                }
+            )
+        )
+
 
 class QueueFeedbackTests(unittest.TestCase):
     def test_constrained_initial_turn_requests_bounded_departure(self) -> None:
@@ -196,6 +212,37 @@ class QueueFeedbackTests(unittest.TestCase):
 
         self.assertEqual(proposal["source"], "local_llm")
         self.assertEqual(proposal["action"], "reposition")
+        self.assertEqual(proposal["direction"], "left")
+
+    def test_mobility_strategy_uses_last_json_after_echoed_prompt(self) -> None:
+        analysis = {
+            "required": True,
+            "trigger": "initial_turn_constrained",
+            "bearing_error_rad": 1.0,
+            "clearance_m": {"front": 1.0, "left": 2.0, "right": 0.1, "rear": 0.5},
+            "candidates": [
+                {
+                    "direction": "left",
+                    "distance_m": 0.5,
+                    "clearance_m": 2.0,
+                    "turning_relief_m": 0.25,
+                    "goal_progress_m": 0.0,
+                }
+            ],
+        }
+        proposal = generate_mobility_strategy_proposal(
+            analysis,
+            {"target_node": "wp_a", "target_pose": {"x": 2.0, "y": 0.0}},
+            SimpleNamespace(
+                mobility_strategy_mode="live",
+                local_command="unused",
+                mobility_strategy_max_tokens=160,
+                mobility_strategy_timeout_s=20,
+            ),
+            backend=EchoingMobilityBackend(),
+        )
+
+        self.assertEqual(proposal["source"], "local_llm")
         self.assertEqual(proposal["direction"], "left")
 
     def test_gateway_rejection_preserves_safety_reason(self) -> None:

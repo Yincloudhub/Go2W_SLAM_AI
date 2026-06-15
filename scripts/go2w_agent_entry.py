@@ -740,8 +740,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["live", "deterministic"],
         default="live",
     )
-    parser.add_argument("--mobility-strategy-max-tokens", type=int, default=96)
-    parser.add_argument("--mobility-strategy-timeout-s", type=int, default=8)
+    parser.add_argument("--mobility-strategy-max-tokens", type=int, default=160)
+    parser.add_argument("--mobility-strategy-timeout-s", type=int, default=20)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for queued capture_keyframe steps.")
     parser.add_argument(
         "--communication-journal",

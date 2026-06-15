@@ -93,6 +93,7 @@ MOBILITY_STRATEGY_SYSTEM_PROMPT = (
     "For reposition, choose only a listed candidate direction and choose "
     "distance_m between 0.20 and that candidate's distance_m. "
     "Use navigate only when reposition_required is false. "
+    "Keep reason to 12 words or fewer. "
     "Never output velocity, yaw rate, raw API ids, shell commands, or extra keys."
 )
 
@@ -1021,6 +1022,7 @@ def supervised_departure_decision(
 
 def _extract_json_object(text: str) -> dict[str, Any]:
     decoder = json.JSONDecoder()
+    objects: list[dict[str, Any]] = []
     for index, char in enumerate(text):
         if char != "{":
             continue
@@ -1029,7 +1031,9 @@ def _extract_json_object(text: str) -> dict[str, Any]:
         except json.JSONDecodeError:
             continue
         if isinstance(value, dict):
-            return value
+            objects.append(value)
+    if objects:
+        return objects[-1]
     raise ValueError("mobility strategy returned no JSON object")
 
 
@@ -1091,7 +1095,6 @@ def generate_mobility_strategy_proposal(
 
     request = {
         "target_node": slam_command.get("target_node"),
-        "target_pose": slam_command.get("target_pose"),
         "reposition_required": mobility_analysis.get("required"),
         "trigger": mobility_analysis.get("trigger"),
         "bearing_error_rad": mobility_analysis.get("bearing_error_rad"),
@@ -1108,8 +1111,8 @@ def generate_mobility_strategy_proposal(
         raw_answer = llm_backend.generate(
             prompt,
             system_prompt=MOBILITY_STRATEGY_SYSTEM_PROMPT,
-            max_tokens=int(getattr(args, "mobility_strategy_max_tokens", 96)),
-            timeout_s=int(getattr(args, "mobility_strategy_timeout_s", 8)),
+            max_tokens=int(getattr(args, "mobility_strategy_max_tokens", 160)),
+            timeout_s=int(getattr(args, "mobility_strategy_timeout_s", 20)),
         )
         proposal = _extract_json_object(raw_answer)
         required_keys = {
@@ -1787,8 +1790,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["live", "deterministic"],
         default="live",
     )
-    parser.add_argument("--mobility-strategy-max-tokens", type=int, default=96)
-    parser.add_argument("--mobility-strategy-timeout-s", type=int, default=8)
+    parser.add_argument("--mobility-strategy-max-tokens", type=int, default=160)
+    parser.add_argument("--mobility-strategy-timeout-s", type=int, default=20)
     parser.add_argument("--capture-command", default=os.environ.get("GO2W_CAPTURE_COMMAND", ""), help="Optional bash command for capture_keyframe; GO2W_TARGET_NODE is set.")
     parser.add_argument(
         "--communication-journal",
