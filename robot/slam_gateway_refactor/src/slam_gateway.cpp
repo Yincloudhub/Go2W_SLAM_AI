@@ -99,7 +99,9 @@ SlamGateway::SlamGateway()
 
 SlamGateway::~SlamGateway()
 {
-    stopSupervisedReposition();
+    if (reposition_active_.load() || reposition_thread_.joinable()) {
+        stopSupervisedReposition();
+    }
     taskThreadStop();
     // Do not stop the SLAM backend from short-lived status/query clients.
     // Use the explicit stop_slam command when the backend really should stop.
@@ -348,9 +350,11 @@ void SlamGateway::supervisedRepositionLoop(
 
 int32_t SlamGateway::stopSupervisedReposition()
 {
+    const bool had_reposition =
+        reposition_active_.load() || reposition_thread_.joinable();
     reposition_stop_requested_.store(true);
     int32_t status = 0;
-    if (sport_initialized_) {
+    if (had_reposition && sport_initialized_) {
         std::lock_guard<std::mutex> lock(sport_mutex_);
         status = sport_client_.StopMove();
     }
