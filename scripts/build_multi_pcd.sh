@@ -165,6 +165,46 @@ for m in reg['maps']:
 "
 }
 
+# Update go2w_real_site.pcd_path so Gateway accepts our relocate command
+sync_gateway_pcd() {
+    local target_pcd="$1"
+    "$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+for m in reg['maps']:
+    if m['map_id'] == 'go2w_real_site':
+        m['pcd_path'] = '$target_pcd'
+        break
+with open('$REGISTRY', 'w') as f:
+    json.dump(reg, f, indent=2, ensure_ascii=False)
+"
+}
+
+# Merge all V2 anchors into go2w_real_site for Gateway visibility
+sync_gateway_anchors() {
+    "$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+all_anchors = []
+seen = set()
+gateway = None
+for m in reg['maps']:
+    if m['map_id'] == 'go2w_real_site':
+        gateway = m
+    for a in m.get('relocalization_anchors', []):
+        if a['anchor_id'] not in seen:
+            all_anchors.append(a)
+            seen.add(a['anchor_id'])
+if gateway:
+    gateway['relocalization_anchors'] = all_anchors
+with open('$REGISTRY', 'w') as f:
+    json.dump(reg, f, indent=2, ensure_ascii=False)
+print(f'Synced {len(all_anchors)} anchors to go2w_real_site')
+"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  start — implicitly exits previous PCD, starts fresh map
 # ═══════════════════════════════════════════════════════════════════════════
@@ -298,6 +338,10 @@ for m in reg['maps']:
 
     echo "Relocating: $ANCHOR (map: $MAP_FOR_RELOC, PCD: $PCD_FOR_RELOC)"
     echo ""
+
+    # Sync Gateway-facing pcd_path so relocate passes validation
+    sync_gateway_pcd "$PCD_FOR_RELOC"
+    sync_gateway_anchors > /dev/null
     echo "  Expected Gateway response:"
     echo "    {\"accepted\":true, \"localization_verified\":true, ...}"
     echo ""
@@ -453,6 +497,10 @@ else:
     echo "  If this FAILS: check anchor pose, PCD coverage, robot position."
     echo ""
 
+    # Sync Gateway-facing pcd_path and anchors
+    sync_gateway_pcd "$OTHER_PCD"
+    sync_gateway_anchors > /dev/null
+
     # Send relocate via Gateway directly (V2 registry)
     echo "  Relocating to $OTHER via $REVERSE..."
     RELOC_JSON=$("$PYTHON_BIN" -c "
@@ -520,6 +568,23 @@ for m in reg['maps']:
     for ta in m.get('transition_anchors',[]):
         print(f\"      → {ta.get('connects_to','?')}  (reverse: {ta.get('reverse_anchor','?')})\")
     print()
+"
+    exit 0
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  sync-registry — merge all V2 anchors into go2w_real_site
+# ═══════════════════════════════════════════════════════════════════════════
+if [[ "$ACTION" == "sync-registry" ]]; then
+    sync_gateway_anchors
+    echo "  Also sync pcd_path? Current go2w_real_site PCD:"
+    "$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+for m in reg['maps']:
+    if m['map_id'] == 'go2w_real_site':
+        print(f\"  {m['pcd_path']}\")
 "
     exit 0
 fi

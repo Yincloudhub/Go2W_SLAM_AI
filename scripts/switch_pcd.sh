@@ -220,6 +220,19 @@ fi
 # ── Execute relocation ──
 info "Relocating to target PCD via anchor: $ANCHOR_ID"
 
+# Sync Gateway-facing pcd_path so relocate passes validation
+"$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+for m in reg['maps']:
+    if m['map_id'] == 'go2w_real_site':
+        m['pcd_path'] = '$TARGET_PCD'
+        break
+with open('$REGISTRY', 'w') as f:
+    json.dump(reg, f, indent=2, ensure_ascii=False)
+"
+
 # The Gateway relocate command needs:
 #   map_id = target map's map_id
 #   map_path = target map's pcd_path
