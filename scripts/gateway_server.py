@@ -1,5 +1,5 @@
 """GO2W Gateway HTTP Server — lightweight REST API."""
-import json, subprocess, sys, os, threading
+import json, subprocess, sys, os, time, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 REPO = "/home/unitree/Go2W_SLAM_AI"
@@ -77,6 +77,134 @@ def get_coarse_map() -> dict:
         return {"error": str(e)}
 
 
+def get_planner_context(user_command: str = "", map_id: str = "go2w_real_site") -> dict:
+    """Build cloud LLM planner context: coarse_map + waypoint connectivity + current state."""
+    try:
+        sys.path.insert(0, f"{REPO}/src")
+        from edge_autonomy.cloud_llm_planner import build_waypoint_connectivity
+        from edge_autonomy.path_validator import build_adaptive_coarse_map
+
+        registry_path = f"{REPO}/configs/maps/go2w_real_site_map_registry.json"
+
+        # Coarse map
+        try:
+            cm = build_adaptive_coarse_map(grid_size=40)
+            coarse_map = cm.get("grid_string", "")
+            coarse_map_nodes = cm.get("nodes", {})
+            coarse_map_grid_size = cm.get("grid_size", 0)
+        except Exception:
+            coarse_map = ""
+            coarse_map_nodes = {}
+            coarse_map_grid_size = 0
+
+        # Waypoint connectivity (cached after first call)
+        connectivity = build_waypoint_connectivity(registry_path, map_id=map_id)
+
+        # Current state from Gateway
+        status = get_status()
+        current_pose = status.get("pose")
+
+        return {
+            "coarse_map": coarse_map,
+            "coarse_map_nodes": coarse_map_nodes,
+            "coarse_map_grid_size": coarse_map_grid_size,
+            "waypoint_connectivity": {
+                "nodes": connectivity.get("nodes", []),
+                "adjacency": connectivity.get("adjacency", {}),
+                "grid_positions": connectivity.get("grid_positions", {}),
+            },
+            "current_pose": current_pose,
+            "user_command": user_command,
+            "map_id": map_id,
+            "status": status,
+            "navigation_hint": (
+                "Multi-hop routing: examine the coarse_map. "
+                "Walls are shown as █, open space as ·. "
+                "Topology nodes are overlaid on the grid. "
+                "Use waypoint_connectivity.adjacency to find reachable neighbor pairs. "
+                "Plan a sequence of hops from current_node to requested_target through "
+                "intermediate nodes. Each hop must be a directly connected pair in the adjacency graph. "
+                "Output format: {\"hops\": [\"wp_a\", \"wp_b\", \"wp_c\"], \"reason\": \"short explanation\"}"
+            ),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def handle_cloud_plan(body: dict) -> dict:
+    """Receive cloud LLM hop plan, validate, convert to plan, spawn execution."""
+    if _nav_lock.locked():
+        return {"accepted": False, "reason": "navigation already in progress"}
+
+    hops = body.get("hops")
+    if not isinstance(hops, list) or len(hops) < 2:
+        return {"accepted": False, "reason": "hops must be a list of at least 2 node IDs"}
+
+    reason = str(body.get("reason", ""))
+    map_id = str(body.get("map_id", "go2w_real_site"))
+    registry_path = f"{REPO}/configs/maps/go2w_real_site_map_registry.json"
+
+    try:
+        sys.path.insert(0, f"{REPO}/src")
+        from edge_autonomy.cloud_llm_planner import hops_to_plan, build_waypoint_connectivity
+
+        connectivity = build_waypoint_connectivity(registry_path, map_id=map_id)
+        plan = hops_to_plan(hops, map_id, reason=reason, connectivity=connectivity)
+
+        if plan.get("mode") in ("human_confirm", "safe_hold") and plan.get("confidence", 1.0) < 0.5:
+            return {
+                "accepted": False,
+                "reason": plan.get("reason", "cloud plan rejected by validator"),
+                "plan": plan,
+            }
+
+        # Write plan to temp file and spawn execution
+        import tempfile
+        plan_path = os.path.join(tempfile.gettempdir(), f"go2w_cloud_plan_{int(time.time())}.json")
+        with open(plan_path, "w", encoding="utf-8") as fh:
+            json.dump(plan, fh, ensure_ascii=False)
+
+        target = hops[-1] if len(hops) > 1 else hops[0]
+        speed = body.get("speed", 0.2)
+        nav_mode = body.get("nav_mode", 0)
+
+        cmd = [
+            "python3", f"{REPO}/scripts/run_robot_closed_loop.py",
+            "--command", target,
+            "--registry", registry_path,
+            "--map-id", map_id,
+            "--map-path", body.get("map_path", "/home/unitree/test.pcd"),
+            "--plan-file", plan_path,
+            "--execute",
+            "--nav-speed-mps", str(speed),
+            "--nav-mode", str(nav_mode),
+            "--prompt-mode", "hybrid",
+        ]
+
+        def run_cloud_nav():
+            try:
+                subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            except subprocess.TimeoutExpired:
+                pass
+            finally:
+                try:
+                    os.unlink(plan_path)
+                except OSError:
+                    pass
+                _nav_lock.release()
+
+        _nav_lock.acquire()
+        threading.Thread(target=run_cloud_nav, daemon=True).start()
+        return {
+            "accepted": True,
+            "reason": f"cloud plan accepted: {' → '.join(hops)}",
+            "target": target,
+            "hops": hops,
+        }
+    except Exception as e:
+        return {"accepted": False, "reason": f"cloud plan error: {e}"}
+
+
 class GatewayHandler(BaseHTTPRequestHandler):
     def _json(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False).encode()
@@ -97,6 +225,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
             self._json(get_status())
         elif self.path == "/map":
             self._json(get_coarse_map())
+        elif self.path == "/planner/context" or self.path.startswith("/planner/context?"):
+            self._json(get_planner_context())
         else:
             self._json({"error": "not found"}, 404)
 
@@ -112,6 +242,8 @@ class GatewayHandler(BaseHTTPRequestHandler):
                                   map_path=body.get("map_path", "/home/unitree/test.pcd"),
                                   anchor_id=anchor, operator_ack=True)
             self._json(result)
+        elif self.path == "/planner/plan":
+            self._json(handle_cloud_plan(body))
         else:
             self._json({"error": "not found"}, 404)
 

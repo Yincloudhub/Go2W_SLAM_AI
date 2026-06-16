@@ -37,9 +37,11 @@ from edge_autonomy.gateway_safety import gateway_allows_navigation  # noqa: E402
 from edge_autonomy.local_llm_planner import (  # noqa: E402
     DEFAULT_SYSTEM_PROMPT,
     LocalCommandBackend,
+    PlannerRunResult,
     build_lightweight_planner_context,
     plan_to_task_queue,
     run_local_llm_planner,
+    validate_local_llm_plan,
 )
 from edge_autonomy.map_registry import MapProfile, MapRegistry  # noqa: E402
 from edge_autonomy.mission_decision import (  # noqa: E402
@@ -1955,6 +1957,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")
     parser.add_argument("--summary", action="store_true", help="Print a concise one-line summary instead of full JSON dump.")
+    parser.add_argument("--plan-file", default=None, help="Path to a pre-built plan JSON file. When set, skips the LLM planner and uses this plan directly.")
     return parser
 
 
@@ -2035,22 +2038,69 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.perception_context_path),
         current_time_ms=int(time.time() * 1000),
     )
-    planner_context = build_planner_context(
-        snapshot,
-        registry,
-        user_command=args.command,
-        map_id=args.map_id,
-        perception_context=perception_context,
-    )
 
-    result = run_local_llm_planner(
-        planner_context,
-        LocalCommandBackend(args.local_command),
-        system_prompt=args.system,
-        max_tokens=args.max_tokens,
-        timeout_s=args.timeout_s,
-        prompt_mode=args.prompt_mode,
-    )
+    if args.plan_file:
+        # Cloud LLM / pre-built plan path: load plan from file, skip local LLM planner
+        try:
+            with open(args.plan_file, "r", encoding="utf-8") as fh:
+                plan = json.load(fh)
+        except Exception as exc:
+            output = {
+                "command": args.command,
+                "dry_run": not args.execute,
+                "planner": None,
+                "error": f"failed to load plan file: {exc}",
+            }
+            if args.summary:
+                _print_summary(output)
+            else:
+                print(json.dumps(output, ensure_ascii=False, indent=2 if args.pretty else None))
+            return 2
+        # Build minimal planner_context (needed by plan_to_task_queue for candidate lookup)
+        planner_context = build_planner_context(
+            snapshot,
+            registry,
+            user_command=args.command,
+            map_id=args.map_id,
+            perception_context=perception_context,
+        )
+        try:
+            validate_local_llm_plan(plan)
+        except ValueError as exc:
+            output = {
+                "command": args.command,
+                "dry_run": not args.execute,
+                "planner": None,
+                "error": f"cloud plan validation failed: {exc}",
+            }
+            if args.summary:
+                _print_summary(output)
+            else:
+                print(json.dumps(output, ensure_ascii=False, indent=2 if args.pretty else None))
+            return 2
+        result = PlannerRunResult(
+            plan=plan,
+            raw_answer=json.dumps(plan, ensure_ascii=False),
+            elapsed_s=0.0,
+            user_reply="cloud plan loaded",
+        )
+    else:
+        planner_context = build_planner_context(
+            snapshot,
+            registry,
+            user_command=args.command,
+            map_id=args.map_id,
+            perception_context=perception_context,
+        )
+
+        result = run_local_llm_planner(
+            planner_context,
+            LocalCommandBackend(args.local_command),
+            system_prompt=args.system,
+            max_tokens=args.max_tokens,
+            timeout_s=args.timeout_s,
+            prompt_mode=args.prompt_mode,
+        )
     nav_speed = normalize_unitree_navigation_speed(
         args.nav_speed_mps if args.nav_speed_mps > 0 else None,
         args.nav_mode,
