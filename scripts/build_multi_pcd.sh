@@ -132,10 +132,24 @@ for i, ch in enumerate(stdout):
             val, _ = decoder.raw_decode(stdout[i:])
             if isinstance(val, dict): objs.append(val)
         except: pass
-if objs:
-    print(json.dumps(objs[-1], indent=2, ensure_ascii=False))
-else:
+if not objs:
     print(stdout.strip()[-500:])
+    sys.exit(1)
+# Prefer the dict with 'accepted' key (the command response),
+# then the one with 'world_state', then the last one.
+target = None
+for o in objs:
+    if 'accepted' in o:
+        target = o
+        break
+if target is None:
+    for o in objs:
+        if 'world_state' in o:
+            target = o
+            break
+if target is None:
+    target = objs[-1]
+print(json.dumps(target, indent=2, ensure_ascii=False))
 " "$json"
 }
 
