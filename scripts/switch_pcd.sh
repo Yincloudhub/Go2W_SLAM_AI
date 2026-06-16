@@ -232,8 +232,14 @@ import json
 with open('$REGISTRY') as f:
     reg = json.load(f)
 
-to_map = next(m for m in reg['maps'] if m['map_id'] == '$TO_MAP')
-anchor = next(a for a in to_map['relocalization_anchors'] if a['anchor_id'] == '$ANCHOR_ID')
+to_map = next((m for m in reg['maps'] if m['map_id'] == '$TO_MAP'), None)
+if to_map is None:
+    print('ERROR: map not found', file=sys.stderr)
+    sys.exit(1)
+anchor = next((a for a in to_map['relocalization_anchors'] if a['anchor_id'] == '$ANCHOR_ID'), None)
+if anchor is None:
+    print(f'ERROR: anchor \"$ANCHOR_ID\" not in $TO_MAP relocalization_anchors', file=sys.stderr)
+    sys.exit(1)
 pose = anchor['pose']
 
 cmd = {
@@ -279,7 +285,15 @@ for i, ch in enumerate(text):
         except:
             pass
 if objs:
-    print(json.dumps(objs[-1], indent=2, ensure_ascii=False))
+    # Prefer dict with 'accepted' key for display
+    target = None
+    for o in objs:
+        if 'accepted' in o:
+            target = o
+            break
+    if target is None:
+        target = objs[-1]
+    print(json.dumps(target, indent=2, ensure_ascii=False))
 else:
     print('Raw response:', text[:500])
 "

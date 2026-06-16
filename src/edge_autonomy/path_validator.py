@@ -517,13 +517,20 @@ if __name__ == "__main__":
         print(json.dumps(result, indent=2))
 
     elif len(sys.argv) >= 3 and sys.argv[1] == "between":
-        threshold = 15
-        if len(sys.argv) > 3 and sys.argv[3].isdigit():
+        from_node = sys.argv[2]
+        # to_node is argv[3], unless argv[3] is a digit (threshold)
+        # and argv[4] exists, in which case argv[4] is to_node
+        if len(sys.argv) >= 5 and sys.argv[3].lstrip('-').isdigit():
+            to_node = sys.argv[4]
             threshold = int(sys.argv[3])
+        elif len(sys.argv) >= 4:
+            to_node = sys.argv[3]
+            threshold = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4].isdigit() else 15
+        else:
+            print("Usage: path_validator.py between <from_node> <to_node> [threshold]")
+            sys.exit(2)
         result = check_path_between_nodes(
-            sys.argv[2],
-            sys.argv[3] if len(sys.argv) <= 3 or not sys.argv[3].isdigit() else sys.argv[4]
-            if len(sys.argv) > 4 else "",
+            from_node, to_node,
             density_threshold=threshold,
         )
         print(json.dumps(result, indent=2))
