@@ -118,7 +118,7 @@ gateway_cmd() {
     "$PYTHON_BIN" -c "
 import json, subprocess, sys
 client = '$GATEWAY_CLIENT'
-payload = json.dumps($json, ensure_ascii=False, separators=(',',':')) + '\n'
+payload = sys.argv[1] + '\n'
 p = subprocess.Popen([client, 'eth0'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 stdout, stderr = p.communicate(payload, timeout=30)
 if p.returncode != 0:
@@ -136,7 +136,7 @@ if objs:
     print(json.dumps(objs[-1], indent=2, ensure_ascii=False))
 else:
     print(stdout.strip()[-500:])
-"
+" "$json"
 }
 
 registry_lookup() {
