@@ -76,26 +76,34 @@ SafetyDecision SafetySupervisor::evaluate(const SlamHealth& health,
             return d;
         }
 
-        if (!(obstacle.front_confidence >= kMinimumObstacleConfidence)) {
-            d.allow_navigation = false;
-            d.should_pause = true;
-            d.recommended_mode = "hold";
-            d.reason = "front_obstacle_confidence_too_low";
-            return d;
-        }
-        if (!(obstacle.left_confidence >= kMinimumObstacleConfidence)) {
-            d.allow_navigation = false;
-            d.should_pause = true;
-            d.recommended_mode = "hold";
-            d.reason = "left_obstacle_confidence_too_low";
-            return d;
-        }
-        if (!(obstacle.right_confidence >= kMinimumObstacleConfidence)) {
-            d.allow_navigation = false;
-            d.should_pause = true;
-            d.recommended_mode = "hold";
-            d.reason = "right_obstacle_confidence_too_low";
-            return d;
+        // Per-direction confidence checks are skipped under supervised release.
+        // Rationale: operator presence + emergency stop provide the safety net,
+        // and XT16 geometry may report null confidence for directions partially
+        // occluded by mounted hardware (e.g. TI radar bracket on the back).
+        // The actual clearance values (front/left/right_clearance_m) are still
+        // checked below and will catch real obstacles regardless of confidence.
+        if (!obstacle.supervised_release_active) {
+            if (!(obstacle.front_confidence >= kMinimumObstacleConfidence)) {
+                d.allow_navigation = false;
+                d.should_pause = true;
+                d.recommended_mode = "hold";
+                d.reason = "front_obstacle_confidence_too_low";
+                return d;
+            }
+            if (!(obstacle.left_confidence >= kMinimumObstacleConfidence)) {
+                d.allow_navigation = false;
+                d.should_pause = true;
+                d.recommended_mode = "hold";
+                d.reason = "left_obstacle_confidence_too_low";
+                return d;
+            }
+            if (!(obstacle.right_confidence >= kMinimumObstacleConfidence)) {
+                d.allow_navigation = false;
+                d.should_pause = true;
+                d.recommended_mode = "hold";
+                d.reason = "right_obstacle_confidence_too_low";
+                return d;
+            }
         }
 
         if (obstacle.supervised_release_active) {
