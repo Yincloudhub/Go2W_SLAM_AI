@@ -245,7 +245,7 @@ pose = anchor['pose']
 cmd = {
     'action': 'relocate',
     'operator_ack': True,
-    'map_id': '$TO_MAP',
+    'map_id': 'go2w_real_site',  # Gateway hardcoded map_id
     'map_path': to_map['pcd_path'],
     'anchor_id': anchor['anchor_id'],
     'initial_pose': {

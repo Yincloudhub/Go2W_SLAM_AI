@@ -315,7 +315,7 @@ for m in reg['maps']:
                 cmd = {
                     'action': 'relocate',
                     'operator_ack': True,
-                    'map_id': m['map_id'],
+                    'map_id': 'go2w_real_site',  # Gateway hardcoded map_id
                     'map_path': m['pcd_path'],
                     'anchor_id': a['anchor_id'],
                     'initial_pose': {
@@ -467,7 +467,7 @@ for m in reg['maps']:
                 cmd = {
                     'action': 'relocate',
                     'operator_ack': True,
-                    'map_id': m['map_id'],
+                    'map_id': 'go2w_real_site',  # Gateway hardcoded map_id
                     'map_path': m['pcd_path'],
                     'anchor_id': a['anchor_id'],
                     'initial_pose': {
