@@ -300,12 +300,42 @@ for m in reg['maps']:
     echo ""
     echo "  Expected Gateway response:"
     echo "    {\"accepted\":true, \"localization_verified\":true, ...}"
-    echo "  Common failures:"
-    echo "    relocalization_active_anchor_not_found → anchor not verified in registry"
-    echo "    PCD file missing → check path: $PCD_FOR_RELOC"
     echo ""
 
-    bash "$SCRIPT_DIR/go2w_accept.sh" relocate "$ANCHOR" confirm
+    # Send relocate directly via Gateway (bypasses go2w_accept.sh which uses old registry)
+    RELOC_JSON=$("$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+for m in reg['maps']:
+    if m['map_id'] == '$MAP_FOR_RELOC':
+        for a in m.get('relocalization_anchors', []):
+            if a['anchor_id'] == '$ANCHOR':
+                p = a['pose']
+                cmd = {
+                    'action': 'relocate',
+                    'operator_ack': True,
+                    'map_id': m['map_id'],
+                    'map_path': m['pcd_path'],
+                    'anchor_id': a['anchor_id'],
+                    'initial_pose': {
+                        'name': a['anchor_id'],
+                        'x': p.get('x', 0.0),
+                        'y': p.get('y', 0.0),
+                        'z': p.get('z', 0.0),
+                        'q_x': p.get('q_x', 0.0),
+                        'q_y': p.get('q_y', 0.0),
+                        'q_z': p.get('q_z', 0.0),
+                        'q_w': p.get('q_w', 1.0),
+                        'speed': 0.0,
+                        'mode': 0
+                    }
+                }
+                print(json.dumps(cmd, ensure_ascii=False))
+                break
+        break
+")
+    gateway_cmd "$RELOC_JSON"
     exit $?
 fi
 
@@ -423,10 +453,43 @@ else:
     echo "  If this FAILS: check anchor pose, PCD coverage, robot position."
     echo ""
 
-    bash "$SCRIPT_DIR/go2w_accept.sh" relocate "$REVERSE" confirm || {
+    # Send relocate via Gateway directly (V2 registry)
+    echo "  Relocating to $OTHER via $REVERSE..."
+    RELOC_JSON=$("$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+for m in reg['maps']:
+    if m['map_id'] == '$OTHER':
+        for a in m.get('relocalization_anchors', []):
+            if a['anchor_id'] == '$REVERSE':
+                p = a['pose']
+                cmd = {
+                    'action': 'relocate',
+                    'operator_ack': True,
+                    'map_id': m['map_id'],
+                    'map_path': m['pcd_path'],
+                    'anchor_id': a['anchor_id'],
+                    'initial_pose': {
+                        'name': a['anchor_id'],
+                        'x': p.get('x', 0.0),
+                        'y': p.get('y', 0.0),
+                        'z': p.get('z', 0.0),
+                        'q_x': p.get('q_x', 0.0),
+                        'q_y': p.get('q_y', 0.0),
+                        'q_z': p.get('q_z', 0.0),
+                        'q_w': p.get('q_w', 1.0),
+                        'speed': 0.0,
+                        'mode': 0
+                    }
+                }
+                print(json.dumps(cmd, ensure_ascii=False))
+                break
+        break
+")
+    gateway_cmd "$RELOC_JSON" || {
         echo ""
         echo "  ❌ FAILED to relocate to $OTHER"
-        echo "  Check: anchor status=verified? PCD exists? Robot at overlap spot?"
         exit 1
     }
 
