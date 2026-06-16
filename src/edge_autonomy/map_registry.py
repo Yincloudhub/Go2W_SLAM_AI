@@ -295,7 +295,7 @@ class MapProfile:
         return {
             "action": "relocate",
             "operator_ack": True,
-            "map_id": self.map_id,
+            "map_id": "go2w_real_site",  # Gateway hardcoded map_id
             "map_path": self.pcd_path,
             "anchor_id": anchor.anchor_id,
             "initial_pose": anchor.pose.to_unitree_json(name=anchor.anchor_id, speed=0.0, mode=0),
@@ -305,7 +305,7 @@ class MapProfile:
         node = self.get_node(node_id_or_alias)
         return {
             "action": "navigate_to_pose",
-            "map_id": self.map_id,
+            "map_id": "go2w_real_site",  # Gateway hardcoded map_id
             "map_path": self.pcd_path,
             "target_node": node.node_id,
             "target_pose": node.pose.to_unitree_json(name=node.node_id, speed=speed, mode=mode),
