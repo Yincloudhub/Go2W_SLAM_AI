@@ -1,14 +1,14 @@
 {
   "version": 2,
-  "comment": "Multi-PCD map registry V2. Each map is independently built to minimize odometry drift. Transition anchors connect adjacent maps for seamless switching.",
-  "default_map_id": "map_701_left",
+  "comment": "Multi-PCD map registry V2. Transition anchors are recorded at the next map's mapping_origin — the build script snapshots them in the current map's frame before switching PCDs.",
+  "default_map_id": "map_701",
   "build_settings": {
     "gait_mode": "standard",
     "speed_mps": 0.2,
     "climbing_mode": false,
     "recorded_by": "",
     "recorded_date": "",
-    "note": "Standard gait, no climbing mode. Fill recorded_by/date after build."
+    "note": "Each map's mapping_origin serves as the reverse transition anchor from the previous map."
   },
   "robot": {
     "host": "192.168.123.18",
@@ -18,105 +18,43 @@
   },
   "maps": [
     {
-      "map_id": "map_701_left",
-      "name": "701左侧（大门进入方向）",
+      "map_id": "map_701",
+      "name": "701中心区（左右两侧之间）",
       "status": "real",
-      "pcd_path": "/home/unitree/maps/map_701_left.pcd",
-      "topology_path": "/home/unitree/maps/map_701_left_topology.json",
+      "pcd_path": "/home/unitree/maps/staging/map_701.pcd",
+      "topology_path": "/home/unitree/maps/map_701_topology.json",
       "frame_id": "map",
-      "mapping_origin_anchor_id": "mapping_origin_701_left",
-      "description": "覆盖701左侧区域：initial_point, chen_jiayu, room_701_corridor。",
+      "mapping_origin_anchor_id": "mapping_origin_701",
+      "description": "701中心区域。建图从这儿开始。",
       "build_date": "",
       "build_gait": "standard",
       "relocalization_anchors": [
         {
-          "anchor_id": "mapping_origin_701_left",
-          "name": "701左侧建图原点",
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_701_left", "speed": 0.0, "mode": 0},
+          "anchor_id": "mapping_origin_701",
+          "name": "701建图原点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_701", "speed": 0.0, "mode": 0},
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 30.0,
           "status": "candidate",
-          "description": "建图原点。建图时机器狗的起始物理位置。"
+          "description": "建图原点。Build with: bash scripts/build_multi_pcd.sh map_701"
         }
       ],
       "transition_anchors": [
         {
-          "anchor_id": "transition_701_left_to_right",
-          "name": "701左→右过渡点",
+          "anchor_id": "transition_701_to_701_left",
+          "name": "701→701左侧过渡点",
           "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
-          "connects_to": "map_701_right",
-          "note": "填坐标：在701左右重叠区域（走廊交界），两侧点云对齐后记录pose。"
-        }
-      ],
-      "topology_nodes": [
-        {
-          "node_id": "initial_point",
-          "name": "初始点",
-          "node_type": "recorded_waypoint",
-          "aliases": ["初始点", "起始点", "回起点", "回来", "返回", "initial_point"],
-          "tags": ["real_site", "recorded", "startup", "safe_return", "live_verified"],
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "initial_point", "speed": 0.5, "mode": 0},
-          "description": "TODO: 建图后推车到位，RViz2确认点云对齐，运行 go2w_accept.sh snapshot initial_point 填入坐标"
+          "connects_to": "map_701_left",
+          "reverse_anchor": "mapping_origin_701_left",
+          "note": "建完 map_701 后，推车到 map_701_left 的建图起点，snapshot 此点。坐标在 map_701 帧中。"
         },
         {
-          "node_id": "chen_jiayu_station",
-          "name": "陈家宇工位",
-          "node_type": "recorded_waypoint",
-          "aliases": ["陈家宇工位", "陈家宇", "chen_jiayu"],
-          "tags": ["real_site", "recorded", "live_verified"],
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "chen_jiayu_station", "speed": 0.5, "mode": 0},
-          "description": "TODO: 建图后推车到位，运行 go2w_accept.sh snapshot chen_jiayu 填入坐标"
-        },
-        {
-          "node_id": "room_701_corridor",
-          "name": "701室走廊",
-          "node_type": "recorded_waypoint",
-          "aliases": ["701走廊", "701室走廊", "701_corridor"],
-          "tags": ["real_site", "recorded", "live_verified"],
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "room_701_corridor", "speed": 0.5, "mode": 0},
-          "description": "TODO: 建图后推车到位，运行 go2w_accept.sh snapshot room_701_corridor 填入坐标"
-        }
-      ],
-      "topology_edges": []
-    },
-    {
-      "map_id": "map_701_right",
-      "name": "701右侧（大门进入方向）",
-      "status": "real",
-      "pcd_path": "/home/unitree/maps/map_701_right.pcd",
-      "topology_path": "/home/unitree/maps/map_701_right_topology.json",
-      "frame_id": "map",
-      "mapping_origin_anchor_id": "mapping_origin_701_right",
-      "description": "覆盖701右侧区域：yin_siyuan, zhao_bo, nie_guoli。",
-      "build_date": "",
-      "build_gait": "standard",
-      "relocalization_anchors": [
-        {
-          "anchor_id": "mapping_origin_701_right",
-          "name": "701右侧建图原点",
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_701_right", "speed": 0.0, "mode": 0},
-          "allowed_radius_m": 1.5,
-          "allowed_yaw_error_deg": 30.0,
-          "status": "candidate",
-          "description": "从 transition_701_left_to_right 位置开始建图。"
-        },
-        {
-          "anchor_id": "transition_701_right_to_left",
-          "name": "701右→左返回过渡点",
+          "anchor_id": "transition_701_to_terrace",
+          "name": "701→露台过渡点",
           "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
-          "allowed_radius_m": 1.5,
-          "allowed_yaw_error_deg": 30.0,
-          "status": "candidate",
-          "description": "和 transition_701_left_to_right 是同一物理位置。在两图切换时用于重定位。"
-        }
-      ],
-      "transition_anchors": [
-        {
-          "anchor_id": "transition_701_right_to_702",
-          "name": "701右→702过渡点",
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
-          "connects_to": "map_702",
-          "note": "填坐标。"
+          "connects_to": "map_terrace_wc",
+          "reverse_anchor": "mapping_origin_terrace",
+          "note": "建完 map_701 后，推车到露台区域的建图起点，snapshot 此点。"
         }
       ],
       "topology_nodes": [
@@ -127,7 +65,7 @@
           "aliases": ["尹思园工位", "尹思园", "yin_siyuan"],
           "tags": ["real_site", "recorded", "live_verified"],
           "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "yin_siyuan_station", "speed": 0.5, "mode": 0},
-          "description": "TODO: 建图后推车到位，RViz2确认点云对齐，运行 go2w_accept.sh snapshot yin_siyuan 填入坐标。含完整四元数。"
+          "description": "TODO: 建图后推车到位，snapshot 填入坐标"
         },
         {
           "node_id": "zhao_bo_office_front",
@@ -151,37 +89,109 @@
       "topology_edges": []
     },
     {
-      "map_id": "map_702",
-      "name": "702区域",
+      "map_id": "map_701_left",
+      "name": "701左侧",
       "status": "real",
-      "pcd_path": "/home/unitree/maps/map_702.pcd",
-      "topology_path": "/home/unitree/maps/map_702_topology.json",
+      "pcd_path": "/home/unitree/maps/staging/map_701_left.pcd",
+      "topology_path": "/home/unitree/maps/map_701_left_topology.json",
       "frame_id": "map",
-      "mapping_origin_anchor_id": "mapping_origin_702",
-      "description": "覆盖702区域：yang_shuyang。",
+      "mapping_origin_anchor_id": "mapping_origin_701_left",
+      "description": "701左侧区域。从 transition_701_to_701_left 位置开始建图。",
       "build_date": "",
       "build_gait": "standard",
       "relocalization_anchors": [
         {
-          "anchor_id": "mapping_origin_702",
-          "name": "702建图原点",
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_702", "speed": 0.0, "mode": 0},
+          "anchor_id": "mapping_origin_701_left",
+          "name": "701左侧建图原点（也是从701过来的过渡点）",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_701_left", "speed": 0.0, "mode": 0},
           "allowed_radius_m": 1.5,
           "allowed_yaw_error_deg": 30.0,
           "status": "candidate",
-          "description": "从 transition_701_right_to_702 位置开始建图。"
+          "description": "建图原点。和 transition_701_to_701_left 是同一物理位置。由 map_701 切换时使用此锚点重定位。Build with: bash scripts/build_multi_pcd.sh map_701_left --from-transition"
         }
       ],
-      "transition_anchors": [],
+      "transition_anchors": [
+        {
+          "anchor_id": "transition_701_left_to_701",
+          "name": "701左侧→701返回点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
+          "connects_to": "map_701",
+          "reverse_anchor": "mapping_origin_701",
+          "note": "返回701中心区。"
+        }
+      ],
       "topology_nodes": [
         {
-          "node_id": "yang_shuyang_station",
-          "name": "杨书阳工位",
+          "node_id": "initial_point",
+          "name": "初始点",
           "node_type": "recorded_waypoint",
-          "aliases": ["杨书阳工位", "杨书阳", "yang_shuyang"],
-          "tags": ["real_site", "recorded", "live_verified"],
-          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "yang_shuyang_station", "speed": 0.5, "mode": 0},
+          "aliases": ["初始点", "起始点", "回起点", "回来", "返回", "initial_point"],
+          "tags": ["real_site", "recorded", "startup", "safe_return", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "initial_point", "speed": 0.5, "mode": 0},
           "description": "TODO"
+        },
+        {
+          "node_id": "chen_jiayu_station",
+          "name": "陈家宇工位",
+          "node_type": "recorded_waypoint",
+          "aliases": ["陈家宇工位", "陈家宇", "chen_jiayu"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "chen_jiayu_station", "speed": 0.5, "mode": 0},
+          "description": "TODO"
+        },
+        {
+          "node_id": "room_701_corridor",
+          "name": "701室走廊",
+          "node_type": "recorded_waypoint",
+          "aliases": ["701走廊", "701室走廊", "701_corridor"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "room_701_corridor", "speed": 0.5, "mode": 0},
+          "description": "TODO"
+        }
+      ],
+      "topology_edges": []
+    },
+    {
+      "map_id": "map_terrace_wc",
+      "name": "7楼露台与厕所走廊",
+      "status": "real",
+      "pcd_path": "/home/unitree/maps/staging/map_terrace_wc.pcd",
+      "topology_path": "/home/unitree/maps/map_terrace_wc_topology.json",
+      "frame_id": "map",
+      "mapping_origin_anchor_id": "mapping_origin_terrace",
+      "description": "7楼露台和厕所走廊区域。从 transition_701_to_terrace 位置开始建图。",
+      "build_date": "",
+      "build_gait": "standard",
+      "relocalization_anchors": [
+        {
+          "anchor_id": "mapping_origin_terrace",
+          "name": "露台建图原点（也是从701过来的过渡点）",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "mapping_origin_terrace", "speed": 0.0, "mode": 0},
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "candidate",
+          "description": "建图原点。和 transition_701_to_terrace 是同一物理位置。由 map_701 切换时使用此锚点重定位。Build with: bash scripts/build_multi_pcd.sh map_terrace_wc --from-transition"
+        }
+      ],
+      "transition_anchors": [
+        {
+          "anchor_id": "transition_terrace_to_701",
+          "name": "露台→701返回点",
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "transition", "speed": 0.0, "mode": 0},
+          "connects_to": "map_701",
+          "reverse_anchor": "mapping_origin_701",
+          "note": "返回701中心区。"
+        }
+      ],
+      "topology_nodes": [
+        {
+          "node_id": "terrace_entrance",
+          "name": "露台入口",
+          "node_type": "recorded_waypoint",
+          "aliases": ["露台", "露台入口", "terrace"],
+          "tags": ["real_site", "recorded", "live_verified"],
+          "pose": {"x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0, "q_x": 0.0, "q_y": 0.0, "q_z": 0.0, "q_w": 1.0, "name": "terrace_entrance", "speed": 0.5, "mode": 0},
+          "description": "TODO: 替换为实际节点名和坐标"
         }
       ],
       "topology_edges": []
