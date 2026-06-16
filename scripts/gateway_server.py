@@ -77,18 +77,33 @@ def get_coarse_map() -> dict:
         return {"error": str(e)}
 
 
-def get_planner_context(user_command: str = "", map_id: str = "go2w_real_site") -> dict:
-    """Build cloud LLM planner context: coarse_map + waypoint connectivity + current state."""
+def get_planner_context(
+    user_command: str = "",
+    map_id: str = "go2w_real_site",
+    registry_path: str = "",
+) -> dict:
+    """Build cloud LLM planner context: coarse_map + waypoint connectivity + current state.
+
+    Args:
+        user_command: Natural language command (e.g. "去赵博那")
+        map_id: Map identifier in the registry
+        registry_path: Path to map registry JSON. Defaults to REPO default.
+    """
     try:
         sys.path.insert(0, f"{REPO}/src")
         from edge_autonomy.cloud_llm_planner import build_waypoint_connectivity
         from edge_autonomy.path_validator import build_adaptive_coarse_map
 
-        registry_path = f"{REPO}/configs/maps/go2w_real_site_map_registry.json"
+        if not registry_path:
+            registry_path = f"{REPO}/configs/maps/go2w_real_site_map_registry.json"
 
         # Coarse map
         try:
-            cm = build_adaptive_coarse_map(grid_size=40)
+            cm = build_adaptive_coarse_map(
+                grid_size=40,
+                registry_path=registry_path,
+                map_id=map_id,
+            )
             coarse_map = cm.get("grid_string", "")
             coarse_map_nodes = cm.get("nodes", {})
             coarse_map_grid_size = cm.get("grid_size", 0)
@@ -142,7 +157,8 @@ def handle_cloud_plan(body: dict) -> dict:
 
     reason = str(body.get("reason", ""))
     map_id = str(body.get("map_id", "go2w_real_site"))
-    registry_path = f"{REPO}/configs/maps/go2w_real_site_map_registry.json"
+    registry_path = str(body.get("registry", "") or f"{REPO}/configs/maps/go2w_real_site_map_registry.json")
+    map_path = str(body.get("map_path", "/home/unitree/test.pcd"))
 
     try:
         sys.path.insert(0, f"{REPO}/src")
@@ -173,7 +189,7 @@ def handle_cloud_plan(body: dict) -> dict:
             "--command", target,
             "--registry", registry_path,
             "--map-id", map_id,
-            "--map-path", body.get("map_path", "/home/unitree/test.pcd"),
+            "--map-path", map_path,
             "--plan-file", plan_path,
             "--execute",
             "--nav-speed-mps", str(speed),
@@ -226,7 +242,14 @@ class GatewayHandler(BaseHTTPRequestHandler):
         elif self.path == "/map":
             self._json(get_coarse_map())
         elif self.path == "/planner/context" or self.path.startswith("/planner/context?"):
-            self._json(get_planner_context())
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(self.path)
+            params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+            self._json(get_planner_context(
+                user_command=params.get("cmd", ""),
+                map_id=params.get("map_id", "go2w_real_site"),
+                registry_path=params.get("registry", ""),
+            ))
         else:
             self._json({"error": "not found"}, 404)
 
