@@ -573,6 +573,47 @@ for m in reg['maps']:
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
+#  snapshot-nodes <map_id> — print snapshot commands for TODO nodes
+# ═══════════════════════════════════════════════════════════════════════════
+if [[ "$ACTION" == "snapshot-nodes" ]]; then
+    MAP_FOR_SNAP="${1:-}"
+    if [[ -z "$MAP_FOR_SNAP" ]]; then
+        echo "Usage: build_multi_pcd.sh snapshot-nodes <map_id>" >&2
+        "$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+for m in reg['maps']:
+    if m['map_id'] != 'go2w_real_site':
+        print(f\"  {m['map_id']}\")
+"
+        exit 2
+    fi
+    echo ""
+    echo "Copy-paste these when robot is at each spot:"
+    "$PYTHON_BIN" -c "
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+for m in reg['maps']:
+    if m['map_id'] == '$MAP_FOR_SNAP':
+        nodes = m.get('topology_nodes', [])
+        if not nodes:
+            print('  (no topology nodes defined)')
+        else:
+            for n in nodes:
+                p = n['pose']
+                done = p['x'] != 0.0 or p['y'] != 0.0
+                tag = 'DONE' if done else 'TODO'
+                print(f\"  [{tag}] bash scripts/go2w_accept.sh snapshot {n['node_id']}   # {n.get('name','')}\")
+        break
+else:
+    print(f'  map \"$MAP_FOR_SNAP\" not found')
+"
+    exit 0
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
 #  sync-registry — merge all V2 anchors into go2w_real_site
 # ═══════════════════════════════════════════════════════════════════════════
 if [[ "$ACTION" == "sync-registry" ]]; then
