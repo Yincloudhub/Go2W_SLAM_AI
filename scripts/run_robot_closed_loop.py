@@ -54,6 +54,10 @@ from edge_autonomy.task_queue import task_step_id, validate_task_queue  # noqa: 
 from edge_autonomy.world_state_v1 import build_world_state_v1  # noqa: E402
 from scripts.slam_runtime_snapshot import parse_sections, run_remote_snapshot  # noqa: E402
 
+# Track recent recovery directions to avoid oscillation (module-level so it
+# persists across recovery attempts within the same session).
+_RECOVERY_HISTORY: list[str] = []
+
 
 PersistentNavigationSession = PersistentGatewaySession
 
@@ -1950,7 +1954,37 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--replay-limit", type=int, default=100)
     parser.add_argument("--execute", action="store_true", help="Actually send the navigation command after safety gates pass.")
     parser.add_argument("--pretty", action="store_true")
+    parser.add_argument("--summary", action="store_true", help="Print a concise one-line summary instead of full JSON dump.")
     return parser
+
+
+def _print_summary(output: dict[str, Any]) -> None:
+    """Print a concise navigation result summary (1-3 lines)."""
+    cmd = output.get("command", "?")
+    sc = output.get("slam_command") or {}
+    tp = sc.get("target_pose") or {}
+    mode = tp.get("mode", "?")
+    spd = tp.get("speed", "?")
+    tgt = sc.get("target_node") or cmd
+
+    qe = output.get("queue_execution") or {}
+    blocked = qe.get("blocked_reason") or output.get("execution", {}).get("blocked_reason") or ""
+
+    st = output.get("semantic_trace") or {}
+    slam_pose = (st.get("slam") or {}).get("pose") or {}
+    x, y = round(slam_pose.get("x", 0), 2), round(slam_pose.get("y", 0), 2)
+    node = (st.get("slam") or {}).get("nearest_node", {})
+    node_id = node.get("node_id") or st.get("current_node") or "?"
+
+    dry = "DRY" if output.get("dry_run") else "RUN"
+    status = "BLOCKED" if blocked else ("DONE" if qe.get("completed") else "SENT")
+
+    parts = [f"[{dry}] CMD:{cmd} → {tgt}  MODE:{mode}  SPD:{spd}m/s  STATUS:{status}"]
+    if blocked:
+        short = str(blocked)[:150]
+        parts.append(f"  REASON: {short}")
+    parts.append(f"  AT:{node_id} ({x}, {y})")
+    print("\n".join(parts))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1971,7 +2005,9 @@ def main(argv: list[str] | None = None) -> int:
                 "result": None,
             },
         }
-        if args.pretty:
+        if args.summary:
+            _print_summary(output)
+        elif args.pretty:
             print(json.dumps(output, ensure_ascii=False, indent=2))
         else:
             print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
@@ -1986,7 +2022,9 @@ def main(argv: list[str] | None = None) -> int:
             "gateway": {"checked": False, "allowed": False, "reason": "not checked; registry blocked execution"},
             "execution": {"executed": False, "blocked_reason": registry_reason, "result": None},
         }
-        if args.pretty:
+        if args.summary:
+            _print_summary(output)
+        elif args.pretty:
             print(json.dumps(output, ensure_ascii=False, indent=2))
         else:
             print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
@@ -2274,7 +2312,9 @@ def main(argv: list[str] | None = None) -> int:
             "errors": communication_errors,
         },
     }
-    if args.pretty:
+    if args.summary:
+        _print_summary(output)
+    elif args.pretty:
         print(json.dumps(output, ensure_ascii=False, indent=2))
     else:
         print(json.dumps(output, ensure_ascii=False, separators=(",", ":")))
