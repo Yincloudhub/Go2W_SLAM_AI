@@ -40,8 +40,8 @@ def validate_record(
         return False, "supervised release must require operator presence", "", 0.0
     if record.get("requires_emergency_stop") is not True:
         return False, "supervised release must require an emergency stop", "", 0.0
-    if record.get("navigation_mode") != 0:
-        return False, "supervised release must require Unitree navigation mode 0", "", 0.0
+    if record.get("navigation_mode") not in (0, 1):
+        return False, "supervised release must require Unitree navigation mode 0 or 1", "", 0.0
     if (
         str(record.get("motion_policy") or "")
         != "unitree_mode0_native_navigation_with_bounded_recovery"

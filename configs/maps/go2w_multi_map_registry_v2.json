@@ -228,7 +228,8 @@
           ],
           "tags": [
             "real_site",
-            "live_calibrated"
+            "live_calibrated",
+            "live_verified"
           ],
           "attributes": {
             "person": "尹思园",
@@ -261,7 +262,8 @@
           ],
           "tags": [
             "real_site",
-            "live_calibrated"
+            "live_calibrated",
+            "live_verified"
           ],
           "attributes": {
             "connects": "701过道",
@@ -297,7 +299,8 @@
           ],
           "tags": [
             "real_site",
-            "live_calibrated"
+            "live_calibrated",
+            "live_verified"
           ],
           "attributes": {
             "person": "赵博",
@@ -336,7 +339,8 @@
           ],
           "tags": [
             "real_site",
-            "live_calibrated"
+            "live_calibrated",
+            "live_verified"
           ],
           "attributes": {
             "person": "杨书洋",
@@ -369,7 +373,8 @@
           ],
           "tags": [
             "real_site",
-            "live_calibrated"
+            "live_calibrated",
+            "live_verified"
           ],
           "attributes": {
             "rotation_space": "360°"
@@ -400,7 +405,8 @@
           ],
           "tags": [
             "real_site",
-            "live_calibrated"
+            "live_calibrated",
+            "live_verified"
           ],
           "attributes": {
             "connects": "701办公室，门外走廊",

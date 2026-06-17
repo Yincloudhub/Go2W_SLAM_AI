@@ -31,7 +31,7 @@ class SportClient : public unitree::robot::Client {
 public:
     SportClient() : unitree::robot::Client(SPORT_SERVICE, false) {}
 
-    void init() {
+    void Init() override {
         SetApiVersion(SPORT_API_VERSION);
         UT_ROBOT_CLIENT_REG_API_NO_PROI(SPORT_API_ID_MOVE);
         UT_ROBOT_CLIENT_REG_API_NO_PROI(SPORT_API_ID_STOP);
@@ -72,7 +72,7 @@ int main(int argc, const char** argv) {
 
     unitree::robot::ChannelFactory::Instance()->Init(0, argv[1]);
     SportClient client;
-    client.init();
+    client.Init();
     client.SetTimeout(2.0f);
 
     std::string line;

@@ -456,25 +456,6 @@
           "description": "PCD test513 重新标注后的赵博办公室门口候选重定位锚点。"
         },
         {
-          "anchor_id": "yin_siyuan_station",
-          "name": "尹思园工位",
-          "pose": {
-            "x": 1.5974299907684326,
-            "y": 0.3592859208583832,
-            "z": -0.010628879070281982,
-            "q_x": 0.014545116573572159,
-            "q_y": 0.01697041466832161,
-            "q_z": -0.003139750799164176,
-            "q_w": 0.99974524974823,
-            "speed": 0.3,
-            "mode": 0
-          },
-          "allowed_radius_m": 1.2,
-          "allowed_yaw_error_deg": 45.0,
-          "status": "candidate",
-          "description": "候选重定位锚点：尹思园工位。"
-        },
-        {
           "anchor_id": "room_701_corridor",
           "name": "701门外走廊",
           "pose": {
