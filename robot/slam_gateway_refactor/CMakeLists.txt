@@ -111,6 +111,13 @@ endif()
 add_executable(slam_llm_command_client src/llm_command_main.cpp)
 target_link_libraries(slam_llm_command_client PRIVATE slam_gateway_core)
 
+add_executable(sport_bridge src/sport_bridge.cpp)
+target_include_directories(sport_bridge PRIVATE ${PROJECT_INCLUDE_DIR} ${SDK_INCLUDE_DIRS})
+target_link_directories(sport_bridge PRIVATE ${SDK_LIBRARY_DIRS})
+target_link_libraries(sport_bridge PRIVATE ${UNITREE_SDK2_LIB} ${DDSC_LIB} ${DDSCXX_LIB} pthread)
+
+install(TARGETS sport_bridge RUNTIME DESTINATION bin)
+
 add_executable(safety_supervisor_smoke_test
     src/safety_supervisor_smoke_test.cpp
     src/safety_supervisor.cpp
