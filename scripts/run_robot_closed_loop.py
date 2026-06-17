@@ -66,7 +66,7 @@ PersistentNavigationSession = PersistentGatewaySession
 
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
 DEFAULT_MAP_ID = "go2w_real_site"
-DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
+DEFAULT_MAP_PATH = "/home/unitree/maps/staging/map_701.pcd"
 SIMULATION_MAP_STATUSES = {"simulation", "simulated", "demo", "synthetic"}
 DEFAULT_MODEL = "/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 DEFAULT_ASK_SCRIPT = "/home/unitree/llm_runtime/scripts/ask_qwen.sh"
