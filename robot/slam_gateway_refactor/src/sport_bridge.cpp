@@ -124,7 +124,7 @@ void watchdog_loop(SportClient* client) {
             std::cerr << "[sport_bridge] DEADMAN triggered: "
                       << (now - last) << "ms since last command" << std::endl;
             g_stop_requested = true;
-            safeStop(*client);
+            safeMove(*client, 0.0f, 0.0f, 0.0f);  // zero velocity, stay standing
         }
     }
 }
@@ -143,11 +143,10 @@ int main(int argc, const char** argv) {
     client.Init();
     client.SetTimeout(2.0f);
 
-    // Ensure robot is stopped when bridge starts idle. The watchdog is disabled
-    // while g_stop_requested=true and becomes active after the first Move.
+    // Start in stopped state (g_stop_requested=true, no active motion).
+    // Do NOT call safeStop here — Go2 interprets Stop as "sit down".
     g_last_command_ms = now_ms();
     g_stop_requested = true;
-    safeStop(client);
 
     // Launch watchdog thread (joinable — clean exit)
     std::thread watchdog(watchdog_loop, &client);
@@ -166,7 +165,7 @@ int main(int argc, const char** argv) {
 
         if (cmd.value("stop", false)) {
             g_stop_requested = true;
-            bool ok = safeStop(client);
+            bool ok = safeMove(client, 0.0f, 0.0f, 0.0f);  // zero velocity, stay standing
             respond(ok ? "ok" : "error", ok ? "true" : "stop_failed");
             continue;
         }
@@ -183,7 +182,7 @@ int main(int argc, const char** argv) {
 
         if (vx == 0.0f && vy == 0.0f && vyaw == 0.0f) {
             g_stop_requested = true;
-            bool ok = safeStop(client);
+            bool ok = safeMove(client, 0.0f, 0.0f, 0.0f);  // zero velocity, stay standing
             respond(ok ? "ok" : "error", ok ? "true" : "stop_failed");
             continue;
         }
@@ -191,9 +190,9 @@ int main(int argc, const char** argv) {
         g_stop_requested = false;
         bool ok = safeMove(client, vx, vy, vyaw);
         if (!ok) {
-            // If Move fails, force a Stop instead of leaving the last command active.
+            // If Move fails, send zero velocity (stay standing) instead of Stop.
             g_stop_requested = true;
-            safeStop(client);
+            safeMove(client, 0.0f, 0.0f, 0.0f);
             respond("error", "move_call_failed");
             continue;
         }
