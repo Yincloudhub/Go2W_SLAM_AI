@@ -178,44 +178,253 @@
           "anchor_id": "transition_701_to_701_left",
           "name": "701→701左侧过渡",
           "pose": {
-            "x": 2.5186,
-            "y": 3.6886,
+            "x": 2.5185554027557373,
+            "y": 3.688645124435425,
             "z": 0.0,
-            "yaw": 1.6114,
+            "yaw": 1.611399323215663,
             "q_x": 0.0,
             "q_y": 0.0,
-            "q_z": 0.7213156442204907,
-            "q_w": 0.6926064838007067,
+            "q_z": 0.7213154098478394,
+            "q_w": 0.6926067278882321,
             "name": "transition",
             "speed": 0.0,
             "mode": 0
           },
           "connects_to": "map_701_left",
           "reverse_anchor": "mapping_origin_701_left",
-          "note": "标定于 2026-06-16 23:48。从 map_701 帧记录。"
+          "note": "已填入 mark-transition 快照坐标 (2026-06-17 提取)"
         },
         {
           "anchor_id": "transition_701_to_terrace",
           "name": "701→露台过渡",
           "pose": {
-            "x": -5.8067,
-            "y": -7.653,
+            "x": -5.806680202484131,
+            "y": -7.653000831604004,
             "z": 0.0,
-            "yaw": -1.5263,
+            "yaw": -1.5262926650006807,
             "q_x": 0.0,
             "q_y": 0.0,
-            "q_z": -0.6912012568597964,
-            "q_w": 0.7226623156879275,
+            "q_z": -0.691198606491351,
+            "q_w": 0.7226648506634417,
             "name": "transition",
             "speed": 0.0,
             "mode": 0
           },
           "connects_to": "map_terrace_wc",
           "reverse_anchor": "mapping_origin_terrace",
-          "note": "标定于 2026-06-17 00:04。从 map_701 帧记录。"
+          "note": "已填入 mark-transition 快照坐标 (2026-06-17 提取)"
         }
       ],
-      "topology_nodes": [],
+      "topology_nodes": [
+        {
+          "node_id": "wp_60497f",
+          "name": "尹思园工位",
+          "node_type": "attributed",
+          "point_category": "person_station",
+          "aliases": [
+            "尹思园工位",
+            "wp_60497f",
+            "尹思园"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "attributes": {
+            "person": "尹思园",
+            "area": "701中心过道，701中心区域",
+            "landmark": "位于701进门中心过道边缘"
+          },
+          "pose": {
+            "x": 0.3427942097187042,
+            "y": 0.2418585866689682,
+            "z": 0.0637761801481247,
+            "yaw": 0.05534504018950288,
+            "q_x": 0.02063470147550106,
+            "q_y": 0.002931780181825161,
+            "q_z": 0.02761412225663662,
+            "q_w": 0.999401330947876,
+            "name": "wp_60497f",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "尹思园工位。标定于 2026-06-17 15:15。"
+        },
+        {
+          "node_id": "wp_b738c7",
+          "name": "701中心过道端点",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "aliases": [
+            "701中心过道端点",
+            "wp_b738c7"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "attributes": {
+            "connects": "701过道",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "rotation_point"
+            ]
+          },
+          "pose": {
+            "x": 1.9244722127914429,
+            "y": -0.28541532158851624,
+            "z": 0.07341332733631134,
+            "yaw": -0.06029612287406987,
+            "q_x": 0.019373159855604172,
+            "q_y": 0.0007093490567058325,
+            "q_z": -0.030162833631038666,
+            "q_w": 0.9993569850921631,
+            "name": "wp_b738c7",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701中心过道端点。标定于 2026-06-17 15:17。"
+        },
+        {
+          "node_id": "wp_bbcb4c",
+          "name": "赵博办公室门口",
+          "node_type": "attributed",
+          "point_category": "person_station",
+          "aliases": [
+            "赵博办公室门口",
+            "wp_bbcb4c",
+            "赵博"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "attributes": {
+            "person": "赵博",
+            "landmark": "位于701办公室右侧过道端点",
+            "connects": "701过道",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "corridor_endpoint",
+              "rotation_point"
+            ]
+          },
+          "pose": {
+            "x": 1.806374430656433,
+            "y": -5.454979419708252,
+            "z": -0.054606471210718155,
+            "yaw": -1.6003284996429157,
+            "q_x": 0.026790807023644447,
+            "q_y": 0.00019184639677405357,
+            "q_z": -0.7174627780914307,
+            "q_w": 0.6960814595222473,
+            "name": "wp_bbcb4c",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "赵博办公室门口。标定于 2026-06-17 15:20。"
+        },
+        {
+          "node_id": "wp_a684c6",
+          "name": "杨书洋工位",
+          "node_type": "attributed",
+          "point_category": "person_station",
+          "aliases": [
+            "杨书洋工位",
+            "wp_a684c6",
+            "杨书洋"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "attributes": {
+            "person": "杨书洋",
+            "area": "701中心区域",
+            "landmark": "杨书洋工位，701右侧过道节点"
+          },
+          "pose": {
+            "x": -1.3153787851333618,
+            "y": -4.942294120788574,
+            "z": -0.07625369727611542,
+            "yaw": 3.083066014607835,
+            "q_x": 0.002184858312830329,
+            "q_y": -0.007806818000972271,
+            "q_z": -0.9995384812355042,
+            "q_w": -0.02927684597671032,
+            "name": "wp_a684c6",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "杨书洋工位。标定于 2026-06-17 15:22。"
+        },
+        {
+          "node_id": "wp_2ae043",
+          "name": "701右侧过末端节点",
+          "node_type": "rotation_point",
+          "point_category": "rotation_spot",
+          "aliases": [
+            "701右侧过末端节点",
+            "wp_2ae043"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "attributes": {
+            "rotation_space": "360°"
+          },
+          "pose": {
+            "x": -2.309776544570923,
+            "y": -5.278553485870361,
+            "z": -0.06835241615772247,
+            "yaw": 0.25140429394623487,
+            "q_x": -0.00818325113505125,
+            "q_y": -0.007602592930197716,
+            "q_z": -0.12530489265918732,
+            "q_w": -0.9920554161071777,
+            "name": "wp_2ae043",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701右侧过末端节点。标定于 2026-06-17 15:24。"
+        },
+        {
+          "node_id": "wp_e643bc",
+          "name": "701门外走廊中心点",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "aliases": [
+            "701门外走廊中心点",
+            "wp_e643bc"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "attributes": {
+            "connects": "701办公室，门外走廊",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "rotation_point"
+            ]
+          },
+          "pose": {
+            "x": -5.528209209442139,
+            "y": 0.13133755326271057,
+            "z": 0.21232907474040985,
+            "yaw": 3.1205530892942104,
+            "q_x": 0.0038655675016343594,
+            "q_y": 0.005480317398905754,
+            "q_z": -0.9999223947525024,
+            "q_w": -0.010498330928385258,
+            "name": "wp_e643bc",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701门外走廊中心点。标定于 2026-06-17 15:26。"
+        }
+      ],
       "topology_edges": []
     },
     {
