@@ -150,18 +150,41 @@ ServiceResult SlamGateway::submitNavigationGoal(const PoseData& goal)
     }
 
     std::cout << "parameter:" << goal.toNavigationJson() << std::endl;
-    // [2026-06-17] Aligned with keyDemo: API 1102 auto-executes navigation.
-    // Calling RESUME_NAV immediately after plan was interfering with execution.
     auto plan_result = callApi(ROBOT_API_ID_POSE_NAV_PL, goal.toNavigationJson());
     ServiceResult result = plan_result;
     if (plan_result.ok) {
-        // keyDemo does NOT call resume after plan — POSE_NAV_PL starts moving.
-        // Resume is only for recovering from pause (user-initiated).
+        // Unitree API 1102 plans the path. Calling RESUME_NAV starts execution.
+        // Small delay to ensure plan is fully processed before execution.
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        nlohmann::json resume_parameter;
+        resume_parameter["data"] = nlohmann::json::object();
+        auto resume_result = callApi(ROBOT_API_ID_RESUME_NAV, resume_parameter.dump());
+
+        const auto decode_reply = [](const std::string& raw) {
+            auto parsed = nlohmann::json::parse(raw, nullptr, false);
+            return parsed.is_discarded() ? nlohmann::json(raw) : parsed;
+        };
         nlohmann::json service_data = {
-            {"plan", plan_result.data},
+            {"plan", decode_reply(plan_result.data)},
+            {"resume", decode_reply(resume_result.data)},
             {"auto_resume_after_goal", true}
         };
-        result = {0, service_data.dump(), true};
+        if (!resume_result.ok) {
+            nlohmann::json pause_parameter;
+            pause_parameter["data"] = nlohmann::json::object();
+            auto pause_result =
+                callApi(ROBOT_API_ID_PAUSE_NAV, pause_parameter.dump());
+            service_data["pause_after_resume_failure"] = {
+                {"ok", pause_result.ok},
+                {"status_code", pause_result.status_code},
+                {"data", decode_reply(pause_result.data)}
+            };
+        }
+        result = {
+            resume_result.status_code,
+            service_data.dump(),
+            resume_result.ok
+        };
     }
 
     {
