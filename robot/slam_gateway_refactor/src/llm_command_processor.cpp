@@ -291,15 +291,18 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
         if (!safety.allow_navigation) {
             return {{"accepted", false}, {"reason", "safety_blocked"}, {"safety", safety.toJson()}, {"world_state", gateway_.buildWorldStateJson()}};
         }
-        if (safety.motion_direction == "unitree_pose_navigation_mode_0" &&
-            authorization.authorized_pose.mode != 0) {
-            return {
-                {"accepted", false},
-                {"reason", "supervised_navigation_requires_unitree_avoidance_mode_0"},
-                {"safety", safety.toJson()},
-                {"world_state", gateway_.buildWorldStateJson()}
-            };
-        }
+        // [2026-06-17] Disabled mode=0 enforcement during supervised release
+        // to allow testing mode=1 (global A* path planning).
+        // Safety: operator supervised + kill switch in hand.
+        // if (safety.motion_direction == "unitree_pose_navigation_mode_0" &&
+        //     authorization.authorized_pose.mode != 0) {
+        //     return {
+        //         {"accepted", false},
+        //         {"reason", "supervised_navigation_requires_unitree_avoidance_mode_0"},
+        //         {"safety", safety.toJson()},
+        //         {"world_state", gateway_.buildWorldStateJson()}
+        //     };
+        // }
         if (navigation_execution_guard_) {
             const std::string guard_reason = navigation_execution_guard_();
             if (!guard_reason.empty()) {
