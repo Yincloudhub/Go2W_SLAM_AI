@@ -1,39 +1,23 @@
 #!/usr/bin/env python3
 """
-snapshot_waypoint.py — Create a topology node at current SLAM pose with full attributes.
+snapshot_waypoint.py — Interactive waypoint creation at current SLAM pose.
+
+Workflow:
+  1. Read current SLAM pose (Gateway get_world_state)
+  2. Choose map/area
+  3. Choose node type(s) — can be multiple
+  4. Enter Chinese name
+  5. Enter type-specific attributes
+  6. Review → confirm → save to V2 registry
+
+No placeholders. Every node is created fresh at snapshot time.
 
 Usage:
-  python3 scripts/snapshot_waypoint.py --map <map_id> --type <node_type> \\
-      --name "中文名称" [--node-id <id>] [--aliases "a,b"] \\
-      [--person <name>] [--area <area>] [--landmark <landmark>] \\
-      [--connects "A,B"] [--tags "t1,t2"]
-
-Node types:
-  attributed       — person station, named location (needs --person or --area)
-  corridor_endpoint — passage waypoint (needs --connects)
-  rotation_point   — spot with turn space
-
-Examples:
-  # Attribute a person's station
-  python3 scripts/snapshot_waypoint.py --map map_701 --type attributed \
-      --name "尹思园工位" --person "尹思园" --area "701右侧" \
-      --aliases "yin_siyuan,尹思园"
-
-  # Corridor endpoint
-  python3 scripts/snapshot_waypoint.py --map map_701 --type corridor_endpoint \
-      --name "701中心走廊口" --connects "701办公区,外走廊" \
-      --node-id corridor_701_center
-
-  # Simple entrance
-  python3 scripts/snapshot_waypoint.py --map map_terrace_wc --type corridor_endpoint \
-      --name "露台入口" --connects "走廊,露台" --aliases "terrace,露台"
-
-If --node-id is omitted, it's auto-generated from --name (lowercase, spaces→underscores).
+  python3 scripts/snapshot_waypoint.py
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
@@ -49,21 +33,66 @@ if str(SRC_ROOT) not in sys.path:
 
 REGISTRY_PATH = REPO_ROOT / "configs" / "maps" / "go2w_multi_map_registry_v2.json"
 
+# ── Map definitions ──
+MAPS = [
+    {"id": "map_701", "label": "701中心区域"},
+    {"id": "map_701_left", "label": "701左侧"},
+    {"id": "map_terrace_wc", "label": "露台区域"},
+]
 
-def name_to_node_id(name: str) -> str:
-    """Auto-generate node_id from Chinese/English name."""
-    # If name is already in English/node-id format, just clean it
-    if re.match(r'^[a-z][a-z0-9_]*$', name):
-        return name
-    # Try to extract English aliases from the name (common pattern: "English中文")
-    # Otherwise transliterate: keep ASCII, lowercase, replace spaces with _
-    ascii_part = re.sub(r'[^a-zA-Z0-9 _-]', '', name).strip().lower()
-    if ascii_part and len(ascii_part) > 3:
-        return re.sub(r'[ _-]+', '_', ascii_part)
-    # Fallback: use a hash of the name
-    import hashlib
-    h = hashlib.md5(name.encode()).hexdigest()[:8]
-    return f"node_{h}"
+# ── Node type definitions ──
+NODE_TYPES = [
+    {
+        "id": "attributed",
+        "label": "个人节点",
+        "desc": "人物工位/办公室/固定位置",
+        "point_category": "person_station",
+        "attrs": ["person", "area", "landmark"],
+        "attr_labels": {"person": "人物姓名", "area": "所属区域", "landmark": "地标描述"},
+    },
+    {
+        "id": "corridor_endpoint",
+        "label": "过道中心",
+        "desc": "走廊口/通道节点",
+        "point_category": "passage_waypoint",
+        "attrs": ["connects"],
+        "attr_labels": {"connects": "连接区域（逗号分隔，如: 701办公区,外走廊）"},
+    },
+    {
+        "id": "rotation_point",
+        "label": "旋转点",
+        "desc": "有旋转空间的点",
+        "point_category": "rotation_spot",
+        "attrs": ["rotation_space"],
+        "attr_labels": {"rotation_space": "旋转空间描述（如: 可360°, 仅左转90°）"},
+    },
+]
+
+
+def getch(prompt: str = "") -> str:
+    """Get single character input."""
+    if prompt:
+        print(prompt, end="", flush=True)
+    try:
+        import msvcrt
+        return msvcrt.getch().decode().lower()
+    except ImportError:
+        import tty, termios
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            return sys.stdin.read(1).lower()
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def input_str(prompt: str, default: str = "") -> str:
+    """Get string input with default."""
+    if default:
+        result = input(f"{prompt} [{default}]: ").strip()
+        return result if result else default
+    return input(f"{prompt}: ").strip()
 
 
 def get_current_pose(timeout_s: int = 10) -> dict:
@@ -76,6 +105,7 @@ def get_current_pose(timeout_s: int = 10) -> dict:
     if not os.path.exists(client):
         client = "robot/slam_gateway_refactor/build/slam_llm_command_client"
 
+    print("  连接 Gateway...")
     p = subprocess.Popen(
         [client, "eth0"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -83,7 +113,6 @@ def get_current_pose(timeout_s: int = 10) -> dict:
     )
 
     q: queue.Queue = queue.Queue()
-
     def reader():
         for line in iter(p.stdout.readline, ""):
             line = line.strip()
@@ -105,18 +134,17 @@ def get_current_pose(timeout_s: int = 10) -> dict:
             d = q.get(timeout=1)
             if "world_state" in d:
                 pose = d["world_state"].get("current_pose", {}).get("pose", {})
-                if abs(pose.get("x", 0)) > 0.001 or abs(pose.get("y", 0)) > 0.001:
-                    p.stdin.close()
-                    p.terminate()
-                    return pose
+                p.stdin.close()
+                p.terminate()
+                return pose
         except queue.Empty:
             pass
 
     p.stdin.close()
     p.terminate()
     raise RuntimeError(
-        "Failed to get valid pose from Gateway. Is SLAM localized?\n"
-        "Run: bash scripts/build_multi_pcd.sh relocate"
+        "\n  ❌ 无法读取 SLAM 位姿。\n"
+        "  SLAM 是否已重定位？运行: bash scripts/build_multi_pcd.sh relocate"
     )
 
 
@@ -130,48 +158,105 @@ def save_registry(reg: dict):
         json.dump(reg, f, indent=2, ensure_ascii=False)
 
 
-def build_node(args, pose: dict) -> dict:
-    """Build a complete topology node entry from CLI args + SLAM pose."""
-    node_id = args.node_id or name_to_node_id(args.name)
-    aliases = [a.strip() for a in (args.aliases or "").split(",") if a.strip()]
-    # Always include the name itself as an alias
-    if args.name not in aliases:
-        aliases.insert(0, args.name)
+def generate_node_id(name: str) -> str:
+    """Generate English node_id from Chinese name."""
+    # Common translations
+    TRANSLATIONS = {
+        "尹思园": "yin_siyuan",
+        "赵波": "zhao_bo",
+        "聂国力": "nie_guoli",
+        "陈家宇": "chen_jiayu",
+        "工位": "station",
+        "办公": "office",
+        "办公室": "office",
+        "走廊": "corridor",
+        "过道": "corridor",
+        "入口": "entrance",
+        "出口": "exit",
+        "露台": "terrace",
+        "厕所": "wc",
+        "中心": "center",
+        "旋转": "rotation",
+    }
 
+    # Try to build meaningful English ID
+    parts = []
+    for char in name:
+        if char in TRANSLATIONS:
+            parts.append(TRANSLATIONS[char])
+        elif char in "，。！？、；：""''（）【】《》 \t\n\r":
+            continue  # skip punctuation
+        elif '\u4e00' <= char <= '\u9fff':
+            continue  # skip untranslated Chinese
+
+    if not parts:
+        # Fallback: use pinyin-style from first chars
+        import hashlib
+        return "wp_" + hashlib.md5(name.encode()).hexdigest()[:6]
+
+    return "_".join(parts)
+
+
+def node_id_exists(reg: dict, node_id: str) -> bool:
+    """Check if node_id already exists anywhere in registry."""
+    for m in reg.get("maps", []):
+        for n in m.get("topology_nodes", []):
+            if n["node_id"] == node_id:
+                return True
+    return False
+
+
+def build_node(
+    map_id: str,
+    name: str,
+    types: list[dict],
+    attrs: dict,
+    pose: dict,
+) -> dict:
+    """Build a complete topology node entry."""
+    node_id_base = generate_node_id(name)
+
+    # Merge attributes from all selected types
+    point_categories = []
+    all_attrs = {}
+    for t in types:
+        point_categories.append(t["point_category"])
+        for k in t["attrs"]:
+            if k in attrs and attrs[k]:
+                all_attrs[k] = attrs[k]
+
+    # Generate unique node_id
+    node_id = node_id_base
+    reg = load_registry()
+    counter = 1
+    while node_id_exists(reg, node_id):
+        counter += 1
+        node_id = f"{node_id_base}_{counter}"
+
+    # Aliases: Chinese name + generated ID
+    aliases = [name, node_id_base]
+    if "person" in all_attrs:
+        aliases.append(all_attrs["person"])
+
+    # Tags
     tags = ["real_site", "live_calibrated"]
-    if args.tags:
-        tags.extend(t.strip() for t in args.tags.split(",") if t.strip())
 
-    attributes = {}
-    if args.type == "attributed":
-        if args.person:
-            attributes["person"] = args.person
-        if args.area:
-            attributes["area"] = args.area
-        if args.landmark:
-            attributes["landmark"] = args.landmark
-        point_category = "person_station" if args.person else "named_location"
+    # Multi-type: primary type is first selected
+    primary_type = types[0]["id"] if types else "attributed"
+    primary_category = point_categories[0] if point_categories else "named_location"
 
-    elif args.type == "corridor_endpoint":
-        connects = [c.strip() for c in (args.connects or "").split(",") if c.strip()]
-        attributes["connects"] = connects
-        point_category = "passage_waypoint"
-
-    elif args.type == "rotation_point":
-        point_category = "rotation_spot"
-
-    else:
-        print(f"ERROR: unknown node_type '{args.type}'", file=sys.stderr)
-        sys.exit(1)
+    # If multiple types, note in attributes
+    if len(types) > 1:
+        all_attrs["secondary_types"] = [t["id"] for t in types[1:]]
 
     node = {
         "node_id": node_id,
-        "name": args.name,
-        "node_type": args.type,
-        "point_category": point_category,
-        "aliases": aliases,
+        "name": name,
+        "node_type": primary_type,
+        "point_category": primary_category,
+        "aliases": list(dict.fromkeys(aliases)),  # deduplicate
         "tags": tags,
-        "attributes": attributes,
+        "attributes": all_attrs,
         "pose": {
             "x": float(pose.get("x", 0.0)),
             "y": float(pose.get("y", 0.0)),
@@ -182,116 +267,183 @@ def build_node(args, pose: dict) -> dict:
             "q_z": float(pose.get("q_z", 0.0)),
             "q_w": float(pose.get("q_w", 1.0)),
             "name": node_id,
-            "speed": float(args.speed),
-            "mode": int(args.mode),
+            "speed": 0.5,
+            "mode": 0,
         },
-        "description": args.description or f"{args.name}。标定于 {time.strftime('%Y-%m-%d %H:%M')}。",
+        "description": f"{name}。标定于 {time.strftime('%Y-%m-%d %H:%M')}。",
     }
     return node
 
 
+def review_node(node: dict, map_label: str):
+    """Print review and confirm save."""
+    print()
+    print("  ╔══════════════════════════════════════════╗")
+    print("  ║           标 点 审 阅                    ║")
+    print("  ╚══════════════════════════════════════════╝")
+    print(f"  所属区域:  {map_label}")
+    print(f"  节点类型:  {node['node_type']}")
+    if "secondary_types" in node.get("attributes", {}):
+        print(f"  附加类型:  {', '.join(node['attributes']['secondary_types'])}")
+    print(f"  节点 ID:   {node['node_id']}")
+    print(f"  中文名:    {node['name']}")
+    print(f"  别名:      {', '.join(node['aliases'])}")
+    print(f"  位姿:      x={node['pose']['x']:.4f}, y={node['pose']['y']:.4f}, yaw={node['pose']['yaw']:.4f} rad")
+    attrs = {k: v for k, v in node.get("attributes", {}).items() if k != "secondary_types"}
+    if attrs:
+        print(f"  属性:      {json.dumps(attrs, ensure_ascii=False)}")
+    print()
+
+
 def main():
-    parser = argparse.ArgumentParser(
-        description="Create a topology node at current SLAM pose with full attributes."
-    )
-    parser.add_argument("--map", required=True, dest="map_id",
-                        help="Target map_id (e.g. map_701, map_701_left, map_terrace_wc)")
-    parser.add_argument("--type", required=True, dest="type",
-                        choices=["attributed", "corridor_endpoint", "rotation_point"],
-                        help="Node type")
-    parser.add_argument("--name", required=True,
-                        help="Human-readable name (Chinese OK, e.g. '尹思园工位')")
-    parser.add_argument("--node-id", dest="node_id",
-                        help="Machine ID (auto-generated from --name if omitted)")
-    parser.add_argument("--aliases", default="",
-                        help="Comma-separated aliases (e.g. 'yin_siyuan,尹思园')")
+    print()
+    print("  ╔══════════════════════════════════════════╗")
+    print("  ║     GO2W 拓扑标点工具                   ║")
+    print("  ╚══════════════════════════════════════════╝")
+    print()
 
-    # Attributed node fields
-    parser.add_argument("--person", help="Person name (for attributed nodes)")
-    parser.add_argument("--area", help="Area description")
-    parser.add_argument("--landmark", help="Landmark description")
-
-    # Corridor endpoint fields
-    parser.add_argument("--connects", help="Comma-separated connected areas")
-
-    # Common
-    parser.add_argument("--tags", default="",
-                        help="Extra comma-separated tags")
-    parser.add_argument("--description", help="Custom description")
-    parser.add_argument("--speed", type=float, default=0.5, help="Nav speed (default 0.5)")
-    parser.add_argument("--mode", type=int, default=0, help="Nav mode (default 0)")
-
-    # Runtime
-    parser.add_argument("--dry-run", action="store_true", help="Print but don't save")
-    parser.add_argument("--timeout", type=int, default=10, help="Gateway timeout seconds")
-    args = parser.parse_args()
-
-    # Load registry
-    reg = load_registry()
-
-    # Find target map
-    map_entry = None
-    for m in reg["maps"]:
-        if m["map_id"] == args.map_id:
-            map_entry = m
-            break
-    if map_entry is None:
-        print(f"ERROR: map '{args.map_id}' not found in registry.", file=sys.stderr)
-        sys.exit(1)
-
-    node_id = args.node_id or name_to_node_id(args.name)
-
-    # Check for duplicate
-    for n in map_entry.get("topology_nodes", []):
-        if n["node_id"] == node_id:
-            print(f"WARNING: node_id '{node_id}' already exists in {args.map_id}.", file=sys.stderr)
-            print(f"  Use --node-id to specify a different ID, or delete the old one first.", file=sys.stderr)
-            sys.exit(1)
-
-    # Get current pose
-    print(f"  Map:    {args.map_id}")
-    print(f"  Node:   {node_id} ({args.name})")
-    print(f"  Type:   {args.type}")
-    print(f"  Reading current SLAM pose...")
+    # ── Step 1: Read current pose ──
+    print("  [1/5] 读取当前 SLAM 位姿...")
     try:
-        pose = get_current_pose(timeout_s=args.timeout)
+        pose = get_current_pose()
     except RuntimeError as e:
-        print(f"\n  ERROR: {e}", file=sys.stderr)
+        print(e, file=sys.stderr)
         sys.exit(1)
+    print(f"  ✅ 位姿: x={pose.get('x',0):.4f}, y={pose.get('y',0):.4f}, yaw={pose.get('yaw',0):.4f} rad ({pose.get('yaw',0)*57.3:.1f}°)")
+    print()
 
-    print(f"  Pose:   x={pose.get('x',0):.4f}, y={pose.get('y',0):.4f}, yaw={pose.get('yaw',0):.4f}")
+    # ── Step 2: Choose map ──
+    print("  [2/5] 选择所属区域:")
+    for i, m in enumerate(MAPS, 1):
+        print(f"    {i}) {m['label']}  ({m['id']})")
+    while True:
+        choice = input_str("  选择", "1")
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(MAPS):
+                selected_map = MAPS[idx]
+                break
+        except ValueError:
+            pass
+        print(f"  请输入 1-{len(MAPS)}")
+    print(f"  ✅ {selected_map['label']}")
+    print()
 
-    if args.dry_run:
-        node = build_node(args, pose)
-        print(f"\n  --dry-run: would create:\n{json.dumps(node, indent=2, ensure_ascii=False)}")
-        return
+    # ── Step 3: Choose node type(s) ──
+    print("  [3/5] 选择节点类型（可多选，如: 1,2）:")
+    for i, t in enumerate(NODE_TYPES, 1):
+        print(f"    {i}) {t['label']}  — {t['desc']}")
+    while True:
+        choice = input_str("  选择（逗号分隔）", "1")
+        try:
+            indices = [int(c.strip()) - 1 for c in choice.split(",")]
+            selected_types = []
+            for idx in indices:
+                if 0 <= idx < len(NODE_TYPES):
+                    selected_types.append(NODE_TYPES[idx])
+            if selected_types:
+                break
+        except ValueError:
+            pass
+        print(f"  请输入 1-{len(NODE_TYPES)}，多选用逗号分隔")
+    type_labels = ", ".join(t["label"] for t in selected_types)
+    print(f"  ✅ {type_labels}")
+    print()
 
-    # Build and insert node
-    node = build_node(args, pose)
-    if "topology_nodes" not in map_entry:
-        map_entry["topology_nodes"] = []
-    map_entry["topology_nodes"].append(node)
+    # ── Step 4: Name ──
+    print("  [4/5] 节点命名:")
+    node_id_hint = generate_node_id("")
+    while True:
+        name = input_str("  中文名称").strip()
+        if name:
+            break
+        print("  名称不能为空")
+    suggested_id = generate_node_id(name)
+    print(f"  (自动生成 node_id: {suggested_id})")
+    custom_id = input_str("  node_id（回车确认自动生成）", "").strip()
+    if not custom_id:
+        custom_id = suggested_id
+    print(f"  ✅ 名称: {name}  |  ID: {custom_id}")
+    print()
 
-    # Save
+    # ── Step 5: Attributes ──
+    print("  [5/5] 填写属性:")
+    attrs = {}
+    seen_attrs = set()
+    for t in selected_types:
+        for attr_key in t["attrs"]:
+            if attr_key in seen_attrs:
+                continue
+            seen_attrs.add(attr_key)
+            label = t["attr_labels"].get(attr_key, attr_key)
+            val = input_str(f"  {label}", "").strip()
+            if val:
+                attrs[attr_key] = val
+
+    # ── Build node ──
+    node = build_node(selected_map["id"], name, selected_types, attrs, pose)
+    # Override auto-generated node_id with user's choice
+    node["node_id"] = custom_id
+    node["pose"]["name"] = custom_id
+
+    # ── Review ──
+    review_node(node, selected_map["label"])
+
+    while True:
+        confirm = input_str("  保存到注册表？", "Y").strip().lower()
+        if confirm in ("y", "yes", ""):
+            break
+        elif confirm in ("n", "no"):
+            print("  ❌ 已取消。")
+            return
+        print("  请输入 Y/n")
+
+    # ── Save ──
+    reg = load_registry()
+    for m in reg["maps"]:
+        if m["map_id"] == selected_map["id"]:
+            if "topology_nodes" not in m:
+                m["topology_nodes"] = []
+            m["topology_nodes"].append(node)
+            break
     save_registry(reg)
 
-    # Summary
-    print(f"\n  ✅ Created: {node_id} in {args.map_id}")
-    print(f"     Position: ({pose.get('x',0):.3f}, {pose.get('y',0):.3f}) yaw={pose.get('yaw',0):.4f} rad")
-    print(f"     Aliases: {node['aliases']}")
-    print(f"     Tags: {node['tags']}")
-    print(f"\n  Copyable command for re-snap:")
-    alias_str = ",".join(node['aliases'][:3])
-    type_args = ""
-    if args.type == "attributed" and args.person:
-        type_args += f" --person '{args.person}'"
-    if args.area:
-        type_args += f" --area '{args.area}'"
-    if args.type == "corridor_endpoint" and args.connects:
-        type_args += f" --connects '{args.connects}'"
-    print(f"  python3 scripts/snapshot_waypoint.py --map {args.map_id} --type {args.type} "
-          f"--name '{args.name}' --node-id {node_id} --aliases '{alias_str}'{type_args}")
+    # Append to snapshot log for audit trail
+    log_path = REPO_ROOT / "artifacts" / "snapshot_log.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_entry = {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "node_id": custom_id,
+        "map_id": selected_map["id"],
+        "name": name,
+        "types": [t["id"] for t in selected_types],
+        "pose": node["pose"],
+    }
+    with open(log_path, "a") as f:
+        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+
+    print(f"\n  ✅ 已保存: {custom_id} → {selected_map['label']}")
+    print(f"     位姿: ({node['pose']['x']:.3f}, {node['pose']['y']:.3f}) yaw={node['pose']['yaw']:.4f}")
+    print(f"     类型: {type_labels}")
+    print()
+
+    # Print remaining nodes in this map for reference
+    map_nodes = [n["node_id"] for m in reg["maps"] if m["map_id"] == selected_map["id"]
+                 for n in m.get("topology_nodes", [])]
+    print(f"  {selected_map['label']} 已标节点 ({len(map_nodes)}):")
+    for nid in map_nodes:
+        print(f"    - {nid}")
+    print()
+
+    # Suggest next
+    print("  继续标下一个点？直接运行:")
+    print("    python3 scripts/snapshot_waypoint.py")
+    print()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n  已取消。")
+        sys.exit(0)
