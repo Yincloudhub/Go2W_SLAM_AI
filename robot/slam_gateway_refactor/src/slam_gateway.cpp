@@ -150,38 +150,18 @@ ServiceResult SlamGateway::submitNavigationGoal(const PoseData& goal)
     }
 
     std::cout << "parameter:" << goal.toNavigationJson() << std::endl;
+    // [2026-06-17] Aligned with keyDemo: API 1102 auto-executes navigation.
+    // Calling RESUME_NAV immediately after plan was interfering with execution.
     auto plan_result = callApi(ROBOT_API_ID_POSE_NAV_PL, goal.toNavigationJson());
     ServiceResult result = plan_result;
     if (plan_result.ok) {
-        nlohmann::json resume_parameter;
-        resume_parameter["data"] = nlohmann::json::object();
-        auto resume_result = callApi(ROBOT_API_ID_RESUME_NAV, resume_parameter.dump());
-
-        const auto decode_reply = [](const std::string& raw) {
-            auto parsed = nlohmann::json::parse(raw, nullptr, false);
-            return parsed.is_discarded() ? nlohmann::json(raw) : parsed;
-        };
+        // keyDemo does NOT call resume after plan — POSE_NAV_PL starts moving.
+        // Resume is only for recovering from pause (user-initiated).
         nlohmann::json service_data = {
-            {"plan", decode_reply(plan_result.data)},
-            {"resume", decode_reply(resume_result.data)},
+            {"plan", plan_result.data},
             {"auto_resume_after_goal", true}
         };
-        if (!resume_result.ok) {
-            nlohmann::json pause_parameter;
-            pause_parameter["data"] = nlohmann::json::object();
-            auto pause_result =
-                callApi(ROBOT_API_ID_PAUSE_NAV, pause_parameter.dump());
-            service_data["pause_after_resume_failure"] = {
-                {"ok", pause_result.ok},
-                {"status_code", pause_result.status_code},
-                {"data", decode_reply(pause_result.data)}
-            };
-        }
-        result = {
-            resume_result.status_code,
-            service_data.dump(),
-            resume_result.ok
-        };
+        result = {0, service_data.dump(), true};
     }
 
     {
