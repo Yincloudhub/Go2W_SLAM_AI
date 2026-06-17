@@ -136,41 +136,41 @@
           "anchor_id": "transition_701_to_701_left",
           "name": "701→701左侧过渡",
           "pose": {
-            "x": 0.0,
-            "y": 0.0,
+            "x": 2.5186,
+            "y": 3.6886,
             "z": 0.0,
-            "yaw": 0.0,
+            "yaw": 1.6114,
             "q_x": 0.0,
             "q_y": 0.0,
-            "q_z": 0.0,
-            "q_w": 1.0,
+            "q_z": 0.7213156442204907,
+            "q_w": 0.6926064838007067,
             "name": "transition",
             "speed": 0.0,
             "mode": 0
           },
           "connects_to": "map_701_left",
           "reverse_anchor": "mapping_origin_701_left",
-          "note": "TODO: 填入 mark-transition snapshot 坐标。"
+          "note": "标定于 2026-06-16 23:48。从 map_701 帧记录。"
         },
         {
           "anchor_id": "transition_701_to_terrace",
           "name": "701→露台过渡",
           "pose": {
-            "x": 0.0,
-            "y": 0.0,
+            "x": -5.8067,
+            "y": -7.653,
             "z": 0.0,
-            "yaw": 0.0,
+            "yaw": -1.5263,
             "q_x": 0.0,
             "q_y": 0.0,
-            "q_z": 0.0,
-            "q_w": 1.0,
+            "q_z": -0.6912012568597964,
+            "q_w": 0.7226623156879275,
             "name": "transition",
             "speed": 0.0,
             "mode": 0
           },
           "connects_to": "map_terrace_wc",
           "reverse_anchor": "mapping_origin_terrace",
-          "note": "TODO: 填入 mark-transition snapshot 坐标。"
+          "note": "标定于 2026-06-17 00:04。从 map_701 帧记录。"
         }
       ],
       "topology_nodes": [],
@@ -287,8 +287,8 @@
             "mode": 0
           },
           "connects_to": "map_701",
-          "reverse_anchor": "mapping_origin_701",
-          "note": "⚠️ 应改为 transition_701_to_terrace（当前用 mapping_origin_701 姿态不对）。"
+          "reverse_anchor": "transition_701_to_terrace",
+          "note": "⚠️ reverse_anchor 修正: mapping_origin_701 → transition_701_to_terrace (后者有在701帧内的真实坐标)"
         }
       ],
       "topology_nodes": [],
