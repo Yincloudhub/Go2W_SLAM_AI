@@ -91,6 +91,48 @@
           "allowed_yaw_error_deg": 30.0,
           "status": "verified",
           "description": "同时也是 transition_701_to_terrace 的物理位置。"
+        },
+        {
+          "anchor_id": "transition_701_to_701_left",
+          "name": "701→701左侧过渡点(重定位用)",
+          "pose": {
+            "x": 2.5186,
+            "y": 3.6886,
+            "z": 0.0,
+            "yaw": 1.6114,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.7213156442204907,
+            "q_w": 0.6926064838007067,
+            "name": "transition_701_to_701_left",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "verified",
+          "description": "从701帧内的快照提取。用于从701_left切回701时做重定位种子。"
+        },
+        {
+          "anchor_id": "transition_701_to_terrace",
+          "name": "701→露台过渡点(重定位用)",
+          "pose": {
+            "x": -5.8067,
+            "y": -7.653,
+            "z": 0.0,
+            "yaw": -1.5263,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.6912012568597964,
+            "q_w": 0.7226623156879275,
+            "name": "transition_701_to_terrace",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "verified",
+          "description": "从701帧内的快照提取。用于从露台切回701时做重定位种子。"
         }
       ],
       "topology_nodes": [],
@@ -228,7 +270,7 @@
             "mode": 0
           },
           "connects_to": "map_701",
-          "reverse_anchor": "mapping_origin_701",
+          "reverse_anchor": "transition_701_to_701_left",
           "note": "返回701中心区原点。"
         }
       ],

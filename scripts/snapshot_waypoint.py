@@ -13,7 +13,8 @@ Workflow:
 No placeholders. Every node is created fresh at snapshot time.
 
 Usage:
-  python3 scripts/snapshot_waypoint.py
+  python3 scripts/snapshot_waypoint.py              # mark a waypoint
+  python3 scripts/snapshot_waypoint.py --transition # record transition anchor + switch PCD
 """
 
 from __future__ import annotations
@@ -295,7 +296,187 @@ def review_node(node: dict, map_label: str):
     print()
 
 
+def do_transition():
+    """Record transition anchor and optionally switch PCD."""
+    print()
+    print("  ╔══════════════════════════════════════════╗")
+    print("  ║     PCD 切换 — 录过渡锚点              ║")
+    print("  ╚══════════════════════════════════════════╝")
+    print()
+    print("  前提: 已重定位到当前 PCD，机器人停在过渡点位置。")
+    print()
+
+    # Step 1: Read pose
+    print("  [1/4] 读取当前 SLAM 位姿...")
+    try:
+        pose = get_current_pose()
+    except RuntimeError as e:
+        print(e, file=sys.stderr)
+        sys.exit(1)
+    print(f"  ✅ 位姿: x={pose.get('x',0):.4f}, y={pose.get('y',0):.4f}, yaw={pose.get('yaw',0):.4f} rad")
+    print()
+
+    # Step 2: Which map are we currently in?
+    print("  [2/4] 当前所在 PCD:")
+    for i, m in enumerate(MAPS, 1):
+        print(f"    {i}) {m['label']}  ({m['id']})")
+    while True:
+        choice = input_str("  当前地图", "1")
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(MAPS):
+                from_map = MAPS[idx]
+                break
+        except ValueError:
+            pass
+
+    # Step 3: Target map
+    other_maps = [m for m in MAPS if m["id"] != from_map["id"]]
+    print(f"\n  [3/4] 要切换到哪个 PCD:")
+    for i, m in enumerate(other_maps, 1):
+        print(f"    {i}) {m['label']}  ({m['id']})")
+    while True:
+        choice = input_str("  目标地图", "1")
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(other_maps):
+                to_map = other_maps[idx]
+                break
+        except ValueError:
+            pass
+    print(f"  ✅ {from_map['label']} → {to_map['label']}")
+    print()
+
+    # Step 4: Record and switch
+    print("  [4/4] 记录过渡锚点 & 切换...")
+    reg = load_registry()
+
+    # Find from_map entry
+    from_entry = None
+    to_entry = None
+    gw_entry = None
+    for m in reg["maps"]:
+        if m["map_id"] == from_map["id"]:
+            from_entry = m
+        if m["map_id"] == to_map["id"]:
+            to_entry = m
+        if m["map_id"] == "go2w_real_site":
+            gw_entry = m
+
+    if not from_entry or not to_entry:
+        print("  ❌ 注册表错误：找不到地图条目", file=sys.stderr)
+        sys.exit(1)
+
+    # Generate transition anchor ID
+    trans_id = f"transition_{from_map['id'].replace('map_','')}_to_{to_map['id'].replace('map_','')}"
+    reverse_id = to_entry.get("mapping_origin_anchor_id", f"mapping_origin_{to_map['id']}")
+
+    # Build transition anchor entry
+    transition_anchor = {
+        "anchor_id": trans_id,
+        "name": f"{from_map['label']}→{to_map['label']}过渡",
+        "pose": {
+            "x": float(pose.get("x", 0.0)),
+            "y": float(pose.get("y", 0.0)),
+            "z": float(pose.get("z", 0.0)),
+            "yaw": float(pose.get("yaw", 0.0)),
+            "q_x": float(pose.get("q_x", 0.0)),
+            "q_y": float(pose.get("q_y", 0.0)),
+            "q_z": float(pose.get("q_z", 0.0)),
+            "q_w": float(pose.get("q_w", 1.0)),
+            "name": "transition",
+            "speed": 0.0,
+            "mode": 0,
+        },
+        "connects_to": to_map["id"],
+        "reverse_anchor": reverse_id,
+        "note": f"标定于 {time.strftime('%Y-%m-%d %H:%M')}。从 {from_map['id']} 帧记录。",
+    }
+
+    # Add/update transition anchor in from_map
+    if "transition_anchors" not in from_entry:
+        from_entry["transition_anchors"] = []
+    # Replace existing if same anchor_id
+    from_entry["transition_anchors"] = [
+        t for t in from_entry.get("transition_anchors", [])
+        if t["anchor_id"] != trans_id
+    ]
+    from_entry["transition_anchors"].append(transition_anchor)
+
+    # Update go2w_real_site: pcd_path → target PCD, sync anchors
+    if gw_entry:
+        gw_entry["pcd_path"] = to_entry["pcd_path"]
+        # Merge target map's relocalization_anchors into gw
+        existing_ids = {a["anchor_id"] for a in gw_entry.get("relocalization_anchors", [])}
+        for a in to_entry.get("relocalization_anchors", []):
+            if a["anchor_id"] not in existing_ids:
+                gw_entry["relocalization_anchors"].append(a)
+                existing_ids.add(a["anchor_id"])
+
+    save_registry(reg)
+
+    # Log
+    log_path = REPO_ROOT / "artifacts" / "snapshot_log.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a") as f:
+        f.write(json.dumps({
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "type": "transition",
+            "transition_id": trans_id,
+            "from_map": from_map["id"],
+            "to_map": to_map["id"],
+            "pose": transition_anchor["pose"],
+        }, ensure_ascii=False) + "\n")
+
+    print(f"  ✅ 过渡锚点已保存: {trans_id}")
+    print(f"     from: {from_map['label']}  ({from_map['id']})")
+    print(f"     to:   {to_map['label']}  ({to_map['id']})")
+    print(f"     位置: ({pose.get('x',0):.4f}, {pose.get('y',0):.4f})")
+    print()
+
+    # Offer to switch now
+    print("  ╔══════════════════════════════════════════╗")
+    print("  ║  现在切换到目标 PCD？                  ║")
+    print("  ║  需要: SLAM 运行 + 机器人不动          ║")
+    print("  ╚══════════════════════════════════════════╝")
+    print()
+    print(f"  切换命令:")
+    print(f"    bash scripts/build_multi_pcd.sh relocate --anchor {reverse_id}")
+    print()
+    switch_now = input_str("  立即执行切换？", "Y").strip().lower()
+    if switch_now in ("y", "yes", ""):
+        print()
+        print("  执行重定位...")
+        import subprocess
+        o = subprocess.run(
+            ["bash", str(REPO_ROOT / "scripts" / "build_multi_pcd.sh"), "relocate", "--anchor", reverse_id],
+            cwd=str(REPO_ROOT),
+        )
+        if o.returncode == 0:
+            print(f"\n  ✅ 已切换到 {to_map['label']}！")
+            print(f"  现在可以标 {to_map['label']} 的节点:")
+            print(f"    python3 scripts/snapshot_waypoint.py")
+        else:
+            print(f"\n  ⚠ 切换失败 (exit={o.returncode})。手动重试:")
+            print(f"    bash scripts/build_multi_pcd.sh relocate --anchor {reverse_id}")
+    else:
+        print(f"\n  稍后手动切换:")
+        print(f"    1. 确保机器人在过渡点不动")
+        print(f"    2. bash scripts/build_multi_pcd.sh relocate --anchor {reverse_id}")
+
+    print()
+
+
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="GO2W topology waypoint tool")
+    parser.add_argument("--transition", action="store_true",
+                        help="Record transition anchor and switch PCD")
+    args, _ = parser.parse_known_args()
+
+    if args.transition:
+        do_transition()
+        return
     print()
     print("  ╔══════════════════════════════════════════╗")
     print("  ║     GO2W 拓扑标点工具                   ║")
