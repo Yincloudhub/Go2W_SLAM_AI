@@ -60,6 +60,7 @@ GATEWAY_POLL_INTERVAL = 0.20    # seconds between get_world_state requests (5 Hz
 DDS_SETTLE_S = 3.0              # seconds to wait for Gateway DDS subscription
 STUCK_TIME_S = 3.0              # seconds of no progress → STUCK
 STUCK_DIST_THRESHOLD_M = 0.05   # minimum distance change to count as progress
+SELF_OCCLUSION_M = 0.15         # clearance below this → treat as open space (self-occlusion)
 
 # Gateway localization.status values that are considered healthy.
 # Gateway reports: 'localized' | 'not_started' | 'lost'.
@@ -312,6 +313,11 @@ class NavigationSession:
                             'rear': float(rear_m) if rear_m is not None else 2.0,
                         }
                         self._clearance_ts = now
+                        # Apply self-occlusion filter: values below threshold
+                        # are XT16 seeing the robot's own body → treat as open space.
+                        for k in list(self._clearance):
+                            if self._clearance[k] < SELF_OCCLUSION_M:
+                                self._clearance[k] = 2.0
 
             except Exception:
                 time.sleep(0.1)
