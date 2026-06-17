@@ -327,12 +327,17 @@ for m in reg['maps']:
 import json
 with open('$REGISTRY') as f:
     reg = json.load(f)
+found = None
 for m in reg['maps']:
     for a in m.get('relocalization_anchors',[]):
         if a['anchor_id'] == '$ANCHOR':
-            print(m['map_id'])
+            found = m['map_id']
             break
-")
+    if found:
+        break
+if found:
+    print(found)
+" 2>/dev/null)
         PCD_FOR_RELOC=$(registry_lookup "$MAP_FOR_RELOC" "pcd_path" 2>/dev/null || echo "")
     fi
 
