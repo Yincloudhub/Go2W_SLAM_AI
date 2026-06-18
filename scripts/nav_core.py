@@ -83,7 +83,14 @@ GATEWAY_POLL_INTERVAL = 0.20    # seconds between get_world_state requests (5 Hz
 DDS_SETTLE_S = 3.0              # seconds to wait for Gateway DDS subscription
 STUCK_TIME_S = 5.0              # seconds of no progress -> STUCK
 STUCK_DIST_THRESHOLD_M = 0.05   # minimum distance change to count as progress
-SELF_OCCLUSION_M = 0.15         # clearance below this → treat as open space (self-occlusion)
+SELF_OCCLUSION_FRONT_M = 0.05  # front: only filter <5cm sensor noise (D435 handles front primarily)
+SELF_OCCLUSION_SIDE_M  = 0.10  # sides: filter leg visibility during rotation
+SELF_OCCLUSION_REAR_M  = 0.15  # rear: permissive
+
+# D435 stereo depth camera integration
+D435_DEPTH_PATH = os.path.join(DEFAULT_REPO, 'artifacts', 'stereo_depth_summary.json')
+D435_STALE_MS = 500      # D435 data older than this → fallback to XT16
+D435_MIN_CONFIDENCE = 0.5  # below this confidence → fallback to XT16
 
 # Gateway localization.status values that are considered healthy.
 # Gateway reports: 'localized' | 'not_started' | 'lost'.
@@ -343,18 +350,39 @@ class NavigationSession:
 
                 if front_m is not None:
                     with self._lock:
+                        xt16_front = float(front_m)
+                        xt16_left  = float(left_m) if left_m is not None else 2.0
+                        xt16_right = float(right_m) if right_m is not None else 2.0
+                        xt16_rear  = float(rear_m) if rear_m is not None else 2.0
+
+                        # ── D435 stereo depth: primary front sensor ──
+                        front_final = xt16_front  # default
+                        d435_used = False
+                        try:
+                            with open(D435_DEPTH_PATH) as _f:
+                                _d435 = json.load(_f)
+                            _age = _d435.get('age_ms', 9999)
+                            _conf = _d435.get('confidence', 0)
+                            if _age < D435_STALE_MS and _conf > D435_MIN_CONFIDENCE:
+                                _d435_front = _d435.get('front_clearance_m')
+                                if _d435_front is not None:
+                                    # Take min of both sensors for safety
+                                    front_final = min(float(_d435_front), xt16_front)
+                                    d435_used = True
+                        except Exception:
+                            pass  # D435 unavailable → XT16-only
+
+                        # ── Directional self-occlusion filter ──
+                        def _apply_self_occ(val, thresh):
+                            return 2.0 if val < thresh else val
+
                         self._clearance = {
-                            'front': float(front_m),
-                            'left': float(left_m) if left_m is not None else 2.0,
-                            'right': float(right_m) if right_m is not None else 2.0,
-                            'rear': float(rear_m) if rear_m is not None else 2.0,
+                            'front': _apply_self_occ(front_final, SELF_OCCLUSION_FRONT_M),
+                            'left':  _apply_self_occ(xt16_left,  SELF_OCCLUSION_SIDE_M),
+                            'right': _apply_self_occ(xt16_right, SELF_OCCLUSION_SIDE_M),
+                            'rear':  _apply_self_occ(xt16_rear,  SELF_OCCLUSION_REAR_M),
                         }
                         self._clearance_ts = now
-                        # Apply self-occlusion filter: values below threshold
-                        # are XT16 seeing the robot's own body → treat as open space.
-                        for k in list(self._clearance):
-                            if self._clearance[k] < SELF_OCCLUSION_M:
-                                self._clearance[k] = 2.0
 
             except Exception:
                 time.sleep(0.1)
