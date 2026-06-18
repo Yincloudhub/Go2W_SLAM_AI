@@ -83,7 +83,7 @@ GATEWAY_POLL_INTERVAL = 0.20    # seconds between get_world_state requests (5 Hz
 DDS_SETTLE_S = 3.0              # seconds to wait for Gateway DDS subscription
 STUCK_TIME_S = 5.0              # seconds of no progress -> STUCK
 STUCK_DIST_THRESHOLD_M = 0.05   # minimum distance change to count as progress
-SELF_OCCLUSION_FRONT_M = 0.01  # front: only filter <1cm sensor noise (wall at 1cm is REAL)
+SELF_OCCLUSION_FRONT_M = 0.005  # front: only filter <5mm sensor noise (wall at 1cm is REAL)
 SELF_OCCLUSION_SIDE_M  = 0.10  # sides: filter leg visibility during rotation
 SELF_OCCLUSION_REAR_M  = 0.15  # rear: permissive
 
