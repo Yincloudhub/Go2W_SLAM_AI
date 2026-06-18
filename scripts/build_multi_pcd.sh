@@ -205,6 +205,44 @@ print(f'Synced {len(all_anchors)} anchors to go2w_real_site')
 "
 }
 
+# Mirror the active real map topology into go2w_real_site for Gateway/Web code
+# that is hardcoded to the wrapper map_id.
+sync_gateway_topology() {
+    "$PYTHON_BIN" -c "
+import copy
+import json
+with open('$REGISTRY') as f:
+    reg = json.load(f)
+gateway = None
+for m in reg['maps']:
+    if m.get('map_id') == 'go2w_real_site':
+        gateway = m
+        break
+if not gateway:
+    raise SystemExit('go2w_real_site wrapper missing')
+target_pcd = gateway.get('pcd_path', '')
+source = None
+for m in reg['maps']:
+    if m.get('map_id') != 'go2w_real_site' and m.get('pcd_path') == target_pcd:
+        source = m
+        break
+if not source:
+    print(f'No source topology map found for pcd_path={target_pcd}')
+else:
+    for key in ('topology_path', 'frame_id', 'transition_anchors'):
+        if key in source:
+            gateway[key] = copy.deepcopy(source[key])
+    gateway['topology_nodes'] = copy.deepcopy(source.get('topology_nodes', []))
+    gateway['topology_edges'] = copy.deepcopy(source.get('topology_edges', []))
+    with open('$REGISTRY', 'w') as f:
+        json.dump(reg, f, indent=2, ensure_ascii=False)
+    print(
+        f\"Synced topology from {source['map_id']} to go2w_real_site: \"
+        f\"nodes={len(gateway['topology_nodes'])} edges={len(gateway['topology_edges'])}\"
+    )
+"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  start — implicitly exits previous PCD, starts fresh map
 # ═══════════════════════════════════════════════════════════════════════════
@@ -329,6 +367,8 @@ with open('$REGISTRY') as f:
     reg = json.load(f)
 found = None
 for m in reg['maps']:
+    if m['map_id'] == 'go2w_real_site':
+        continue  # skip wrapper; use the actual map that owns the PCD
     for a in m.get('relocalization_anchors',[]):
         if a['anchor_id'] == '$ANCHOR':
             found = m['map_id']
@@ -347,6 +387,7 @@ if found:
     # Sync Gateway-facing pcd_path so relocate passes validation
     sync_gateway_pcd "$PCD_FOR_RELOC"
     sync_gateway_anchors > /dev/null
+    sync_gateway_topology > /dev/null
     echo "  Expected Gateway response:"
     echo "    {\"accepted\":true, \"localization_verified\":true, ...}"
     echo ""
@@ -505,6 +546,7 @@ else:
     # Sync Gateway-facing pcd_path and anchors
     sync_gateway_pcd "$OTHER_PCD"
     sync_gateway_anchors > /dev/null
+    sync_gateway_topology > /dev/null
 
     # Send relocate via Gateway directly (V2 registry)
     echo "  Relocating to $OTHER via $REVERSE..."
@@ -623,6 +665,7 @@ fi
 # ═══════════════════════════════════════════════════════════════════════════
 if [[ "$ACTION" == "sync-registry" ]]; then
     sync_gateway_anchors
+    sync_gateway_topology
     echo "  Also sync pcd_path? Current go2w_real_site PCD:"
     "$PYTHON_BIN" -c "
 import json
