@@ -356,7 +356,7 @@ class NavigationSession:
                         xt16_rear  = float(rear_m) if rear_m is not None else 2.0
 
                         # ── D435 stereo depth: primary front sensor ──
-                        front_final = xt16_front  # default
+                        front_final = xt16_front  # default: XT16 fallback
                         d435_used = False
                         try:
                             with open(D435_DEPTH_PATH) as _f:
@@ -366,11 +366,12 @@ class NavigationSession:
                             if _age < D435_STALE_MS and _conf > D435_MIN_CONFIDENCE:
                                 _d435_front = _d435.get('front_clearance_m')
                                 if _d435_front is not None:
-                                    # Take min of both sensors for safety
-                                    front_final = min(float(_d435_front), xt16_front)
+                                    # D435 is primary for front (XT16 geometry is fallback only).
+                                    # Cross-validated: D435 p10 + 0.20m mount offset ≈ XT16 raw p10.
+                                    front_final = float(_d435_front)
                                     d435_used = True
                         except Exception:
-                            pass  # D435 unavailable → XT16-only
+                            pass  # D435 unavailable → XT16-only fallback
 
                         # ── Directional self-occlusion filter ──
                         def _apply_self_occ(val, thresh):
