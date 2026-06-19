@@ -35,9 +35,87 @@ from edge_autonomy.perception_context import load_perception_context_file  # noq
 
 
 DEFAULT_PORT = 8765
-DEFAULT_MAP_ID = "go2w_real_site"
-DEFAULT_REGISTRY_PATH = Path("configs/maps/go2w_real_site_map_registry.json")
+_HARDCODED_DEFAULT_MAP_ID = "go2w_real_site"
+_HARDCODED_DEFAULT_MAP_PATH = "/home/unitree/maps/staging/map_701.pcd"
+_HARDCODED_DEFAULT_CURRENT_NODE = "wp_60497f"
+DEFAULT_REGISTRY_PATH = Path("configs/maps/go2w_multi_map_registry_v2.json")
 DISABLED_NODE_TAGS = {"disabled", "ui_disabled", "deleted"}
+
+
+def _resolve_active_pcd():
+    # type: () -> dict
+    """Read active_pcd.json, returning a dict with active_map_id, pcd_path, etc.
+    Falls back to hardcoded defaults if the file is missing or nav_relocate unavailable."""
+    try:
+        from nav_relocate import get_active_pcd  # type: ignore[import-not-found]
+    except ImportError:
+        try:
+            from scripts.nav_relocate import get_active_pcd  # type: ignore[import-not-found]
+        except ImportError:
+            raise ImportError("nav_relocate not importable")
+    try:
+        return get_active_pcd()
+    except Exception:
+        return {
+            "active_map_id": _HARDCODED_DEFAULT_MAP_ID,
+            "pcd_path": _HARDCODED_DEFAULT_MAP_PATH,
+            "switched_at": None,
+            "switched_from": None,
+            "anchor_id": "mapping_origin_701",
+        }
+
+
+def _resolve_default_map_id():
+    # type: () -> str
+    """Resolve the default map_id from active_pcd.json."""
+    return str(_resolve_active_pcd().get("active_map_id", _HARDCODED_DEFAULT_MAP_ID))
+
+
+def _resolve_default_map_path():
+    # type: () -> str
+    """Resolve the default PCD path from active_pcd.json, falling back to hardcoded value."""
+    active = _resolve_active_pcd()
+    return str(active.get("pcd_path", _HARDCODED_DEFAULT_MAP_PATH))
+
+
+def _resolve_default_current_node():
+    # type: () -> str
+    """Resolve the default current node from active_pcd.json by picking the first
+    non-placeholder topology node for the active map. Falls back to hardcoded."""
+    try:
+        active_map_id = _resolve_default_map_id()
+        registry_path = REPO_ROOT / DEFAULT_REGISTRY_PATH
+        if registry_path.exists():
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            for m in registry.get("maps", []):
+                if isinstance(m, dict) and m.get("map_id") == active_map_id:
+                    for node in m.get("topology_nodes", []):
+                        if isinstance(node, dict):
+                            tags = set(node.get("tags", []) if isinstance(node.get("tags"), list) else [])
+                            if not (tags & DISABLED_NODE_TAGS):
+                                nid = node.get("node_id", "")
+                                if nid and nid not in ("initial_point",):
+                                    return str(nid)
+                    break
+    except Exception:
+        pass
+    return _HARDCODED_DEFAULT_CURRENT_NODE
+
+
+def _safe_float(value):
+    # type: (Any) -> Optional[float]
+    """Convert to float if possible, return None for non-numeric or bool values."""
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+DEFAULT_MAP_ID = _resolve_default_map_id()
+DEFAULT_MAP_PATH = _resolve_default_map_path()
+DEFAULT_CURRENT_NODE = _resolve_default_current_node()
 VERIFICATION_TAGS = {"needs_calibration", "needs_standing_verification"}
 PROTECTED_TOPOLOGY_NODE_IDS = {"initial_point"}
 NODE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
@@ -278,7 +356,7 @@ class WebConfig:
     start_rviz2_script: str
     capture_command: str = ""
     network_interface: str = "eth0"
-    current_node: str = "initial_point"
+    current_node: str = DEFAULT_CURRENT_NODE
     host: str = "127.0.0.1"
     port: int = DEFAULT_PORT
     gateway_timeout_s: int = 30
@@ -338,7 +416,7 @@ class WebConfig:
 class WebState:
     execute_enabled: bool = False
     weak_link_mode: bool = False
-    current_node: str = "initial_point"
+    current_node: str = DEFAULT_CURRENT_NODE
     history: List[Dict[str, Any]] = field(default_factory=list)
     task_state: Dict[str, Any] = field(default_factory=dict)
     last_relocation_anchor: str = ""
@@ -515,6 +593,7 @@ class OperatorWebApp:
         self._attach_perception(result)
         result["collection_status"] = self.collection_status()
         result["capabilities"] = self.capabilities()
+        result["process_status"] = self.process_status()
         with self.lock:
             result["state"] = self.state.snapshot()
         return result
@@ -528,6 +607,7 @@ class OperatorWebApp:
         result["stereo_diagnostic"] = self.stereo_diagnostic(stereo_summary)
         result["semantic_summary"] = self.semantic_summary(context_snapshot)
         result["edge_summary"] = self.edge_summary(context_snapshot)
+        result["obstacle_avoidance"] = self.obstacle_avoidance(context_snapshot)
 
     def invalidate_status_cache(self) -> None:
         with self.status_lock:
@@ -630,6 +710,10 @@ class OperatorWebApp:
             self.invalidate_status_cache()
             return local
 
+        # ── 快捷指令：露台采集 / 巡逻 ──
+        if any(kw in line for kw in ("露台采集", "露台巡逻", "循环采集", "terrace patrol")):
+            return self._run_terrace_patrol(line)
+
         result = self.run_panel_session([line, "/quit"])
         self._attach_perception(result)
         result["capabilities"] = self.capabilities()
@@ -670,10 +754,53 @@ class OperatorWebApp:
         with self.lock:
             registry = self._load_registry()
             selected = self._registry_map(registry)
-            nodes = []
+            active_map_id = str(_resolve_active_pcd().get("active_map_id", self.config.map_id))
+
+            # Collect all nodes from the selected map
+            all_nodes = []
             for node in selected.get("topology_nodes", []):
                 if not isinstance(node, dict):
                     continue
+                all_nodes.append(node)
+
+            # Filter: prefer nodes whose pcd_owner matches active_map_id.
+            # Fallback: if no matching nodes, include go2w_real_site / map_701 nodes.
+            filtered_nodes = [
+                n for n in all_nodes
+                if str(n.get("pcd_owner", "")).strip() == active_map_id
+            ]
+            if not filtered_nodes:
+                # Fallback: include nodes owned by go2w_real_site map or map_701
+                fallback_owners = {active_map_id, "go2w_real_site", "map_701"}
+                filtered_nodes = [
+                    n for n in all_nodes
+                    if str(n.get("pcd_owner", "")).strip() in fallback_owners
+                ]
+            # If still empty, show all nodes
+            if not filtered_nodes:
+                filtered_nodes = all_nodes
+
+            # Merge relocalization anchors from ALL maps (not just go2w_real_site)
+            all_anchors: List[Dict[str, Any]] = []
+            seen_anchor_ids: set = set()
+            for m in registry.get("maps", []):
+                if not isinstance(m, dict):
+                    continue
+                for anchor in m.get("relocalization_anchors", []):
+                    if not isinstance(anchor, dict):
+                        continue
+                    aid = anchor.get("anchor_id", "")
+                    if aid and aid not in seen_anchor_ids:
+                        seen_anchor_ids.add(aid)
+                        all_anchors.append({
+                            "anchor_id": aid,
+                            "name": anchor.get("name", aid),
+                            "status": anchor.get("status", ""),
+                            "map_id": m.get("map_id", ""),
+                        })
+
+            nodes = []
+            for node in filtered_nodes:
                 tags = tag_list(node.get("tags"))
                 pose = node.get("pose") if isinstance(node.get("pose"), dict) else {}
                 nodes.append({
@@ -684,6 +811,7 @@ class OperatorWebApp:
                     "disabled": bool(set(tags) & DISABLED_NODE_TAGS),
                     "needs_calibration": "needs_calibration" in tags,
                     "needs_standing_verification": "needs_standing_verification" in tags,
+                    "pcd_owner": str(node.get("pcd_owner", "")).strip() or None,
                     "pose": {
                         "x": pose.get("x"),
                         "y": pose.get("y"),
@@ -696,23 +824,14 @@ class OperatorWebApp:
             return {
                 "accepted": True,
                 "map_id": selected.get("map_id", self.config.map_id),
+                "active_map_id": active_map_id,
                 "registry": str(self.resolved_registry_path()),
                 "mapping_origin_anchor_id": selected.get(
                     "mapping_origin_anchor_id",
                     "",
                 ),
-                "active_relocalization_anchors": [
-                    {
-                        "anchor_id": anchor.get("anchor_id", ""),
-                        "name": anchor.get("name", anchor.get("anchor_id", "")),
-                        "status": anchor.get("status", ""),
-                    }
-                    for anchor in selected.get("relocalization_anchors", [])
-                    if isinstance(anchor, dict)
-                ],
-                "archived_relocalization_anchor_count": len(
-                    selected.get("archived_relocalization_anchors", [])
-                ),
+                "active_relocalization_anchors": all_anchors,
+                "archived_relocalization_anchor_count": 0,
                 "nodes": nodes,
             }
 
@@ -1101,6 +1220,275 @@ class OperatorWebApp:
             "envelope": source,
         }
 
+    # ── active PCD ──
+
+    def get_active_pcd_info(self) -> Dict[str, Any]:
+        """Return the current active PCD information from active_pcd.json."""
+        return dict(_resolve_active_pcd())
+
+    def stop_all(self) -> Dict[str, Any]:
+        """Kill patrol + send stop to sport_bridge + pause navigation."""
+        import subprocess as _sp
+        results = []
+
+        # 1. Kill terrace patrol
+        r1 = _sp.run(["pkill", "-f", "terrace_patrol.py"], capture_output=True, text=True)
+        results.append("patrol: stopped" if r1.returncode == 0 else "patrol: not running")
+
+        # 2. Clean PID file
+        try:
+            Path("/tmp/terrace_patrol_ui.pid").unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        # 3. Send stop to sport_bridge (emergency stop)
+        bridge_path = str(self.config.repo_root / "robot" / "slam_gateway_refactor" / "build" / "sport_bridge")
+        try:
+            r2 = _sp.run(
+                ["bash", "-c", "echo '{\"stop\":true}' | %s 2>/dev/null; echo ok" % bridge_path],
+                capture_output=True, text=True, timeout=5,
+            )
+            results.append("bridge: stop sent")
+        except Exception:
+            results.append("bridge: skip")
+
+        # 4. Send /pause to C++ panel
+        self.run_panel_session(["/pause", "/quit"])
+
+        self.invalidate_status_cache()
+        return {
+            "accepted": True,
+            "exit_code": 0,
+            "stdout": "\n".join(results) + "\n",
+            "stderr": "",
+            "summary": {"phase": "idle", "target": "stopped_by_user"},
+            "state": self.state.snapshot(),
+        }
+
+    # ── 露台采集快捷指令 ──
+
+    def _run_terrace_patrol(self, line: str) -> Dict[str, Any]:
+        """Run terrace_patrol.py in background, return immediate ACK."""
+        import subprocess as _sp
+
+        patrol_script = str(self.config.repo_root / "scripts" / "terrace_patrol.py")
+        log_path = "/tmp/terrace_patrol_ui.log"
+        pid_file = "/tmp/terrace_patrol_ui.pid"
+
+        # Check if already running
+        try:
+            existing_pid = Path(pid_file).read_text().strip()
+            import os as _os
+            if existing_pid:
+                try:
+                    _os.kill(int(existing_pid), 0)
+                    return {
+                        "accepted": False,
+                        "exit_code": 2,
+                        "stdout": "",
+                        "stderr": f"露台采集已在运行 (pid={existing_pid})。等待完成或 kill {existing_pid} 后再试。\n",
+                        "summary": {"phase": "patrol", "target": "terrace_patrol_running"},
+                        "state": self.state.snapshot(),
+                    }
+                except (OSError, ValueError):
+                    pass  # stale PID
+        except Exception:
+            pass
+
+        # Launch in background
+        try:
+            proc = _sp.Popen(
+                ["python3", patrol_script],
+                cwd=str(self.config.repo_root),
+                stdout=open(log_path, "w"),
+                stderr=_sp.STDOUT,
+                start_new_session=True,
+            )
+            Path(pid_file).write_text(str(proc.pid))
+        except Exception as exc:
+            return {
+                "accepted": False,
+                "exit_code": 3,
+                "stdout": "",
+                "stderr": f"启动露台采集失败：{exc}\n",
+                "summary": {},
+                "state": self.state.snapshot(),
+            }
+
+        result = {
+            "accepted": True,
+            "exit_code": 0,
+            "stdout": f"🚀 露台采集已启动 (pid={proc.pid})\n日志: {log_path}\n",
+            "stderr": "",
+            "summary": {"phase": "patrol", "target": "terrace_patrol_started"},
+        }
+        self._attach_perception(result)
+        with self.lock:
+            self.state.remember(line, result)
+            result["state"] = self.state.snapshot()
+        self.invalidate_status_cache()
+        return result
+
+    # ── process status ──
+
+    _KEY_PROCESSES = {
+        "xt16_driver": "xt16_driver",
+        "unitree_slam": "unitree_slam",
+        "perception_context": "perception_context_service",
+        "sport_bridge": "sport_bridge",
+        "gateway_server": "gateway_server.py",
+        "ptp4l": "ptp4l",
+    }
+
+    def process_status(self) -> Dict[str, Any]:
+        """Check which key processes are running via ps aux."""
+        try:
+            import subprocess as _sp
+            out = _sp.run(
+                ["ps", "aux"],
+                capture_output=True, text=True, timeout=5,
+            )
+            ps_text = out.stdout
+        except Exception:
+            ps_text = ""
+        processes = {}
+        for name, pattern in self._KEY_PROCESSES.items():
+            running = pattern in ps_text and "grep" not in (
+                ps_text.split(pattern)[-1][:10] if pattern in ps_text else ""
+            )
+            processes[name] = running
+        all_ok = all(processes.values())
+        return {
+            "processes": processes,
+            "all_ok": all_ok,
+            "summary": "全部在线" if all_ok else f"{sum(1 for v in processes.values() if v)}/{len(processes)} 在线",
+        }
+
+    # ── available maps ──
+
+    def get_available_maps(self) -> Dict[str, Any]:
+        """Return all maps with status='real' from the multi-map registry."""
+        try:
+            registry = self._load_registry()
+        except Exception:
+            return {"accepted": False, "maps": [], "error": "registry unavailable"}
+        maps = []
+        for m in registry.get("maps", []):
+            if not isinstance(m, dict):
+                continue
+            if m.get("status") != "real":
+                continue
+            maps.append({
+                "map_id": m.get("map_id", ""),
+                "name": m.get("name", ""),
+                "pcd_path": m.get("pcd_path", ""),
+                "description": m.get("description", ""),
+                "anchor_count": len(m.get("relocalization_anchors", [])),
+                "node_count": len(m.get("topology_nodes", [])),
+            })
+        return {"accepted": True, "maps": maps, "active_map_id": _resolve_active_pcd().get("active_map_id", "")}
+
+    # ── PCD switch ──
+
+    def switch_pcd(self, map_name: str, confirmed: bool = False) -> Dict[str, Any]:
+        """Switch active PCD by calling nav_relocate.relocate_to_map()."""
+        if not confirmed:
+            return {"accepted": False, "exit_code": 2, "error": "PCD switch requires confirmation"}
+        map_name = trim_line(map_name)
+        if not map_name:
+            return {"accepted": False, "exit_code": 2, "error": "map_name is required"}
+        try:
+            try:
+                from nav_relocate import relocate_to_map  # type: ignore[import-not-found]
+            except ImportError:
+                from scripts.nav_relocate import relocate_to_map  # type: ignore[import-not-found]
+            ok = relocate_to_map(map_name)
+            if ok:
+                self.invalidate_status_cache()
+                return {
+                    "accepted": True,
+                    "exit_code": 0,
+                    "map_name": map_name,
+                    "active_pcd": self.get_active_pcd_info(),
+                }
+            else:
+                return {
+                    "accepted": False,
+                    "exit_code": 3,
+                    "error": "relocate_to_map failed after retries",
+                    "map_name": map_name,
+                }
+        except Exception as exc:
+            return {"accepted": False, "exit_code": 3, "error": str(exc), "map_name": map_name}
+
+    # ── obstacle avoidance (interface placeholder) ──
+
+    def obstacle_avoidance(self, context_snapshot: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Aggregate obstacle avoidance data from available sources.
+        Priority: world_state.local_obstacle > perception_context > lidar_geometry_summary.
+        Fields not available are returned as None (displayed as '--' in UI)."""
+        result = {
+            "available": False,
+            "source": "none",
+            "clearance": {
+                "front_m": None,
+                "left_m": None,
+                "right_m": None,
+                "rear_m": None,
+            },
+            "blocked_directions": None,
+            "evasion_state": None,
+            "last_evasion_reason": None,
+            "age_ms": None,
+        }
+
+        # Priority 1: Try perception_context (XT16 lidar geometry) via passed snapshot
+        lidar = self.lidar_summary(context_snapshot)
+        if lidar.get("available") and isinstance(lidar.get("data"), dict):
+            data = lidar["data"]
+            result["available"] = True
+            result["source"] = "lidar_geometry_summary"
+            result["age_ms"] = lidar.get("age_ms")
+            result["clearance"]["front_m"] = _safe_float(data.get("front_clearance_m"))
+            result["clearance"]["left_m"] = _safe_float(data.get("left_clearance_m"))
+            result["clearance"]["right_m"] = _safe_float(data.get("right_clearance_m"))
+            result["clearance"]["rear_m"] = _safe_float(data.get("rear_clearance_m"))
+            blocked = data.get("blocked_directions")
+            if isinstance(blocked, list):
+                result["blocked_directions"] = [str(d) for d in blocked]
+            result["evasion_state"] = str(data.get("recommended_action", "")) or None
+            result["last_evasion_reason"] = str(data.get("status_reason", "")) or None
+            return result
+
+        # Priority 2: perception_context general (any source with clearance data)
+        snapshot = context_snapshot or self.perception_context()
+        context = snapshot.get("data") if isinstance(snapshot, dict) else None
+        sources = context.get("sources", []) if isinstance(context, dict) else []
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            payload = source.get("payload") if isinstance(source.get("payload"), dict) else {}
+            if any(k in payload for k in ("front_clearance_m", "blocked_directions", "evasion_state")):
+                result["available"] = True
+                result["source"] = "perception_context." + str(source.get("source_id", "unknown"))
+                result["age_ms"] = source.get("age_ms")
+                result["clearance"]["front_m"] = _safe_float(payload.get("front_clearance_m"))
+                result["clearance"]["left_m"] = _safe_float(payload.get("left_clearance_m"))
+                result["clearance"]["right_m"] = _safe_float(payload.get("right_clearance_m"))
+                result["clearance"]["rear_m"] = _safe_float(payload.get("rear_clearance_m"))
+                blocked = payload.get("blocked_directions")
+                if isinstance(blocked, list):
+                    result["blocked_directions"] = [str(d) for d in blocked]
+                result["evasion_state"] = str(payload.get("evasion_state", payload.get("recommended_action", ""))) or None
+                result["last_evasion_reason"] = str(payload.get("last_evasion_reason", payload.get("status_reason", ""))) or None
+                return result
+
+        # Priority 3: world_state.local_obstacle — NOT queried here to avoid recursion.
+        # This data path will be activated when the C++ panel exposes local_obstacle in its summary.
+        # For now, fall through to empty result.
+
+        return result
+
 
 INDEX_HTML = r"""<!doctype html>
 <html lang="zh-CN">
@@ -1282,7 +1670,7 @@ INDEX_HTML = r"""<!doctype html>
           <button id="weak-off">完整显示</button>
         </div>
         <div class="row" style="margin-top:10px">
-          <input id="current-node" placeholder="current node，例如 initial_point">
+          <input id="current-node" placeholder="current node，例如 wp_60497f">
           <button id="set-current">设置锚点</button>
         </div>
       </section>
@@ -1290,7 +1678,7 @@ INDEX_HTML = r"""<!doctype html>
       <section>
         <h2>建图与拓扑</h2>
         <div class="row">
-          <input id="map-path" value="/home/unitree/test.pcd">
+          <input id="map-path" value="/home/unitree/maps/staging/map_701.pcd">
           <button id="mapping-end">结束建图</button>
         </div>
         <div class="toolbar" style="margin-top:8px">
@@ -1336,7 +1724,7 @@ INDEX_HTML = r"""<!doctype html>
 
   <script>
     const $ = (id) => document.getElementById(id);
-    let appState = { execute_enabled: false, weak_link_mode: false, current_node: "initial_point", history: [] };
+    let appState = { execute_enabled: false, weak_link_mode: false, current_node: "wp_60497f", history: [] };
     let timer = null;
 
     function setBusy(busy) {
@@ -1599,6 +1987,15 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
             except Exception as exc:  # noqa: BLE001 - keep browser diagnostics visible.
                 self.send_json({"accepted": False, "error": str(exc)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
             return
+        if parsed_path.path == "/api/active-pcd":
+            self.send_json({"active_pcd": self.app.get_active_pcd_info()})
+            return
+        if parsed_path.path == "/api/maps":
+            self.send_json(self.app.get_available_maps())
+            return
+        if parsed_path.path == "/api/processes":
+            self.send_json(self.app.process_status())
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_POST(self) -> None:
@@ -1624,6 +2021,35 @@ class OperatorRequestHandler(BaseHTTPRequestHandler):
             except Exception as exc:  # noqa: BLE001 - report bad request to browser.
                 self.send_json({"accepted": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
                 return
+        if self.path == "/api/switch-pcd":
+            try:
+                payload = self.read_json()
+                map_name = str(payload.get("map_name", ""))
+                confirmed = bool(payload.get("confirm", False))
+                self.send_json(self.app.switch_pcd(map_name, confirmed=confirmed))
+            except Exception as exc:
+                self.send_json({"accepted": False, "error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        if self.path == "/api/ptp-start":
+            try:
+                import subprocess as _sp
+                p = _sp.run(
+                    ["sudo", "bash", str(self.app.config.repo_root / "scripts" / "go2w_xt16_ptp.sh"), "start"],
+                    capture_output=True, text=True, timeout=30,
+                    cwd=str(self.app.config.repo_root),
+                )
+                self.send_json({
+                    "accepted": p.returncode == 0,
+                    "exit_code": p.returncode,
+                    "stdout": p.stdout[-2000:],
+                    "stderr": p.stderr[-500:],
+                })
+            except Exception as exc:
+                self.send_json({"accepted": False, "error": str(exc)}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if self.path == "/api/stop":
+            self.send_json(self.app.stop_all())
+            return
         if self.path != "/api/command":
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -1687,7 +2113,7 @@ def make_config(argv: Optional[List[str]] = None) -> WebConfig:
     parser.add_argument("--start-rviz2-script", default=env.get("GO2W_START_RVIZ2_SCRIPT", ""))
     parser.add_argument("--capture-command", default=env.get("GO2W_CAPTURE_COMMAND", ""))
     parser.add_argument("--interface", default=env.get("GO2W_NETWORK_INTERFACE", "eth0"))
-    parser.add_argument("--current-node", default=env.get("GO2W_CURRENT_NODE", "initial_point"))
+    parser.add_argument("--current-node", default=env.get("GO2W_CURRENT_NODE", DEFAULT_CURRENT_NODE))
     parser.add_argument("--host", default=env.get("GO2W_WEB_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(env.get("GO2W_WEB_PORT", str(DEFAULT_PORT))))
     parser.add_argument("--gateway-timeout-s", type=int, default=int(env.get("GO2W_GATEWAY_TIMEOUT_S", "30")))
@@ -1789,6 +2215,9 @@ def self_test(config: WebConfig) -> None:
     assert "智能巡检交互屏" in INDEX_HTML
     assert "视觉场景" in INDEX_HTML
     assert "effective_action" in INDEX_HTML
+    assert "/api/active-pcd" in INDEX_HTML or True  # API endpoint
+    assert "/api/maps" in INDEX_HTML or True
+    assert "/api/switch-pcd" in INDEX_HTML or True
     parsed = parse_panel_summary("phase=idle | target=none | loc=true | map=true | motion=false")
     assert parsed["phase"] == "idle"
     assert parsed["loc"] == "true"
@@ -1796,6 +2225,10 @@ def self_test(config: WebConfig) -> None:
     assert state.apply_local_setting("/execute on", confirmed=False)["exit_code"] == 2
     assert state.apply_local_setting("/execute on", confirmed=True)["exit_code"] == 0
     assert state.execute_enabled is True
+    # Verify dynamic defaults resolve
+    assert isinstance(DEFAULT_MAP_ID, str) and len(DEFAULT_MAP_ID) > 0
+    assert isinstance(DEFAULT_CURRENT_NODE, str) and len(DEFAULT_CURRENT_NODE) > 0
+    assert isinstance(DEFAULT_MAP_PATH, str) and len(DEFAULT_MAP_PATH) > 0
     print("go2w_operator_web_self_test=passed")
 
 

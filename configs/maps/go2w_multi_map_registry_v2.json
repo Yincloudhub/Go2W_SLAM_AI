@@ -25,7 +25,7 @@
       "topology_path": "/home/unitree/maps/staging/map_701_topology.json",
       "frame_id": "map",
       "mapping_origin_anchor_id": "mapping_origin_701",
-      "description": "Auto-generated. Do not edit manually. Synced by build_multi_pcd.sh relocate.",
+      "description": "Gateway-facing compatibility wrapper for the measured map_701 topology.",
       "build_date": "2026-06-16",
       "build_gait": "standard",
       "relocalization_anchors": [
@@ -135,9 +135,560 @@
           "description": "从701帧内的快照提取。用于从露台切回701时做重定位种子。"
         }
       ],
-      "topology_nodes": [],
-      "topology_edges": [],
-      "transition_anchors": []
+      "topology_nodes": [
+        {
+          "node_id": "wp_60497f",
+          "name": "尹思园工位",
+          "node_type": "attributed",
+          "point_category": "person_station",
+          "aliases": [
+            "尹思园工位",
+            "wp_60497f",
+            "尹思园"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "person": "尹思园",
+            "area": "701中心过道，701中心区域",
+            "landmark": "位于701进门中心过道边缘"
+          },
+          "pose": {
+            "x": 0.3427942097187042,
+            "y": 0.2418585866689682,
+            "z": 0.0637761801481247,
+            "yaw": 0.05534504018950288,
+            "q_x": 0.02063470147550106,
+            "q_y": 0.002931780181825161,
+            "q_z": 0.02761412225663662,
+            "q_w": 0.999401330947876,
+            "name": "wp_60497f",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "尹思园工位。标定于 2026-06-17 15:15。",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "wp_b738c7",
+          "name": "701中心过道端点",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "aliases": [
+            "701中心过道端点",
+            "wp_b738c7"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "connects": "701过道",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "rotation_point"
+            ]
+          },
+          "pose": {
+            "x": 1.9244722127914429,
+            "y": -0.28541532158851624,
+            "z": 0.07341332733631134,
+            "yaw": -0.06029612287406987,
+            "q_x": 0.019373159855604172,
+            "q_y": 0.0007093490567058325,
+            "q_z": -0.030162833631038666,
+            "q_w": 0.9993569850921631,
+            "name": "wp_b738c7",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701中心过道端点。标定于 2026-06-17 15:17。",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "wp_bbcb4c",
+          "name": "赵博办公室门口",
+          "node_type": "attributed",
+          "point_category": "person_station",
+          "aliases": [
+            "赵博办公室门口",
+            "wp_bbcb4c",
+            "赵博"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "person": "赵博",
+            "landmark": "位于701办公室右侧过道端点",
+            "connects": "701过道",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "corridor_endpoint",
+              "rotation_point"
+            ]
+          },
+          "pose": {
+            "x": 1.806374430656433,
+            "y": -5.454979419708252,
+            "z": -0.054606471210718155,
+            "yaw": -1.6003284996429157,
+            "q_x": 0.026790807023644447,
+            "q_y": 0.00019184639677405357,
+            "q_z": -0.7174627780914307,
+            "q_w": 0.6960814595222473,
+            "name": "wp_bbcb4c",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "赵博办公室门口。标定于 2026-06-17 15:20。",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "wp_a684c6",
+          "name": "杨书洋工位",
+          "node_type": "attributed",
+          "point_category": "person_station",
+          "aliases": [
+            "杨书洋工位",
+            "wp_a684c6",
+            "杨书洋"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "person": "杨书洋",
+            "area": "701中心区域",
+            "landmark": "杨书洋工位，701右侧过道节点"
+          },
+          "pose": {
+            "x": -1.3153787851333618,
+            "y": -4.942294120788574,
+            "z": -0.07625369727611542,
+            "yaw": 3.083066014607835,
+            "q_x": 0.002184858312830329,
+            "q_y": -0.007806818000972271,
+            "q_z": -0.9995384812355042,
+            "q_w": -0.02927684597671032,
+            "name": "wp_a684c6",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "杨书洋工位。标定于 2026-06-17 15:22。",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "wp_2ae043",
+          "name": "701右侧过末端节点",
+          "node_type": "rotation_point",
+          "point_category": "rotation_spot",
+          "aliases": [
+            "701右侧过末端节点",
+            "wp_2ae043"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "rotation_space": "360°"
+          },
+          "pose": {
+            "x": -2.309776544570923,
+            "y": -5.278553485870361,
+            "z": -0.06835241615772247,
+            "yaw": 0.25140429394623487,
+            "q_x": -0.00818325113505125,
+            "q_y": -0.007602592930197716,
+            "q_z": -0.12530489265918732,
+            "q_w": -0.9920554161071777,
+            "name": "wp_2ae043",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701右侧过末端节点。标定于 2026-06-17 15:24。",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "wp_e643bc",
+          "name": "701门外走廊中心点",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "aliases": [
+            "701门外走廊中心点",
+            "wp_e643bc"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "connects": "701办公室，门外走廊",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "rotation_point"
+            ]
+          },
+          "pose": {
+            "x": -5.528209209442139,
+            "y": 0.13133755326271057,
+            "z": 0.21232907474040985,
+            "yaw": 3.1205530892942104,
+            "q_x": 0.0038655675016343594,
+            "q_y": 0.005480317398905754,
+            "q_z": -0.9999223947525024,
+            "q_w": -0.010498330928385258,
+            "name": "wp_e643bc",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701门外走廊中心点。标定于 2026-06-17 15:26。",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "transition_701_to_701_left",
+          "name": "701→701左侧过渡",
+          "node_type": "transition_anchor",
+          "point_category": "map_transition",
+          "aliases": [
+            "701→701左侧过渡",
+            "transition_701_to_701_left",
+            "map_701_left",
+            "mapping_origin_701_left"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "attributes": {
+            "connects_to": "map_701_left",
+            "reverse_anchor": "mapping_origin_701_left",
+            "rotation_space": "360deg"
+          },
+          "pose": {
+            "x": 2.5185554027557373,
+            "y": 3.688645124435425,
+            "z": 0.0,
+            "yaw": 1.611399323215663,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.7213154098478394,
+            "q_w": 0.6926067278882321,
+            "name": "transition_701_to_701_left",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "已填入 mark-transition 快照坐标 (2026-06-17 提取)",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "transition_701_to_terrace",
+          "name": "701→露台过渡",
+          "node_type": "transition_anchor",
+          "point_category": "map_transition",
+          "aliases": [
+            "701→露台过渡",
+            "transition_701_to_terrace",
+            "map_terrace_wc",
+            "mapping_origin_terrace"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "attributes": {
+            "connects_to": "map_terrace_wc",
+            "reverse_anchor": "mapping_origin_terrace",
+            "rotation_space": "360deg"
+          },
+          "pose": {
+            "x": -5.806680202484131,
+            "y": -7.653000831604004,
+            "z": 0.0,
+            "yaw": -1.5262926650006807,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.691198606491351,
+            "q_w": 0.7226648506634417,
+            "name": "transition_701_to_terrace",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "已填入 mark-transition 快照坐标 (2026-06-17 提取)",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "wp_832687",
+          "name": "露台水池",
+          "node_type": "attributed",
+          "point_category": "landmark",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台水池",
+            "wp_832687"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "name": "wp_832687",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台水池。标定于2026-06-18。"
+        },
+        {
+          "node_id": "wp_48cd1f",
+          "name": "露台走廊末端",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台走廊末端",
+            "wp_48cd1f"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 13.826,
+            "y": -0.569,
+            "z": 0.0,
+            "yaw": -0.092,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.046,
+            "q_w": 0.999,
+            "name": "wp_48cd1f",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台走廊末端。标定于2026-06-18。"
+        },
+        {
+          "node_id": "wp_4ff584",
+          "name": "露台门口",
+          "node_type": "attributed",
+          "point_category": "entrance",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台门口",
+            "wp_4ff584"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 15.264,
+            "y": -3.674,
+            "z": 0.0,
+            "yaw": -1.141,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.54,
+            "q_w": 0.842,
+            "name": "wp_4ff584",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台门口。标定于2026-06-18。"
+        },
+        {
+          "node_id": "wp_a98f89",
+          "name": "露台电梯口",
+          "node_type": "attributed",
+          "point_category": "entrance",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台电梯口",
+            "wp_a98f89"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 16.239,
+            "y": 1.41,
+            "z": 0.0,
+            "yaw": 1.482,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.675,
+            "q_w": 0.738,
+            "name": "wp_a98f89",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台电梯口。标定于2026-06-18。"
+        }
+      ],
+      "topology_edges": [
+        {
+          "from": "wp_60497f",
+          "to": "wp_b738c7",
+          "bidirectional": true,
+          "expected_distance_m": 1.667,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_60497f",
+          "to": "wp_e643bc",
+          "bidirectional": true,
+          "expected_distance_m": 5.87,
+          "distance_verified": false,
+          "description": "Direct origin-to-hallway shortcut (2026-06-18)."
+        },
+        {
+          "from": "wp_b738c7",
+          "to": "wp_bbcb4c",
+          "bidirectional": true,
+          "expected_distance_m": 5.171,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_bbcb4c",
+          "to": "wp_a684c6",
+          "bidirectional": true,
+          "expected_distance_m": 3.164,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_a684c6",
+          "to": "wp_2ae043",
+          "bidirectional": true,
+          "expected_distance_m": 1.05,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_2ae043",
+          "to": "wp_e643bc",
+          "bidirectional": true,
+          "expected_distance_m": 6.295,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_b738c7",
+          "to": "transition_701_to_701_left",
+          "bidirectional": true,
+          "expected_distance_m": 4.018,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_e643bc",
+          "to": "transition_701_to_terrace",
+          "bidirectional": true,
+          "expected_distance_m": 7.789,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_832687",
+          "to": "wp_48cd1f",
+          "bidirectional": true,
+          "expected_distance_m": 13.83,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
+        },
+        {
+          "from": "wp_48cd1f",
+          "to": "wp_4ff584",
+          "bidirectional": true,
+          "expected_distance_m": 3.42,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
+        },
+        {
+          "from": "wp_48cd1f",
+          "to": "wp_a98f89",
+          "bidirectional": true,
+          "expected_distance_m": 3.12,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
+        }
+      ],
+      "transition_anchors": [
+        {
+          "anchor_id": "transition_701_to_701_left",
+          "name": "701→701左侧过渡",
+          "pose": {
+            "x": 2.5185554027557373,
+            "y": 3.688645124435425,
+            "z": 0.0,
+            "yaw": 1.611399323215663,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.7213154098478394,
+            "q_w": 0.6926067278882321,
+            "name": "transition",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "connects_to": "map_701_left",
+          "reverse_anchor": "mapping_origin_701_left",
+          "note": "已填入 mark-transition 快照坐标 (2026-06-17 提取)"
+        },
+        {
+          "anchor_id": "transition_701_to_terrace",
+          "name": "701→露台过渡",
+          "pose": {
+            "x": -5.806680202484131,
+            "y": -7.653000831604004,
+            "z": 0.0,
+            "yaw": -1.5262926650006807,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.691198606491351,
+            "q_w": 0.7226648506634417,
+            "name": "transition",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "connects_to": "map_terrace_wc",
+          "reverse_anchor": "mapping_origin_terrace",
+          "note": "已填入 mark-transition 快照坐标 (2026-06-17 提取)"
+        }
+      ]
     },
     {
       "map_id": "map_701",
@@ -249,7 +800,8 @@
             "speed": 0.5,
             "mode": 0
           },
-          "description": "尹思园工位。标定于 2026-06-17 15:15。"
+          "description": "尹思园工位。标定于 2026-06-17 15:15。",
+          "pcd_owner": "map_701"
         },
         {
           "node_id": "wp_b738c7",
@@ -285,7 +837,8 @@
             "speed": 0.5,
             "mode": 0
           },
-          "description": "701中心过道端点。标定于 2026-06-17 15:17。"
+          "description": "701中心过道端点。标定于 2026-06-17 15:17。",
+          "pcd_owner": "map_701"
         },
         {
           "node_id": "wp_bbcb4c",
@@ -325,7 +878,8 @@
             "speed": 0.5,
             "mode": 0
           },
-          "description": "赵博办公室门口。标定于 2026-06-17 15:20。"
+          "description": "赵博办公室门口。标定于 2026-06-17 15:20。",
+          "pcd_owner": "map_701"
         },
         {
           "node_id": "wp_a684c6",
@@ -360,7 +914,8 @@
             "speed": 0.5,
             "mode": 0
           },
-          "description": "杨书洋工位。标定于 2026-06-17 15:22。"
+          "description": "杨书洋工位。标定于 2026-06-17 15:22。",
+          "pcd_owner": "map_701"
         },
         {
           "node_id": "wp_2ae043",
@@ -392,7 +947,8 @@
             "speed": 0.5,
             "mode": 0
           },
-          "description": "701右侧过末端节点。标定于 2026-06-17 15:24。"
+          "description": "701右侧过末端节点。标定于 2026-06-17 15:24。",
+          "pcd_owner": "map_701"
         },
         {
           "node_id": "wp_e643bc",
@@ -428,10 +984,144 @@
             "speed": 0.5,
             "mode": 0
           },
-          "description": "701门外走廊中心点。标定于 2026-06-17 15:26。"
+          "description": "701门外走廊中心点。标定于 2026-06-17 15:26。",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "transition_701_to_701_left",
+          "name": "701→701左侧过渡",
+          "node_type": "transition_anchor",
+          "point_category": "map_transition",
+          "aliases": [
+            "701→701左侧过渡",
+            "transition_701_to_701_left",
+            "map_701_left",
+            "mapping_origin_701_left"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "attributes": {
+            "connects_to": "map_701_left",
+            "reverse_anchor": "mapping_origin_701_left",
+            "rotation_space": "360deg"
+          },
+          "pose": {
+            "x": 2.5185554027557373,
+            "y": 3.688645124435425,
+            "z": 0.0,
+            "yaw": 1.611399323215663,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.7213154098478394,
+            "q_w": 0.6926067278882321,
+            "name": "transition_701_to_701_left",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "已填入 mark-transition 快照坐标 (2026-06-17 提取)",
+          "pcd_owner": "map_701"
+        },
+        {
+          "node_id": "transition_701_to_terrace",
+          "name": "701→露台过渡",
+          "node_type": "transition_anchor",
+          "point_category": "map_transition",
+          "aliases": [
+            "701→露台过渡",
+            "transition_701_to_terrace",
+            "map_terrace_wc",
+            "mapping_origin_terrace"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "attributes": {
+            "connects_to": "map_terrace_wc",
+            "reverse_anchor": "mapping_origin_terrace",
+            "rotation_space": "360deg"
+          },
+          "pose": {
+            "x": -5.806680202484131,
+            "y": -7.653000831604004,
+            "z": 0.0,
+            "yaw": -1.5262926650006807,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.691198606491351,
+            "q_w": 0.7226648506634417,
+            "name": "transition_701_to_terrace",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "已填入 mark-transition 快照坐标 (2026-06-17 提取)",
+          "pcd_owner": "map_701"
         }
       ],
-      "topology_edges": []
+      "topology_edges": [
+        {
+          "from": "wp_60497f",
+          "to": "wp_b738c7",
+          "bidirectional": true,
+          "expected_distance_m": 1.667,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_b738c7",
+          "to": "wp_bbcb4c",
+          "bidirectional": true,
+          "expected_distance_m": 5.171,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_bbcb4c",
+          "to": "wp_a684c6",
+          "bidirectional": true,
+          "expected_distance_m": 3.164,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_a684c6",
+          "to": "wp_2ae043",
+          "bidirectional": true,
+          "expected_distance_m": 1.05,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_2ae043",
+          "to": "wp_e643bc",
+          "bidirectional": true,
+          "expected_distance_m": 6.295,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_b738c7",
+          "to": "transition_701_to_701_left",
+          "bidirectional": true,
+          "expected_distance_m": 4.018,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        },
+        {
+          "from": "wp_e643bc",
+          "to": "transition_701_to_terrace",
+          "bidirectional": true,
+          "expected_distance_m": 7.789,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
+        }
+      ]
     },
     {
       "map_id": "map_701_left",
@@ -489,7 +1179,72 @@
           "note": "返回701中心区原点。"
         }
       ],
-      "topology_nodes": [],
+      "topology_nodes": [
+        {
+          "node_id": "wp_701_left_001",
+          "name": "701左侧待标定节点1",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "pcd_owner": "map_701_left",
+          "aliases": [
+            "701左侧待标定节点1",
+            "wp_701_left_001"
+          ],
+          "tags": [
+            "placeholder",
+            "needs_calibration"
+          ],
+          "attributes": {
+            "description": "701左侧区域入口附近，待标定。"
+          },
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "name": "wp_701_left_001",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "701左侧区域入口附近，待标定。"
+        },
+        {
+          "node_id": "wp_701_left_002",
+          "name": "701左侧待标定节点2",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "pcd_owner": "map_701_left",
+          "aliases": [
+            "701左侧待标定节点2",
+            "wp_701_left_002"
+          ],
+          "tags": [
+            "placeholder",
+            "needs_calibration"
+          ],
+          "attributes": {
+            "description": "701左侧区域深处，待标定。"
+          },
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "name": "wp_701_left_002",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "701左侧区域深处，待标定。"
+        }
+      ],
       "topology_edges": []
     },
     {
@@ -548,8 +1303,158 @@
           "note": "⚠️ reverse_anchor 修正: mapping_origin_701 → transition_701_to_terrace (后者有在701帧内的真实坐标)"
         }
       ],
-      "topology_nodes": [],
-      "topology_edges": []
+      "topology_nodes": [
+        {
+          "node_id": "wp_832687",
+          "name": "露台水池",
+          "node_type": "attributed",
+          "point_category": "landmark",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台水池",
+            "wp_832687"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.0,
+            "q_w": 1.0,
+            "name": "wp_832687",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台水池。标定于2026-06-18。"
+        },
+        {
+          "node_id": "wp_48cd1f",
+          "name": "露台走廊末端",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台走廊末端",
+            "wp_48cd1f"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 13.826,
+            "y": -0.569,
+            "z": 0.0,
+            "yaw": -0.092,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.046,
+            "q_w": 0.999,
+            "name": "wp_48cd1f",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台走廊末端。标定于2026-06-18。"
+        },
+        {
+          "node_id": "wp_4ff584",
+          "name": "露台门口",
+          "node_type": "attributed",
+          "point_category": "entrance",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台门口",
+            "wp_4ff584"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 15.264,
+            "y": -3.674,
+            "z": 0.0,
+            "yaw": -1.141,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.54,
+            "q_w": 0.842,
+            "name": "wp_4ff584",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台门口。标定于2026-06-18。"
+        },
+        {
+          "node_id": "wp_a98f89",
+          "name": "露台电梯口",
+          "node_type": "attributed",
+          "point_category": "entrance",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台电梯口",
+            "wp_a98f89"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 16.239,
+            "y": 1.41,
+            "z": 0.0,
+            "yaw": 1.482,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.675,
+            "q_w": 0.738,
+            "name": "wp_a98f89",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台电梯口。标定于2026-06-18。"
+        }
+      ],
+      "topology_edges": [
+        {
+          "from": "wp_832687",
+          "to": "wp_48cd1f",
+          "bidirectional": true,
+          "expected_distance_m": 13.83,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
+        },
+        {
+          "from": "wp_48cd1f",
+          "to": "wp_4ff584",
+          "bidirectional": true,
+          "expected_distance_m": 3.42,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
+        },
+        {
+          "from": "wp_48cd1f",
+          "to": "wp_a98f89",
+          "bidirectional": true,
+          "expected_distance_m": 3.12,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
+        }
+      ]
     }
   ]
 }

@@ -11,421 +11,540 @@
   "maps": [
     {
       "map_id": "go2w_real_site",
-      "name": "GO2W 真实现场拓扑",
+      "name": "GO2W real site map_701 compatibility",
       "status": "real",
-      "pcd_path": "/home/unitree/test.pcd",
-      "topology_path": "/home/unitree/topology_points.json",
+      "pcd_path": "/home/unitree/maps/staging/map_701.pcd",
+      "topology_path": "/home/unitree/maps/staging/map_701_topology.json",
       "frame_id": "map",
-      "description": "真实现场 PCD 与人工标注拓扑点，供机器狗本地 LLM 闭环使用。",
+      "description": "Gateway/Web/local compatibility registry for measured map_701 topology.",
       "topology_nodes": [
         {
-          "node_id": "initial_point",
-          "name": "初始点",
-          "node_type": "recorded_waypoint",
-          "aliases": [
-            "初始点",
-            "起始点",
-            "回到初始点",
-            "回起点",
-            "回来",
-            "返回",
-            "initial_point"
-          ],
-          "tags": [
-            "real_site",
-            "recorded",
-            "startup",
-            "safe_return",
-            "live_verified",
-            "ui_verified"
-          ],
-          "pose": {
-            "x": -0.39,
-            "y": 0.18,
-            "z": 0.0,
-            "yaw": -0.11,
-            "q_x": 0.0,
-            "q_y": 0.0,
-            "q_z": -0.05497227502706773,
-            "q_w": 0.9984878812375985,
-            "speed": 0.3,
-            "mode": 0
-          },
-          "description": "实验室入口初始位置，走廊与办公区交界处，四面开阔",
-          "verification": {
-            "verified_at": "2026-06-02T21:45:44+0800",
-            "source": "operator_ui_current_pose",
-            "distance_m": 0.213,
-            "current_pose": {
-              "x": -0.39,
-              "y": 0.18,
-              "yaw": -0.11
-            },
-            "previous_pose": {
-              "x": -0.25,
-              "y": 0.02,
-              "z": 0.0,
-              "yaw": -0.04,
-              "q_x": 0.0,
-              "q_y": 0.0,
-              "q_z": -0.01999866669333308,
-              "q_w": 0.9998000066665778,
-              "speed": 0.3,
-              "mode": 0
-            }
-          },
-          "area": "701入口走廊"
-        },
-        {
-          "node_id": "yin_siyuan_station",
+          "node_id": "wp_60497f",
           "name": "尹思园工位",
-          "node_type": "annotated_waypoint",
+          "node_type": "attributed",
+          "point_category": "person_station",
           "aliases": [
             "尹思园工位",
-            "尹思园",
-            "尹思园位置",
-            "yin_siyuan_station"
+            "wp_60497f",
+            "尹思园"
           ],
           "tags": [
             "real_site",
-            "pcd_annotated",
-            "workstation",
             "live_calibrated",
-            "live_verified",
-            "corner_enclosed"
+            "live_verified"
           ],
+          "attributes": {
+            "person": "尹思园",
+            "area": "701中心过道，701中心区域",
+            "landmark": "位于701进门中心过道边缘"
+          },
           "pose": {
-            "x": 1.5974299907684326,
-            "y": 0.3592859208583832,
-            "z": -0.010628879070281982,
-            "q_x": 0.014545116573572159,
-            "q_y": 0.01697041466832161,
-            "q_z": -0.003139750799164176,
-            "q_w": 0.99974524974823,
-            "speed": 0.3,
+            "x": 0.3427942097187042,
+            "y": 0.2418585866689682,
+            "z": 0.0637761801481247,
+            "yaw": 0.05534504018950288,
+            "q_x": 0.02063470147550106,
+            "q_y": 0.002931780181825161,
+            "q_z": 0.02761412225663662,
+            "q_w": 0.999401330947876,
+            "name": "wp_60497f",
+            "speed": 0.5,
             "mode": 0
           },
-          "description": "701左侧区域靠墙工位，三面被隔断包围，出口朝西通向走廊",
-          "calibration": {
-            "confirmed_at": "2026-05-22",
-            "source": "artifacts/real_site_pcd/yin_siyuan_calibration_20260522.json",
-            "method": "field_navigation_current_slam_pose",
-            "pcd_delta_m": 0.1923085248321673
-          },
-          "area": "701左侧办公区",
-          "exit_direction": "west"
+          "description": "尹思园工位。标定于 2026-06-17 15:15。"
         },
         {
-          "node_id": "chen_jiayu_station",
-          "name": "陈嘉瑜工位",
-          "node_type": "annotated_waypoint",
+          "node_id": "wp_b738c7",
+          "name": "701中心过道端点",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
           "aliases": [
-            "陈嘉瑜工位",
-            "陈嘉瑜",
-            "陈嘉瑜位置",
-            "chen_jiayu_station"
+            "701中心过道端点",
+            "wp_b738c7"
           ],
           "tags": [
             "real_site",
-            "workstation",
             "live_calibrated",
-            "prone_observed",
-            "standard_prone_pose",
-            "live_verified",
-            "ui_verified",
-            "needs_standing_verification"
+            "live_verified"
           ],
+          "attributes": {
+            "connects": "701过道",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "rotation_point"
+            ]
+          },
           "pose": {
-            "x": -1.1047908067703247,
-            "y": -0.6664881110191345,
-            "z": 0.0,
-            "yaw": 1.5275480012859097,
-            "q_x": 0.0,
-            "q_y": 0.0,
-            "q_z": 0.6916520640112973,
-            "q_w": 0.7222308649932598,
-            "speed": 0.3,
+            "x": 1.9244722127914429,
+            "y": -0.28541532158851624,
+            "z": 0.07341332733631134,
+            "yaw": -0.06029612287406987,
+            "q_x": 0.019373159855604172,
+            "q_y": 0.0007093490567058325,
+            "q_z": -0.030162833631038666,
+            "q_w": 0.9993569850921631,
+            "name": "wp_b738c7",
+            "speed": 0.5,
             "mode": 0
           },
-          "description": "701左侧区域居中工位，面向走廊方向",
-          "calibration_observation": {
-            "captured_at": "2026-06-01T14:57:00+08:00",
-            "source": "gateway_world_state.rt/slam_info",
-            "robot_posture": "prone",
-            "localization_status": "localized",
-            "slam_health": "ok",
-            "pose": {
-              "x": -1.1047908067703247,
-              "y": -0.6664881110191345,
-              "z": 0.04458674043416977,
-              "yaw": 1.5275480012859097,
-              "q_x": 0.015116733498871326,
-              "q_y": 0.00804204773157835,
-              "q_z": 0.6916059851646423,
-              "q_w": 0.7220719456672668,
-              "speed": 0.800000011920929,
-              "mode": 0
-            }
-          },
-          "verification": {
-            "verified_at": "2026-06-01T20:12:00+0800",
-            "source": "operator_ui_current_pose",
-            "distance_m": 0.223,
-            "current_pose": {
-              "x": -1.16,
-              "y": -0.45,
-              "yaw": 1.55
-            }
-          },
-          "area": "701左侧办公区"
+          "description": "701中心过道端点。标定于 2026-06-17 15:17。"
         },
         {
-          "node_id": "yang_shuyang_station",
-          "name": "杨书洋工位",
-          "node_type": "annotated_waypoint",
-          "aliases": [
-            "杨书洋工位",
-            "杨书洋",
-            "杨书洋位置",
-            "yang_shuyang_station"
-          ],
-          "tags": [
-            "real_site",
-            "pcd_annotated",
-            "workstation",
-            "live_verified",
-            "ui_verified"
-          ],
-          "pose": {
-            "x": 0.07719039916992188,
-            "y": -4.940850067138673,
-            "z": 0.0,
-            "q_x": 0.0,
-            "q_y": 0.0,
-            "q_z": 0.0,
-            "q_w": 1.0,
-            "speed": 0.3,
-            "mode": 0
-          },
-          "description": "702区域工位，需经走廊南下再西转",
-          "verification": {
-            "verified_at": "2026-06-01T20:15:51+0800",
-            "source": "operator_ui_current_pose",
-            "distance_m": 0.219,
-            "current_pose": {
-              "x": -0.01,
-              "y": -4.74,
-              "yaw": 3.1
-            }
-          },
-          "area": "702办公区"
-        },
-        {
-          "node_id": "zhao_bo_office_front",
+          "node_id": "wp_bbcb4c",
           "name": "赵博办公室门口",
-          "node_type": "annotated_waypoint",
+          "node_type": "attributed",
+          "point_category": "person_station",
           "aliases": [
             "赵博办公室门口",
-            "赵博老师办公室门口",
-            "赵博办公室",
-            "赵博门口",
-            "赵博",
-            "赵博老师",
-            "zhao_bo_office_front"
+            "wp_bbcb4c",
+            "赵博"
           ],
           "tags": [
             "real_site",
-            "pcd_annotated",
-            "office",
-            "photo_required",
-            "live_verified",
-            "ui_verified"
+            "live_calibrated",
+            "live_verified"
           ],
+          "attributes": {
+            "person": "赵博",
+            "landmark": "位于701办公室右侧过道端点",
+            "connects": "701过道",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "corridor_endpoint",
+              "rotation_point"
+            ]
+          },
           "pose": {
-            "x": 3.077190399169922,
-            "y": -5.528350067138671,
+            "x": 1.806374430656433,
+            "y": -5.454979419708252,
+            "z": -0.054606471210718155,
+            "yaw": -1.6003284996429157,
+            "q_x": 0.026790807023644447,
+            "q_y": 0.00019184639677405357,
+            "q_z": -0.7174627780914307,
+            "q_w": 0.6960814595222473,
+            "name": "wp_bbcb4c",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "赵博办公室门口。标定于 2026-06-17 15:20。"
+        },
+        {
+          "node_id": "wp_a684c6",
+          "name": "杨书洋工位",
+          "node_type": "attributed",
+          "point_category": "person_station",
+          "aliases": [
+            "杨书洋工位",
+            "wp_a684c6",
+            "杨书洋"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "person": "杨书洋",
+            "area": "701中心区域",
+            "landmark": "杨书洋工位，701右侧过道节点"
+          },
+          "pose": {
+            "x": -1.3153787851333618,
+            "y": -4.942294120788574,
+            "z": -0.07625369727611542,
+            "yaw": 3.083066014607835,
+            "q_x": 0.002184858312830329,
+            "q_y": -0.007806818000972271,
+            "q_z": -0.9995384812355042,
+            "q_w": -0.02927684597671032,
+            "name": "wp_a684c6",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "杨书洋工位。标定于 2026-06-17 15:22。"
+        },
+        {
+          "node_id": "wp_2ae043",
+          "name": "701右侧过末端节点",
+          "node_type": "rotation_point",
+          "point_category": "rotation_spot",
+          "aliases": [
+            "701右侧过末端节点",
+            "wp_2ae043"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "rotation_space": "360°"
+          },
+          "pose": {
+            "x": -2.309776544570923,
+            "y": -5.278553485870361,
+            "z": -0.06835241615772247,
+            "yaw": 0.25140429394623487,
+            "q_x": -0.00818325113505125,
+            "q_y": -0.007602592930197716,
+            "q_z": -0.12530489265918732,
+            "q_w": -0.9920554161071777,
+            "name": "wp_2ae043",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701右侧过末端节点。标定于 2026-06-17 15:24。"
+        },
+        {
+          "node_id": "wp_e643bc",
+          "name": "701门外走廊中心点",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "aliases": [
+            "701门外走廊中心点",
+            "wp_e643bc"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {
+            "connects": "701办公室，门外走廊",
+            "rotation_space": "360°",
+            "secondary_types": [
+              "rotation_point"
+            ]
+          },
+          "pose": {
+            "x": -5.528209209442139,
+            "y": 0.13133755326271057,
+            "z": 0.21232907474040985,
+            "yaw": 3.1205530892942104,
+            "q_x": 0.0038655675016343594,
+            "q_y": 0.005480317398905754,
+            "q_z": -0.9999223947525024,
+            "q_w": -0.010498330928385258,
+            "name": "wp_e643bc",
+            "speed": 0.5,
+            "mode": 0
+          },
+          "description": "701门外走廊中心点。标定于 2026-06-17 15:26。"
+        },
+        {
+          "node_id": "transition_701_to_701_left",
+          "name": "701→701左侧过渡",
+          "node_type": "transition_anchor",
+          "point_category": "map_transition",
+          "aliases": [
+            "701→701左侧过渡",
+            "transition_701_to_701_left",
+            "map_701_left",
+            "mapping_origin_701_left"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "attributes": {
+            "connects_to": "map_701_left",
+            "reverse_anchor": "mapping_origin_701_left",
+            "rotation_space": "360deg"
+          },
+          "pose": {
+            "x": 2.5185554027557373,
+            "y": 3.688645124435425,
             "z": 0.0,
+            "yaw": 1.611399323215663,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.7213154098478394,
+            "q_w": 0.6926067278882321,
+            "name": "transition_701_to_701_left",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "已填入 mark-transition 快照坐标 (2026-06-17 提取)"
+        },
+        {
+          "node_id": "transition_701_to_terrace",
+          "name": "701→露台过渡",
+          "node_type": "transition_anchor",
+          "point_category": "map_transition",
+          "aliases": [
+            "701→露台过渡",
+            "transition_701_to_terrace",
+            "map_terrace_wc",
+            "mapping_origin_terrace"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "attributes": {
+            "connects_to": "map_terrace_wc",
+            "reverse_anchor": "mapping_origin_terrace",
+            "rotation_space": "360deg"
+          },
+          "pose": {
+            "x": -5.806680202484131,
+            "y": -7.653000831604004,
+            "z": 0.0,
+            "yaw": -1.5262926650006807,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.691198606491351,
+            "q_w": 0.7226648506634417,
+            "name": "transition_701_to_terrace",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "已填入 mark-transition 快照坐标 (2026-06-17 提取)"
+        },
+        {
+          "node_id": "wp_832687",
+          "name": "露台水池",
+          "node_type": "attributed",
+          "point_category": "landmark",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台水池",
+            "wp_832687"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
             "q_x": 0.0,
             "q_y": 0.0,
             "q_z": 0.0,
             "q_w": 1.0,
-            "speed": 0.3,
+            "name": "wp_832687",
+            "speed": 0.0,
             "mode": 0
           },
-          "description": "赵博办公室门口，701右侧尽头，需经走廊再南下聂国力办公室到达",
-          "verification": {
-            "verified_at": "2026-06-01T20:15:04+0800",
-            "source": "operator_ui_current_pose",
-            "distance_m": 0.13,
-            "current_pose": {
-              "x": 3.17,
-              "y": -5.62,
-              "yaw": -0.02
-            }
-          },
-          "area": "701右侧办公区"
+          "description": "露台水池。标定于2026-06-18。"
         },
         {
-          "node_id": "room_701_corridor",
-          "name": "701门外走廊",
-          "node_type": "annotated_waypoint",
+          "node_id": "wp_48cd1f",
+          "name": "露台走廊末端",
+          "node_type": "corridor_endpoint",
+          "point_category": "passage_waypoint",
+          "pcd_owner": "map_terrace_wc",
           "aliases": [
-            "701门外走廊",
-            "701门口",
-            "701走廊",
-            "room_701_corridor"
+            "露台走廊末端",
+            "wp_48cd1f"
           ],
           "tags": [
             "real_site",
-            "pcd_annotated",
-            "701",
-            "corridor",
-            "photo_required",
-            "needs_calibration"
+            "live_calibrated",
+            "live_verified"
           ],
+          "attributes": {},
           "pose": {
-            "x": -4.210309600830078,
-            "y": -0.19085006713867259,
+            "x": 13.826,
+            "y": -0.569,
             "z": 0.0,
+            "yaw": -0.092,
             "q_x": 0.0,
             "q_y": 0.0,
-            "q_z": 0.0,
-            "q_w": 1.0,
-            "speed": 0.3,
+            "q_z": -0.046,
+            "q_w": 0.999,
+            "name": "wp_48cd1f",
+            "speed": 0.0,
             "mode": 0
           },
-          "description": "701门外走廊，连接电梯间与701办公区的主通道",
-          "area": "走廊"
+          "description": "露台走廊末端。标定于2026-06-18。"
         },
         {
-          "node_id": "nie_guoli_office_front",
-          "name": "聂国篱办公室门口",
-          "node_type": "recorded_waypoint",
+          "node_id": "wp_4ff584",
+          "name": "露台门口",
+          "node_type": "attributed",
+          "point_category": "entrance",
+          "pcd_owner": "map_terrace_wc",
           "aliases": [
-            "聂国篱办公室门口",
-            "聂国篱办公室",
-            "聂国篱门口",
-            "聂国篱",
-            "nie_guoli_office_front",
-            "wp_1"
+            "露台门口",
+            "wp_4ff584"
           ],
           "tags": [
             "real_site",
-            "recorded",
-            "office",
-            "doorway",
-            "live_verified",
-            "live_calibrated"
+            "live_calibrated",
+            "live_verified"
           ],
+          "attributes": {},
           "pose": {
-            "x": 3.2489,
-            "y": -3.4457,
-            "z": -0.03357435762882233,
-            "q_x": 0.01912033185362816,
-            "q_y": 0.016667384654283524,
-            "q_z": -0.722239077091217,
-            "q_w": 0.6914089918136597,
-            "speed": 0.3,
-            "mode": 0,
-            "yaw": -1.6228
+            "x": 15.264,
+            "y": -3.674,
+            "z": 0.0,
+            "yaw": -1.141,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": -0.54,
+            "q_w": 0.842,
+            "name": "wp_4ff584",
+            "speed": 0.0,
+            "mode": 0
           },
-          "description": "聂国篱办公室门口，701右侧走廊中途，通往赵博办公室的必经点",
-          "area": "701右侧办公区"
+          "description": "露台门口。标定于2026-06-18。"
+        },
+        {
+          "node_id": "wp_a98f89",
+          "name": "露台电梯口",
+          "node_type": "attributed",
+          "point_category": "entrance",
+          "pcd_owner": "map_terrace_wc",
+          "aliases": [
+            "露台电梯口",
+            "wp_a98f89"
+          ],
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "attributes": {},
+          "pose": {
+            "x": 16.239,
+            "y": 1.41,
+            "z": 0.0,
+            "yaw": 1.482,
+            "q_x": 0.0,
+            "q_y": 0.0,
+            "q_z": 0.675,
+            "q_w": 0.738,
+            "name": "wp_a98f89",
+            "speed": 0.0,
+            "mode": 0
+          },
+          "description": "露台电梯口。标定于2026-06-18。"
         }
       ],
       "topology_edges": [
         {
-          "from": "initial_point",
-          "to": "yin_siyuan_station",
+          "from": "wp_60497f",
+          "to": "wp_b738c7",
           "bidirectional": true,
-          "expected_distance_m": 0.7,
-          "description": "初始点到尹思园工位的候选路径。"
+          "expected_distance_m": 1.667,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
         },
         {
-          "from": "initial_point",
-          "to": "zhao_bo_office_front",
+          "from": "wp_60497f",
+          "to": "wp_e643bc",
           "bidirectional": true,
-          "expected_distance_m": 4.6,
-          "description": "初始点到赵博办公室门口的候选路径。"
+          "expected_distance_m": 5.87,
+          "distance_verified": false,
+          "description": "Direct origin-to-hallway shortcut (2026-06-18)."
         },
         {
-          "from": "initial_point",
-          "to": "room_701_corridor",
+          "from": "wp_b738c7",
+          "to": "wp_bbcb4c",
           "bidirectional": true,
-          "expected_distance_m": 4.7,
-          "description": "初始点到 701门外走廊 的候选路径。"
+          "expected_distance_m": 5.171,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
         },
         {
-          "from": "yin_siyuan_station",
-          "to": "zhao_bo_office_front",
+          "from": "wp_bbcb4c",
+          "to": "wp_a684c6",
           "bidirectional": true,
-          "expected_distance_m": 5.0,
-          "description": "尹思园工位到赵博办公室门口的候选路径。"
+          "expected_distance_m": 3.164,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
         },
         {
-          "from": "yin_siyuan_station",
-          "to": "room_701_corridor",
+          "from": "wp_a684c6",
+          "to": "wp_2ae043",
           "bidirectional": true,
-          "expected_distance_m": 5.1,
-          "description": "尹思园工位到 701门外走廊 的候选路径。"
+          "expected_distance_m": 1.05,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
         },
         {
-          "from": "initial_point",
-          "to": "nie_guoli_office_front",
+          "from": "wp_2ae043",
+          "to": "wp_e643bc",
           "bidirectional": true,
-          "expected_distance_m": 2.9,
-          "description": "录制点 wp_1 候选路径，现场确认为聂国篱办公室门口。"
+          "expected_distance_m": 6.295,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
         },
         {
-          "from": "yin_siyuan_station",
-          "to": "nie_guoli_office_front",
+          "from": "wp_b738c7",
+          "to": "transition_701_to_701_left",
           "bidirectional": true,
-          "expected_distance_m": 3.1,
-          "description": "录制点 wp_1 候选路径，现场确认为聂国篱办公室门口。"
+          "expected_distance_m": 4.018,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
         },
         {
-          "from": "initial_point",
-          "to": "yang_shuyang_station",
+          "from": "wp_e643bc",
+          "to": "transition_701_to_terrace",
           "bidirectional": true,
-          "expected_distance_m": 5.2,
-          "description": "PCD test513 候选路径：初始点到杨书洋工位。"
+          "expected_distance_m": 7.789,
+          "distance_verified": false,
+          "description": "Declared live topology edge for map_701 no-motion dry-run routing."
         },
         {
-          "from": "yang_shuyang_station",
-          "to": "zhao_bo_office_front",
+          "from": "wp_832687",
+          "to": "wp_48cd1f",
           "bidirectional": true,
-          "expected_distance_m": 2.9,
-          "description": "PCD test513 候选路径：杨书洋工位到赵博办公室门口。"
+          "expected_distance_m": 13.83,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
         },
         {
-          "from": "yang_shuyang_station",
-          "to": "nie_guoli_office_front",
+          "from": "wp_48cd1f",
+          "to": "wp_4ff584",
           "bidirectional": true,
-          "expected_distance_m": 3.5,
-          "description": "PCD test513 候选路径：杨书洋工位到聂国篱办公室门口。"
+          "expected_distance_m": 3.42,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
+        },
+        {
+          "from": "wp_48cd1f",
+          "to": "wp_a98f89",
+          "bidirectional": true,
+          "expected_distance_m": 3.12,
+          "distance_verified": false,
+          "description": "Terrace edge (2026-06-18)."
         }
       ],
       "relocalization_anchors": [
         {
           "anchor_id": "mapping_origin",
           "name": "mapping_origin",
-          "status": "verified_startup_relocalization_20260601",
-          "allowed_radius_m": 1.5,
-          "allowed_yaw_error_deg": 30.0,
           "pose": {
             "x": 0.0,
             "y": 0.0,
             "z": 0.0,
+            "yaw": 0.0,
             "q_x": 0.0,
             "q_y": 0.0,
             "q_z": 0.0,
             "q_w": 1.0,
-            "yaw": 0.0,
+            "name": "mapping_origin",
             "speed": 0.0,
             "mode": 0
           },
-          "description": "Startup relocalization anchor verified on 2026-06-01 after SLAM restart; ICP Score 0.0165342 and relocation succeeded."
-        },
+          "allowed_radius_m": 1.5,
+          "allowed_yaw_error_deg": 30.0,
+          "status": "verified_map_701_origin_20260617",
+          "description": "Compatibility anchor for go2w_real_site; pose mirrors map_701 mapping origin."
+        }
+      ],
+      "archived_relocalization_anchors": [
         {
           "anchor_id": "yin_siyuan_station",
           "name": "尹思园工位",
@@ -444,9 +563,7 @@
           "allowed_yaw_error_deg": 30.0,
           "status": "verified_startup_relocalization_20260615",
           "description": "候选重定位锚点：尹思园工位。"
-        }
-      ],
-      "archived_relocalization_anchors": [
+        },
         {
           "anchor_id": "initial_point",
           "name": "初始点",

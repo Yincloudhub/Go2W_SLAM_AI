@@ -36,18 +36,19 @@
     header {
       position: sticky;
       top: 0;
-      z-index: 3;
+      z-index: 10;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      padding: 13px 18px;
+      padding: 10px 18px;
       border-bottom: 1px solid var(--line);
       background: rgba(255, 255, 255, .96);
+      backdrop-filter: blur(6px);
     }
     h1, h2, h3, p { margin: 0; }
-    h1 { font-size: 18px; letter-spacing: 0; }
-    h2 { margin-bottom: 10px; font-size: 15px; letter-spacing: 0; }
+    h1 { font-size: 17px; letter-spacing: 0; }
+    h2 { font-size: 14px; letter-spacing: 0; user-select: none; }
     h3 { font-size: 13px; letter-spacing: 0; }
     .brand small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
     main {
@@ -58,12 +59,52 @@
       margin: 0 auto;
       padding: 14px;
     }
-    section {
+
+    /* ── Collapsible sections ── */
+    .section-block {
       border: 1px solid var(--line);
       border-radius: 7px;
       background: var(--surface);
-      padding: 13px;
+      overflow: hidden;
     }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 14px;
+      cursor: pointer;
+      background: var(--surface);
+      transition: background .12s;
+    }
+    .section-head:hover { background: var(--surface-soft); }
+    .section-head h2 { flex: 1; }
+    .section-arrow {
+      display: inline-block;
+      transition: transform .2s;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .section-block.collapsed .section-arrow { transform: rotate(-90deg); }
+    .section-body { padding: 0 14px 13px; }
+    .section-block.collapsed .section-body { display: none; }
+    .section-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .section-status .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    .dot.danger { background: var(--danger); }
+    .dot.off { background: #c0c7c5; }
+
     .stack { display: grid; gap: 12px; align-content: start; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
     .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: center; }
@@ -75,29 +116,52 @@
       color: var(--ink);
       font: inherit;
     }
-    button { min-height: 34px; padding: 7px 10px; cursor: pointer; font-weight: 650; }
+    button { min-height: 34px; padding: 7px 12px; cursor: pointer; font-weight: 650; white-space: nowrap; }
     button:hover { border-color: #9eb4b0; }
     button:disabled { cursor: wait; opacity: .55; }
     button.primary { border-color: var(--brand); background: var(--brand); color: #fff; }
     button.secondary { border-color: var(--blue); background: var(--blue); color: #fff; }
     button.danger { border-color: #efb5ae; background: #fff3f1; color: var(--danger); }
+    button.ptp-btn { border-color: #c4b5e0; background: #6b3fa0; color: #fff; font-size: 13px; }
     input, select { min-height: 34px; width: 100%; padding: 7px 9px; }
-    textarea { min-height: 86px; width: 100%; padding: 9px; resize: vertical; }
+    textarea { min-height: 80px; width: 100%; padding: 9px; resize: vertical; }
     .pill {
       display: inline-flex;
       align-items: center;
+      gap: 5px;
       min-height: 26px;
       border: 1px solid var(--line);
       border-radius: 999px;
       background: var(--surface-soft);
       color: var(--muted);
-      padding: 3px 8px;
+      padding: 3px 9px;
       font-size: 12px;
       white-space: nowrap;
     }
     .pill.ok { border-color: #a4d2b7; background: #eef9f2; color: var(--ok); }
     .pill.warn { border-color: #e0bf84; background: #fff8e8; color: var(--warn); }
     .pill.danger { border-color: #efb5ae; background: #fff3f1; color: var(--danger); }
+
+    /* ── Process grid ── */
+    .proc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+    .proc-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      padding: 6px 9px;
+      font-size: 12px;
+    }
+    .proc-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .proc-item .status { font-weight: 650; font-size: 11px; }
+    .proc-item.on .status { color: var(--ok); }
+    .proc-item.off .status { color: var(--danger); }
+    .proc-item .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .proc-item.on .dot { background: var(--ok); }
+    .proc-item.off .dot { background: #c0c7c5; }
+
     .screen {
       overflow: hidden;
       border: 1px solid #1b3734;
@@ -113,55 +177,77 @@
       padding: 11px 13px;
       border-bottom: 1px solid var(--screen-line);
       background: #102321;
+      cursor: pointer;
     }
-    .screen-head small { display: block; color: var(--screen-muted); }
     .screen-body { display: grid; gap: 12px; padding: 15px; }
+    .screen.collapsed .screen-body { display: none; }
     .reply {
-      min-height: 116px;
+      min-height: 100px;
       border-left: 3px solid #63d6c5;
       padding: 3px 0 3px 13px;
     }
     .reply-label { color: var(--screen-muted); font-size: 12px; }
-    .reply strong { display: block; margin-top: 7px; font-size: 23px; line-height: 1.25; letter-spacing: 0; }
+    .reply strong { display: block; margin-top: 7px; font-size: 22px; line-height: 1.25; }
     .reply p { margin-top: 7px; color: var(--screen-muted); }
     .screen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .screen-cell {
-      min-height: 76px;
+      min-height: 70px;
       border: 1px solid var(--screen-line);
       border-radius: 6px;
       background: var(--screen-soft);
       padding: 9px;
     }
     .screen-cell label { display: block; color: var(--screen-muted); font-size: 12px; }
-    .screen-cell strong { display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 14px; }
-    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-    .metric { min-height: 66px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); padding: 8px; }
-    .metric label { display: block; color: var(--muted); font-size: 12px; }
-    .metric strong { display: block; margin-top: 5px; overflow-wrap: anywhere; font-size: 13px; }
-    .history { display: grid; max-height: 190px; overflow: auto; gap: 6px; }
-    .history div { border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); padding: 7px 8px; overflow-wrap: anywhere; }
-    .topology-list { display: grid; max-height: 330px; overflow: auto; gap: 8px; }
+    .screen-cell strong { display: block; margin-top: 6px; overflow-wrap: anywhere; font-size: 13px; }
+
+    .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 7px; }
+    .metric {
+      min-height: 58px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      padding: 7px 8px;
+    }
+    .metric label { display: block; color: var(--muted); font-size: 11px; }
+    .metric strong { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 12px; }
+
+    .history { display: grid; max-height: 180px; overflow: auto; gap: 5px; }
+    .history div {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      padding: 6px 8px;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+    }
+    .topology-list { display: grid; max-height: 350px; overflow: auto; gap: 7px; }
     .node-card {
       display: grid;
-      gap: 7px;
+      gap: 6px;
       border: 1px solid var(--line);
       border-radius: 7px;
       background: var(--surface-soft);
-      padding: 9px;
+      padding: 8px;
     }
     .node-card.disabled { opacity: .62; }
-    .node-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .node-head { display: flex; justify-content: space-between; gap: 6px; align-items: flex-start; }
     .node-title { display: grid; gap: 2px; min-width: 0; }
     .node-title strong, .node-title small { overflow-wrap: anywhere; }
     .tags { display: flex; flex-wrap: wrap; gap: 4px; }
-    .tag { border: 1px solid var(--line); border-radius: 999px; background: #fff; padding: 2px 6px; color: var(--muted); font-size: 11px; }
+    .tag {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      padding: 2px 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
     .tag.warn { border-color: #e0bf84; background: #fff8e8; color: var(--warn); }
     .tag.danger { border-color: #efb5ae; background: #fff3f1; color: var(--danger); }
-    details { border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
-    summary { cursor: pointer; padding: 11px 13px; font-weight: 700; }
+
     pre {
-      min-height: 220px;
-      max-height: 42vh;
+      min-height: 200px;
+      max-height: 40vh;
       margin: 0;
       overflow: auto;
       border-top: 1px solid #263b39;
@@ -173,20 +259,21 @@
       font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     .muted { color: var(--muted); font-size: 12px; }
+
     @media (max-width: 1050px) {
       main { grid-template-columns: 1fr; }
     }
     @media (max-width: 700px) {
       header { align-items: flex-start; flex-direction: column; }
-      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .screen-grid { grid-template-columns: 1fr; }
+      .proc-grid { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 480px) {
       main { padding: 9px; gap: 9px; }
-      section { padding: 10px; }
       .row { grid-template-columns: 1fr; }
       button { width: 100%; }
-      .reply strong { font-size: 19px; }
+      .reply strong { font-size: 18px; }
+      .proc-grid { grid-template-columns: 1fr 1fr; }
     }
   </style>
 </head>
@@ -198,81 +285,154 @@
     </div>
     <div class="toolbar">
       <span id="conn" class="pill warn">连接检查中</span>
+      <span id="active-pcd-pill" class="pill">PCD: 读取中</span>
       <span id="exec-pill" class="pill">仅预演</span>
       <span id="weak-pill" class="pill">标准链路</span>
-      <button id="refresh" class="primary" title="立即刷新机器人状态">刷新状态</button>
+      <button id="stop-task" class="danger" title="终止巡逻/导航任务">⏹ 终止任务</button>
+      <button id="refresh" class="primary" title="立即刷新">刷新</button>
     </div>
   </header>
+
   <main>
+    <!-- ═══════════ LEFT COLUMN ═══════════ -->
     <div class="stack">
-      <section>
-        <h2>运行控制</h2>
-        <div class="toolbar">
-          <button id="start-slam" class="secondary">一键就绪：雷达 + SLAM</button>
-          <button id="exec-toggle" class="danger">允许真实执行</button>
-          <button id="weak-toggle">启用弱网摘要</button>
+
+      <!-- 1. 服务进程状态 (always visible) -->
+      <div class="section-block" id="sect-processes">
+        <div class="section-head" onclick="toggleSection('sect-processes')">
+          <h2>服务进程</h2>
+          <span class="section-status"><span class="dot off" id="proc-dot"></span><span id="proc-summary">检查中…</span></span>
+          <span class="section-arrow">▼</span>
         </div>
-        <details style="margin-top:10px">
-          <summary>高级运行设置</summary>
-          <div class="field-stack" style="padding:0 11px 11px">
-            <div class="row">
-              <input id="current-node" placeholder="当前导航拓扑点，例如 initial_point（不用于重定位）">
-              <button id="set-current">保存导航拓扑点</button>
-            </div>
+        <div class="section-body">
+          <div class="proc-grid" id="proc-grid">
+            <div class="proc-item off"><span class="dot"></span><span class="label">xt16_driver</span><span class="status">--</span></div>
+            <div class="proc-item off"><span class="dot"></span><span class="label">unitree_slam</span><span class="status">--</span></div>
+            <div class="proc-item off"><span class="dot"></span><span class="label">perception</span><span class="status">--</span></div>
+            <div class="proc-item off"><span class="dot"></span><span class="label">sport_bridge</span><span class="status">--</span></div>
+            <div class="proc-item off"><span class="dot"></span><span class="label">gateway</span><span class="status">--</span></div>
+            <div class="proc-item off"><span class="dot"></span><span class="label">ptp4l</span><span class="status">--</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 运行控制 -->
+      <div class="section-block" id="sect-control">
+        <div class="section-head" onclick="toggleSection('sect-control')">
+          <h2>运行控制</h2>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-body">
+          <div class="toolbar">
+            <button id="start-slam" class="secondary">一键就绪：雷达 + SLAM</button>
+            <button id="exec-toggle" class="danger">允许真实执行</button>
+            <button id="weak-toggle">启用弱网摘要</button>
+          </div>
+          <div class="toolbar" style="margin-top:8px">
+            <button id="ptp-start-btn" class="ptp-btn" title="启动 PTP 时间同步（XT16 雷达必需）">⚡ PTP + 驱动</button>
+            <span class="muted" id="ptp-feedback"></span>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <input id="current-node" placeholder="当前导航拓扑点，例如 wp_60497f">
+            <button id="set-current">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 重定位 (always visible!) -->
+      <div class="section-block" id="sect-relocate">
+        <div class="section-head" onclick="toggleSection('sect-relocate')">
+          <h2>重定位</h2>
+          <span class="section-status"><span id="relocate-count" class="muted"></span></span>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-body">
+          <div class="field-stack">
             <div class="row">
               <select id="relocate-anchor" title="选择已验证的重定位锚点">
-                <option value="">请选择与实际位置匹配的重定位锚点</option>
+                <option value="">请选择重定位锚点…</option>
               </select>
-              <button id="relocate-anchor-btn">执行重定位</button>
+              <button id="relocate-anchor-btn" class="danger">执行重定位</button>
             </div>
-          </div>
-        </details>
-      </section>
-      <section>
-        <h2>语义拓扑</h2>
-        <div class="field-stack">
-          <div class="row">
-            <input id="topology-name" placeholder="新拓扑点 ID，例如 wp_station_01">
-            <button id="topology-registry-add" class="danger">登记当前位置</button>
-          </div>
-          <input id="topology-display-name" placeholder="显示名，例如 赵博办公室门口">
-          <input id="topology-aliases" placeholder="别名，用逗号分隔，例如 赵博办公室,赵博门口">
-          <details>
-            <summary>建图与可视化</summary>
-            <div class="field-stack" style="padding:0 11px 11px">
-              <div class="row">
-                <input id="map-path" value="/home/unitree/test.pcd">
-                <button id="mapping-end">结束并保存</button>
-              </div>
-              <div class="toolbar">
-                <button id="mapping-start" class="danger">开始建图</button>
-                <button id="rviz-start">打开 RViz2</button>
-              </div>
-            </div>
-          </details>
-          <div class="toolbar">
-            <button id="topology-refresh">刷新拓扑列表</button>
-            <span class="muted">禁用是软删除；坐标保留，路由会跳过。</span>
-          </div>
-          <div id="topology-list" class="topology-list">
-            <div class="muted">正在读取拓扑点...</div>
+            <small id="relocate-hint" class="muted">将机器人推到锚点附近 → 选择对应锚点 → 执行重定位</small>
           </div>
         </div>
-      </section>
-      <section>
-        <h2>任务历史</h2>
-        <div id="history" class="history"></div>
-      </section>
+      </div>
+
+      <!-- 4. PCD 地图切换 -->
+      <div class="section-block" id="sect-pcd">
+        <div class="section-head" onclick="toggleSection('sect-pcd')">
+          <h2>PCD 地图切换</h2>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-body">
+          <div class="field-stack">
+            <div class="row">
+              <select id="pcd-selector" title="选择要切换到的 PCD 地图">
+                <option value="">正在读取可用地图…</option>
+              </select>
+              <button id="pcd-switch-btn" class="danger" disabled>切换 PCD</button>
+            </div>
+            <small id="pcd-status" class="muted">当前活跃 PCD：读取中…</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. 语义拓扑 -->
+      <div class="section-block" id="sect-topology">
+        <div class="section-head" onclick="toggleSection('sect-topology')">
+          <h2>语义拓扑</h2>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-body">
+          <div class="field-stack">
+            <div class="row">
+              <input id="topology-name" placeholder="新拓扑点 ID，例如 wp_station_01">
+              <button id="topology-registry-add" class="danger">登记当前位置</button>
+            </div>
+            <input id="topology-display-name" placeholder="显示名，例如 赵博办公室门口">
+            <input id="topology-aliases" placeholder="别名，用逗号分隔，例如 赵博办公室,赵博门口">
+            <div class="row" style="margin-top:4px">
+              <input id="map-path" value="/home/unitree/maps/staging/map_701.pcd">
+              <button id="mapping-end">结束并保存</button>
+            </div>
+            <div class="toolbar">
+              <button id="mapping-start" class="danger">开始建图</button>
+              <button id="rviz-start">打开 RViz2</button>
+              <button id="topology-refresh">刷新拓扑</button>
+            </div>
+            <span class="muted">禁用是软删除；坐标保留，路由会跳过。</span>
+            <div id="topology-list" class="topology-list">
+              <div class="muted">正在读取拓扑点…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. 任务历史 -->
+      <div class="section-block" id="sect-history">
+        <div class="section-head" onclick="toggleSection('sect-history')">
+          <h2>任务历史</h2>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-body">
+          <div id="history" class="history"></div>
+        </div>
+      </div>
     </div>
 
+    <!-- ═══════════ RIGHT COLUMN ═══════════ -->
     <div class="stack">
-      <section class="screen">
-        <div class="screen-head">
+
+      <!-- 智能巡检交互屏 -->
+      <div class="screen" id="sect-screen">
+        <div class="screen-head" onclick="toggleSection('sect-screen')">
           <div>
-            <h2>智能巡检交互屏</h2>
-            <small>LLM 任务反馈与实时环境理解</small>
+            <h2 style="color:var(--screen-ink)">智能巡检交互屏</h2>
+            <small style="color:var(--screen-muted)">LLM 任务反馈与实时环境理解</small>
           </div>
-          <span id="screen-health" class="pill">系统检查中</span>
+          <span id="screen-health" class="pill" style="background:transparent;border-color:var(--screen-line);color:var(--screen-muted)">系统检查中</span>
+          <span class="section-arrow" style="color:var(--screen-muted)">▼</span>
         </div>
         <div class="screen-body">
           <div class="reply">
@@ -289,90 +449,95 @@
             <div class="screen-cell"><label>任务队列</label><strong id="screen-queue">暂无队列</strong></div>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section>
-        <div class="screen-head">
-          <div>
-            <h2>多传感器采集</h2>
-            <small>缺少单路数据时继续保存其他在线 topic</small>
+      <!-- 实时状态 -->
+      <div class="section-block" id="sect-metrics">
+        <div class="section-head" onclick="toggleSection('sect-metrics')">
+          <h2>实时状态</h2>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-body">
+          <div class="metrics" id="metrics-grid">
+            <div class="metric"><label>任务阶段</label><strong id="m-phase">未知</strong></div>
+            <div class="metric"><label>当前目标</label><strong id="m-target">暂无</strong></div>
+            <div class="metric"><label>定位状态</label><strong id="m-loc">未知</strong></div>
+            <div class="metric"><label>地图状态</label><strong id="m-map">未知</strong></div>
+            <div class="metric"><label>安全导航许可</label><strong id="m-safety-allow">禁止</strong></div>
+            <div class="metric"><label>底盘运动状态</label><strong id="m-chassis-motion">静止</strong></div>
+            <div class="metric"><label>避障·前净空</label><strong id="m-oa-front">--</strong></div>
+            <div class="metric"><label>避障·左净空</label><strong id="m-oa-left">--</strong></div>
+            <div class="metric"><label>避障·右净空</label><strong id="m-oa-right">--</strong></div>
+            <div class="metric"><label>避障·后净空</label><strong id="m-oa-rear">--</strong></div>
+            <div class="metric"><label>避障·阻断方向</label><strong id="m-oa-blocked">--</strong></div>
+            <div class="metric"><label>避障·躲避状态</label><strong id="m-oa-evasion">--</strong></div>
+            <div class="metric"><label>真实执行开关</label><strong id="m-execution-enabled">关闭</strong></div>
+            <div class="metric"><label>建图原点</label><strong id="m-mapping-origin">未读取</strong></div>
+            <div class="metric"><label>最近重定位</label><strong id="m-relocation-anchor">暂无记录</strong></div>
+            <div class="metric"><label>导航拓扑点</label><strong id="m-current-node">wp_60497f</strong></div>
+            <div class="metric"><label>XT16 标定</label><strong id="m-lidar-calibration">等待摘要</strong></div>
+            <div class="metric"><label>XT16 有效年龄</label><strong id="m-lidar-age">等待摘要</strong></div>
+            <div class="metric"><label>XT16 四向净空</label><strong id="m-lidar-clearance">等待摘要</strong></div>
+            <div class="metric"><label>XT16 安全判定</label><strong id="m-lidar-safety">等待摘要</strong></div>
+            <div class="metric"><label>双目距离</label><strong id="m-stereo-front">暂无数据</strong></div>
+            <div class="metric"><label>双目质量</label><strong id="m-stereo-health">暂无数据</strong></div>
+            <div class="metric"><label>视觉场景</label><strong id="m-semantic-scene">暂无数据</strong></div>
+            <div class="metric"><label>视觉建议</label><strong id="m-semantic-action">暂无数据</strong></div>
           </div>
-          <span id="collection-health" class="pill">尚未开始</span>
         </div>
-        <div class="field-stack" style="margin-top:10px">
-          <strong id="collection-message">等待采集任务</strong>
-          <div class="metrics">
-            <div class="metric"><label>前视相机</label><strong id="collection-front-camera">未检查</strong></div>
-            <div class="metric"><label>点云</label><strong id="collection-pointcloud">未检查</strong></div>
-            <div class="metric"><label>IMU</label><strong id="collection-imu">未检查</strong></div>
-            <div class="metric"><label>里程计</label><strong id="collection-odometry">未检查</strong></div>
-            <div class="metric"><label>姿态</label><strong id="collection-attitude">未检查</strong></div>
-            <div class="metric"><label>输出目录</label><strong id="collection-output">暂无</strong></div>
+      </div>
+
+      <!-- LLM 输入 -->
+      <div class="section-block" id="sect-llm">
+        <div class="section-head" onclick="toggleSection('sect-llm')">
+          <h2>LLM 任务输入</h2>
+          <span class="section-arrow">▼</span>
+        </div>
+        <div class="section-body">
+          <textarea id="llm-input" placeholder="例如：去陈嘉瑜工位查看环境，到了以后告诉我当前位置"></textarea>
+          <div class="toolbar" style="margin-top:8px">
+            <button id="send-llm" class="primary">发送任务</button>
+            <select id="refresh-interval" style="width:160px">
+              <option value="-1" selected>自适应：任务 2s / 待机 5s</option>
+              <option value="0">暂停自动刷新</option>
+              <option value="1000">每 1 秒刷新</option>
+              <option value="2000">每 2 秒刷新</option>
+              <option value="5000">每 5 秒刷新</option>
+            </select>
           </div>
         </div>
-      </section>
+      </div>
 
-      <section>
-        <h2>实时状态</h2>
-        <div class="metrics">
-          <div class="metric"><label>任务阶段</label><strong id="m-phase">未知</strong></div>
-          <div class="metric"><label>当前目标</label><strong id="m-target">暂无</strong></div>
-          <div class="metric"><label>唯一建图原点</label><strong id="m-mapping-origin">未读取</strong></div>
-          <div class="metric"><label>最近重定位锚点</label><strong id="m-relocation-anchor">暂无记录</strong></div>
-          <div class="metric"><label>当前导航拓扑点</label><strong id="m-current-node">initial_point</strong></div>
-          <div class="metric"><label>定位状态</label><strong id="m-loc">未知</strong></div>
-          <div class="metric"><label>地图状态</label><strong id="m-map">未知</strong></div>
-          <div class="metric"><label>真实执行开关</label><strong id="m-execution-enabled">关闭</strong></div>
-          <div class="metric"><label>安全导航许可</label><strong id="m-safety-allow">禁止</strong></div>
-          <div class="metric"><label>底盘运动状态</label><strong id="m-chassis-motion">静止</strong></div>
-          <div class="metric"><label>障碍物</label><strong id="m-obstacle">未知</strong></div>
-          <div class="metric"><label>网络模式</label><strong id="m-net">标准链路</strong></div>
-          <div class="metric"><label>安全状态</label><strong id="m-safety">等待</strong></div>
-          <div class="metric"><label>双目距离</label><strong id="m-stereo-front">暂无数据</strong></div>
-          <div class="metric"><label>双目质量</label><strong id="m-stereo-health">暂无数据</strong></div>
-          <div class="metric"><label>前视深度诊断</label><strong id="m-motion-guard">等待深度摘要</strong></div>
-          <div class="metric"><label>XT16 标定</label><strong id="m-lidar-calibration">等待摘要</strong></div>
-          <div class="metric"><label>XT16 有效年龄</label><strong id="m-lidar-age">等待摘要</strong></div>
-          <div class="metric"><label>XT16 四向净空</label><strong id="m-lidar-clearance">等待摘要</strong></div>
-          <div class="metric"><label>XT16 安全判定</label><strong id="m-lidar-safety">等待摘要</strong></div>
-          <div class="metric"><label>视觉场景</label><strong id="m-semantic-scene">暂无数据</strong></div>
-          <div class="metric"><label>视觉建议</label><strong id="m-semantic-action">暂无数据</strong></div>
-          <div class="metric"><label>外部边缘节点</label><strong id="m-edge-node">未接入</strong></div>
-          <div class="metric"><label>Keyframe</label><strong id="m-capture">semantic_event_only</strong></div>
-          <div class="metric"><label>Not wired</label><strong id="m-notwired">relative_motion</strong></div>
+      <!-- 工程控制台 -->
+      <div class="section-block" id="sect-console">
+        <div class="section-head" onclick="toggleSection('sect-console')">
+          <h2>工程控制台</h2>
+          <span class="section-arrow">▼</span>
         </div>
-      </section>
-
-      <section>
-        <h2>LLM 任务输入</h2>
-        <textarea id="llm-input" placeholder="例如：去陈嘉瑜工位查看环境，到了以后告诉我当前位置"></textarea>
-        <div class="toolbar" style="margin-top:8px">
-          <button id="send-llm" class="primary">发送任务</button>
-          <select id="refresh-interval" style="width:150px">
-            <option value="-1" selected>自适应：任务 2 秒 / 待机 5 秒</option>
-            <option value="0">暂停自动刷新</option>
-            <option value="1000">每 1 秒刷新</option>
-            <option value="2000">每 2 秒刷新</option>
-            <option value="5000">每 5 秒刷新</option>
-          </select>
+        <div class="section-body">
+          <pre id="output">等待状态刷新…</pre>
         </div>
-      </section>
-
-      <details>
-        <summary>工程控制台</summary>
-        <pre id="output">等待状态刷新...</pre>
-      </details>
+      </div>
     </div>
   </main>
 
   <script>
+    /* ── Collapsible sections ── */
+    function toggleSection(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle('collapsed');
+    }
+
+    /* ── Helpers ── */
     const $ = (id) => document.getElementById(id);
-    let appState = { execute_enabled: false, weak_link_mode: false, current_node: "initial_point", history: [] };
+    let appState = { execute_enabled: false, weak_link_mode: false, current_node: "wp_60497f", history: [] };
     let timer = null;
     let latestPhase = "idle";
     let statusInFlight = false;
     let commandInFlight = false;
     let topologyState = { nodes: [] };
+    let activePcdName = "读取中…";  // cached for screen-target
 
     const zh = {
       idle: "待命", queued: "已排队", planning: "规划中", navigating: "前往目标", arrived: "已到达",
@@ -405,6 +570,26 @@
       }
       return {};
     }
+
+    /* ── Process status ── */
+    function updateProcesses(ps) {
+      if (!ps || !ps.processes) return;
+      const procs = ps.processes;
+      const labels = { xt16_driver: "XT16驱动", unitree_slam: "SLAM", perception_context: "感知", sport_bridge: "Bridge", gateway_server: "Gateway", ptp4l: "PTP" };
+      let html = '';
+      for (const [name, running] of Object.entries(procs)) {
+        const cls = running ? 'on' : 'off';
+        const status = running ? '● 运行' : '○ 停止';
+        const label = labels[name] || name;
+        html += `<div class="proc-item ${cls}"><span class="dot"></span><span class="label">${escapeHtml(label)}</span><span class="status">${status}</span></div>`;
+      }
+      document.getElementById('proc-grid').innerHTML = html;
+      const dot = document.getElementById('proc-dot');
+      dot.className = 'dot ' + (ps.all_ok ? 'ok' : 'warn');
+      document.getElementById('proc-summary').textContent = ps.summary || '';
+    }
+
+    /* ── Screen ── */
     function setScreen(summary, semantic, taskState) {
       const s = summary || {};
       const task = taskState || {};
@@ -412,57 +597,91 @@
       const semanticStatus = String(semanticData.source_status || "");
       const semanticOffline = !semantic || !semantic.available || semantic.stale_by_age || semanticData.stale ||
         ["stale", "unavailable", "clock_skew"].includes(semanticStatus);
+
+      // Parse YOLO objects
+      const yoloObjects = Array.isArray(semanticData.objects) ? semanticData.objects : [];
+      const yoloCount = yoloObjects.length;
+      let yoloDominant = "无";
+      if (yoloCount > 0) {
+        const counts = {};
+        yoloObjects.forEach(o => {
+          const cls = o.class || o.class_name || o.label || "物体";
+          counts[cls] = (counts[cls] || 0) + 1;
+        });
+        yoloDominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+      }
+
       const locOk = yes(s.loc);
       const safetyOk = (s.safety || "") === "ok";
       const phase = s.phase || "idle";
       const target = s.target || "暂无目标";
-      const dominant = semanticOffline ? "视觉离线" : z(semanticData.dominant_class || "none");
-      const action = semanticOffline ? "仅使用雷达与 SLAM" : z(semanticData.effective_action || "ignored");
-      $("screen-target").textContent = target;
+
+      $("screen-target").textContent = activePcdName || "701中心区";
       $("screen-planner").textContent = task.planner_source || "等待任务";
       const currentStep = task.current_step || {};
       $("screen-step").textContent = currentStep.action
-        ? `${currentStep.action}${currentStep.target_node ? ` / ${currentStep.target_node}` : ""}${currentStep.status ? ` / ${currentStep.status}` : ""}`
+        ? `${currentStep.action}${currentStep.target_node ? " / " + currentStep.target_node : ""}${currentStep.status ? " / " + currentStep.status : ""}`
         : "暂无任务";
       $("screen-queue").textContent = task.queue_id
         ? `${task.queue_id} / ${(task.targets || []).join(" → ") || "无导航目标"}`
         : "暂无队列";
-      $("screen-vision").textContent = semanticOffline ? "语义视觉未启动或离线，不参与运动决策" : `${dominant} / ${semanticData.object_count ?? 0} 个目标`;
-      $("screen-action").textContent = action;
+      $("screen-vision").textContent = semanticOffline
+        ? "YOLO 离线"
+        : yoloCount > 0 ? `${yoloDominant} +${yoloCount - 1}个` : "空场景";
+
+      // Safety strategy: show all 3 sensors status
+      const lidarStatus = (window._lastLidarStatus === "fresh") ? "✅" : "⚠";
+      const stereoStatus = (window._lastStereoAvail) ? "✅" : "⚠";
+      const yoloStatus = semanticOffline ? "⚠" : "✅";
+      $("screen-action").textContent = `XT16${lidarStatus} D435${stereoStatus} YOLO${yoloStatus}`;
+
+      // Dynamic reply
       if (task.blocked_reason) {
-        $("screen-reply").textContent = "任务已被安全逻辑阻断";
+        $("screen-reply").textContent = "任务被安全逻辑阻断";
         $("screen-detail").textContent = task.blocked_reason;
         $("screen-health").textContent = "任务阻断";
         $("screen-health").className = "pill danger";
+      } else if (phase === "patrol") {
+        const patrolTarget = s.target || "";
+        $("screen-reply").textContent = patrolTarget === "terrace_patrol_running"
+          ? "露台采集进行中…"
+          : "🚀 露台采集已启动";
+        $("screen-detail").textContent = `PCD: ${activePcdName}｜巡逻脚本运行中｜查看工程控制台日志`;
+        $("screen-health").textContent = "巡逻中";
+        $("screen-health").className = "pill ok";
       } else if (!locOk) {
-        $("screen-reply").textContent = "定位尚未就绪，请先检查 SLAM";
-        $("screen-detail").textContent = "当前不会执行导航任务。";
+        $("screen-reply").textContent = "定位未就绪 — 请执行重定位";
+        $("screen-detail").textContent = `当前 PCD: ${activePcdName}。将机器人推到锚点附近后重定位。`;
         $("screen-health").textContent = "定位异常";
         $("screen-health").className = "pill danger";
       } else if (!safetyOk) {
-        $("screen-reply").textContent = "检测到安全限制，任务保持等待";
-        $("screen-detail").textContent = `安全状态：${z(s.safety, s.safety || "未知")}`;
+        $("screen-reply").textContent = "安全限制激活";
+        $("screen-detail").textContent = `安全状态：${z(s.safety, s.safety || "未知")}。等待传感器就绪。`;
         $("screen-health").textContent = "安全限制";
         $("screen-health").className = "pill warn";
       } else if (phase === "arrived") {
-        $("screen-reply").textContent = task.llm_feedback || `已经到达 ${target}`;
-        $("screen-detail").textContent = `视觉反馈：${dominant}，当前策略：${action}。`;
+        $("screen-reply").textContent = task.llm_feedback || `已到达 ${target}`;
+        const yoloInfo = yoloCount > 0 ? `｜YOLO: ${yoloDominant} +${yoloCount - 1}个` : "";
+        $("screen-detail").textContent = `位置: ${activePcdName}${yoloInfo}`;
         $("screen-health").textContent = "已到达";
         $("screen-health").className = "pill ok";
       } else if (phase === "navigating") {
         $("screen-reply").textContent = task.llm_feedback || `正在前往 ${target}`;
-        $("screen-detail").textContent = `环境理解：${dominant}，当前策略：${action}。`;
+        $("screen-detail").textContent = `PCD: ${activePcdName}｜YOLO: ${yoloDominant}`;
         $("screen-health").textContent = "任务进行中";
         $("screen-health").className = "pill ok";
       } else {
-        $("screen-reply").textContent = task.llm_feedback || task.operator_feedback || "系统在线，等待新的巡检任务";
-        $("screen-detail").textContent = semanticOffline
-          ? `当前位于 ${target}。语义视觉侧车未启动或离线，近场运动许可仍由实时深度摘要与 SLAM 安全门决定。`
-          : `当前位于 ${target}。视觉理解：${dominant}，策略：${action}。`;
+        // Idle: show dynamic status with sensor details
+        const yoloInfo = yoloCount > 0 ? `${yoloDominant} +${yoloCount - 1}个` : "空场景";
+        const safetyReason = s.safety && s.safety !== "ok" ? `｜🛡${s.safety}` : "";
+        $("screen-reply").textContent = task.llm_feedback || task.operator_feedback || "系统在线，等待任务";
+        $("screen-detail").textContent = `📍${activePcdName}｜👁YOLO: ${yoloInfo}${safetyReason}`;
         $("screen-health").textContent = "系统在线";
         $("screen-health").className = "pill ok";
       }
     }
+
+    /* ── Metrics ── */
     function updateMetrics(summary) {
       const s = summary || {};
       const nextPhase = s.phase || "idle";
@@ -477,10 +696,8 @@
       $("m-execution-enabled").textContent = yes(s.exec) ? "已开启" : "关闭";
       $("m-safety-allow").textContent = yes(s.nav_allow) ? "允许" : "禁止";
       $("m-chassis-motion").textContent = yes(s.chassis) ? "运动中" : "静止";
-      $("m-obstacle").textContent = z(s.obstacle || "unknown");
-      $("m-net").textContent = s.net === "normal" ? "标准链路" : z(s.net);
-      $("m-safety").textContent = z(s.safety || "unknown");
     }
+
     function updateState(state) {
       if (!state) return;
       appState = state;
@@ -501,37 +718,107 @@
       });
       $("history").innerHTML = items.join("") || "<div>暂无任务历史</div>";
     }
+
+    /* ── Lidar ── */
     function updateLidar(lidar) {
       if (!lidar || !lidar.available || !lidar.data) {
-        $("m-lidar-calibration").textContent = "XT16 摘要未启动或离线";
-        $("m-lidar-age").textContent = "无有效数据";
-        $("m-lidar-clearance").textContent = "无四向净空";
-        $("m-lidar-safety").textContent = "锁定：缺少 XT16 摘要";
+        window._lastLidarStatus = "offline";
+        $("m-lidar-calibration").textContent = "离线";
+        $("m-lidar-age").textContent = "无数据";
+        $("m-lidar-clearance").textContent = "无数据";
+        $("m-lidar-safety").textContent = "🔒 无 XT16";
         return;
       }
       const data = lidar.data;
-      const aggregate = {
-        front: data.front_clearance_m,
-        left: data.left_clearance_m,
-        right: data.right_clearance_m,
-        rear: data.rear_clearance_m
-      };
-      const body = data.body_clearance_m || {};
-      const fmt = (value) => value == null ? "?" : `${Number(value).toFixed(2)}m`;
+      const fmt = (value) => value == null ? "--" : `${Number(value).toFixed(2)}m`;
+      // Track lidar freshness for screen-action
+      window._lastLidarStatus = lidar.status || "offline";
+      // Short calibration status
       $("m-lidar-calibration").textContent = lidar.calibrated
-        ? `verified / ${lidar.calibration_id}`
-        : `未标定 / ${(lidar.stale_reasons || []).join(", ") || "缺少 calibration_id"}`;
-      const effective = lidar.effective_age_ms == null ? "?" : `${Math.round(lidar.effective_age_ms)}ms`;
-      const latency = lidar.sensor_latency_ms == null ? "?" : `${Math.round(lidar.sensor_latency_ms)}ms`;
-      $("m-lidar-age").textContent = `有效 ${effective} / 传感器 ${latency}`;
-      $("m-lidar-clearance").textContent =
-        `总 F${fmt(aggregate.front)} L${fmt(aggregate.left)} R${fmt(aggregate.right)} B${fmt(aggregate.rear)} / ` +
-        `机身 F${fmt(body.front)} L${fmt(body.left)} R${fmt(body.right)} B${fmt(body.rear)}`;
+        ? "✅ 已标定"
+        : "⚠ 未标定";
+      // Short age
+      const ageMs = lidar.effective_age_ms;
+      $("m-lidar-age").textContent = ageMs != null ? `${Math.round(ageMs)}ms` : "--";
+      // Clearance: compact 4-direction
+      const agg = { front: data.front_clearance_m, left: data.left_clearance_m, right: data.right_clearance_m, rear: data.rear_clearance_m };
+      $("m-lidar-clearance").textContent = `前${fmt(agg.front)} 左${fmt(agg.left)} 右${fmt(agg.right)} 后${fmt(agg.rear)}`;
+      // Safety verdict: short
       const blocked = Array.isArray(data.blocked_directions) ? data.blocked_directions.join(",") : "";
       $("m-lidar-safety").textContent = lidar.status === "fresh"
-        ? `${data.recommended_action || "normal"}${blocked ? ` / 阻断 ${blocked}` : " / 四向可用"}`
-        : `锁定：${(lidar.stale_reasons || []).join(", ") || lidar.status}`;
+        ? `${data.recommended_action || "正常"}${blocked ? " ⛔" + blocked : ""}`
+        : "🔒 未标定";
     }
+
+    function updateStereo(stereo, diagnostic) {
+      if (!stereo || !stereo.available || !stereo.data) {
+        window._lastStereoAvail = false;
+        $("m-stereo-front").textContent = "离线";
+        $("m-stereo-health").textContent = "无数据";
+        return;
+      }
+      const data = stereo.data;
+      const front = data.front_clearance_m;
+      window._lastStereoAvail = true;
+      $("m-stereo-front").textContent = front != null ? `${Number(front).toFixed(2)}m` : "--";
+      const age = stereo.age_ms == null ? "--" : `${Math.round(stereo.age_ms)}ms`;
+      const stale = stereo.stale_by_age ? " ⚠过期" : "";
+      $("m-stereo-health").textContent = `${age}${stale}`;
+    }
+
+    function updateSemantic(semantic) {
+      if (!semantic || !semantic.available || !semantic.data) {
+        $("m-semantic-scene").textContent = "离线";
+        $("m-semantic-action").textContent = "离线";
+        return;
+      }
+      const data = semantic.data;
+      const age = semantic.age_ms == null ? "--" : `${Math.round(semantic.age_ms)}ms`;
+      const stale = semantic.stale_by_age || data.stale || data.source_status === "stale";
+
+      // Parse YOLO objects array
+      const objects = Array.isArray(data.objects) ? data.objects : [];
+      const objCount = objects.length;
+      // Find dominant class (most frequent or highest confidence)
+      let dominant = "无";
+      if (objCount > 0) {
+        const counts = {};
+        objects.forEach(o => {
+          const cls = o.class || o.class_name || o.label || "物体";
+          counts[cls] = (counts[cls] || 0) + 1;
+        });
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        dominant = sorted[0][0];
+      }
+
+      if (stale || !data.source_status || data.source_status === "unavailable") {
+        $("m-semantic-scene").textContent = `离线 (${age})`;
+        $("m-semantic-action").textContent = "仅观察";
+        return;
+      }
+      $("m-semantic-scene").textContent = objCount > 0
+        ? `${dominant} +${objCount - 1}个 / ${age}`
+        : `空场景 / ${age}`;
+      $("m-semantic-action").textContent = "YOLO 在线";
+    }
+
+    function updateObstacleAvoidance(oa) {
+      if (!oa) {
+        ["front","left","right","rear","blocked","evasion"].forEach(k => { const el = $("m-oa-" + k); if(el) el.textContent = "--"; });
+        return;
+      }
+      const fmt = (v) => v == null ? "--" : `${Number(v).toFixed(2)}m`;
+      $("m-oa-front").textContent = fmt(oa.clearance && oa.clearance.front_m);
+      $("m-oa-left").textContent = fmt(oa.clearance && oa.clearance.left_m);
+      $("m-oa-right").textContent = fmt(oa.clearance && oa.clearance.right_m);
+      $("m-oa-rear").textContent = fmt(oa.clearance && oa.clearance.rear_m);
+      const blocked = Array.isArray(oa.blocked_directions) ? oa.blocked_directions.join(", ") : "--";
+      $("m-oa-blocked").textContent = blocked || "--";
+      const evasion = oa.evasion_state || "--";
+      const reason = oa.last_evasion_reason ? ` (${oa.last_evasion_reason})` : "";
+      $("m-oa-evasion").textContent = `${evasion}${reason}`;
+    }
+
     function poseLabel(pose) {
       if (!pose || pose.x === null || pose.x === undefined || pose.y === null || pose.y === undefined) return "pose ?";
       const yaw = pose.yaw === null || pose.yaw === undefined ? "?" : Number(pose.yaw).toFixed(2);
@@ -542,29 +829,37 @@
       if (["photo_required", "people_possible"].includes(tag)) return "tag warn";
       return "tag";
     }
+
+    /* ── Topology ── */
     function renderTopology(topology) {
       topologyState = topology || { nodes: [] };
       const anchors = topologyState.active_relocalization_anchors || [];
       const originAnchor = topologyState.mapping_origin_anchor_id || "";
       $("m-mapping-origin").textContent = originAnchor || "未登记";
+
+      // Populate relocate anchor dropdown
       const anchorSelect = $("relocate-anchor");
       if (anchorSelect) {
         const current = anchorSelect.value;
         const options = anchors.map((anchor) => {
           const id = anchor.anchor_id || "";
-          const origin = id === originAnchor ? " · 建图原点" : "";
+          const origin = id === originAnchor ? " · 原点" : "";
           const status = anchor.status ? ` · ${anchor.status}` : "";
-          const label = `${anchor.name || id}${origin}${status}`;
+          const mapId = anchor.map_id ? ` [${anchor.map_id}]` : "";
+          const label = `${anchor.name || id}${origin}${status}${mapId}`;
           return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
         }).join("");
-        anchorSelect.innerHTML = `<option value="">请选择与实际位置匹配的重定位锚点</option>${options}`;
+        anchorSelect.innerHTML = `<option value="">请选择重定位锚点…</option>${options}`;
         anchorSelect.disabled = anchors.length === 0;
         if (anchors.some((anchor) => anchor.anchor_id === current)) {
           anchorSelect.value = current;
         } else {
           anchorSelect.value = "";
         }
+        $("relocate-count").textContent = anchors.length ? `${anchors.length} 个锚点可用` : "无可用锚点";
       }
+
+      // Render topology nodes
       const nodes = topologyState.nodes || [];
       const list = $("topology-list");
       if (!nodes.length) {
@@ -601,6 +896,15 @@
         </div>`;
       }).join("");
     }
+
+    /* ── API ── */
+    async function api(path, options = {}) {
+      const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return res.json();
+    }
+
+    /* ── Refresh ── */
     async function refreshTopology() {
       try {
         const result = await api("/api/topology");
@@ -609,6 +913,7 @@
         $("topology-list").innerHTML = `<div class="muted">${escapeHtml(String(err))}</div>`;
       }
     }
+
     async function topologyAction(action, nodeId, extra = {}) {
       const result = await api("/api/topology-node", {
         method: "POST",
@@ -618,114 +923,94 @@
       $("output").textContent = JSON.stringify(result, null, 2);
       return result;
     }
-    function updateCapabilities(capabilities) {
-      const caps = capabilities || {};
-      const capture = caps.capture_keyframe || {};
-      $("m-capture").textContent = capture.configured ? "ready" : (capture.status || "semantic_event_only");
-      const notWired = Object.entries(caps)
-        .filter(([, value]) => value && value.status === "not_wired")
-        .map(([name]) => name);
-      $("m-notwired").textContent = notWired.join(", ") || "none";
-    }
-    function updateStereo(stereo, diagnostic) {
-      if (!stereo || !stereo.available || !stereo.data) {
-        $("m-stereo-front").textContent = "深度侧车未启动或离线";
-        $("m-stereo-health").textContent = "无实时 ROI 摘要";
-        $("m-motion-guard").textContent = "离线，不参与运动裁决";
+
+    function updateActivePcd(activePcd) {
+      if (!activePcd || !activePcd.active_map_id) {
+        $("active-pcd-pill").textContent = "PCD: --";
+        $("active-pcd-pill").className = "pill warn";
+        $("pcd-status").textContent = "当前活跃 PCD：未读取";
         return;
       }
-      const data = stereo.data;
-      const front = data.front_clearance_m;
-      const center = data.center_distance_m ?? data.center_window_m;
-      const frontText = front == null ? "前方 ?" : `前方 ${Number(front).toFixed(2)}m`;
-      const centerText = center == null ? "中心 ?" : `中心 ${Number(center).toFixed(2)}m`;
-      $("m-stereo-front").textContent = `${frontText} / ${centerText}`;
-      const confidence = data.confidence == null ? "整体 ?" : `整体 ${Number(data.confidence).toFixed(3)}`;
-      const frontConfidence = data.roi_confidence && data.roi_confidence.front !== undefined ? `前方 ${Number(data.roi_confidence.front).toFixed(3)}` : "前方 ?";
-      const age = stereo.age_ms == null ? "未知" : `${Math.round(stereo.age_ms)}ms`;
-      $("m-stereo-health").textContent = `${confidence}, ${frontConfidence} / ${age}${stereo.stale_by_age ? " 摘要停止更新" : ""}`;
-      $("m-motion-guard").textContent = diagnostic && diagnostic.healthy
-        ? "诊断正常：实时近场深度"
-        : `诊断告警：${diagnostic && diagnostic.reason ? diagnostic.reason : "等待深度摘要"}`;
+      const mapId = activePcd.active_map_id || "--";
+      const pcdFile = (activePcd.pcd_path || "").split("/").pop() || "--";
+      $("active-pcd-pill").textContent = `PCD: ${mapId}`;
+      $("active-pcd-pill").className = "pill ok";
+      $("pcd-status").textContent = `当前活跃 PCD：${mapId} / ${pcdFile}`;
+      // Update screen-target with Chinese name if we know it
+      if (activePcdName === "读取中…" || activePcdName === mapId) {
+        // will be filled by maps API below
+      }
+      const selector = $("pcd-selector");
+      if (selector) {
+        for (const opt of selector.options) {
+          if (opt.value === mapId && opt.value !== "") { opt.selected = true; break; }
+        }
+      }
     }
-    function updateSemantic(semantic) {
-      if (!semantic || !semantic.available || !semantic.data) {
-        $("m-semantic-scene").textContent = "暂无数据";
-        $("m-semantic-action").textContent = "暂无数据";
+
+    function updateAvailableMaps(mapsData) {
+      const selector = $("pcd-selector");
+      if (!selector || !mapsData || !mapsData.maps) return;
+      const maps = mapsData.maps || [];
+      const activeMapId = (mapsData.active_map_id || "").trim();
+      // Cache active PCD Chinese name for screen-target
+      const activeMap = maps.find(m => m.map_id === activeMapId);
+      if (activeMap && activeMap.name) {
+        activePcdName = activeMap.name;
+        $("screen-target").textContent = activePcdName;
+      }
+      if (maps.length === 0) {
+        selector.innerHTML = '<option value="">没有可用的 real 地图</option>';
+        $("pcd-switch-btn").disabled = true;
         return;
       }
-      const data = semantic.data;
-      const age = semantic.age_ms == null ? "未知" : `${Math.round(semantic.age_ms)}ms`;
-      const stale = semantic.stale_by_age || data.stale;
-      if (stale || ["stale", "unavailable", "clock_skew"].includes(String(data.source_status || ""))) {
-        $("m-semantic-scene").textContent = `语义侧车未启动或离线 / 最后摘要 ${age}`;
-        $("m-semantic-action").textContent = "仅观察，不参与决策";
-        return;
-      }
-      const recommended = data.recommended_action || "normal";
-      const effective = data.effective_action || (stale ? "ignored" : recommended);
-      $("m-semantic-scene").textContent = `${z(data.source_status)} / ${z(data.dominant_class || "none")} / ${data.object_count ?? 0} 个目标`;
-      $("m-semantic-action").textContent = `${z(effective)} / ${age}${stale ? " 已过期" : ""}`;
+      const options = maps.map((m) => {
+        const label = `${m.map_id} — ${m.name || ""} (${m.node_count} 节点)`;
+        const selected = m.map_id === activeMapId ? " selected" : "";
+        return `<option value="${escapeHtml(m.map_id)}"${selected}>${escapeHtml(label)}</option>`;
+      }).join("");
+      selector.innerHTML = `<option value="">选择要切换的地图…</option>${options}`;
+      $("pcd-switch-btn").disabled = false;
     }
-    function updateEdge(edge) {
-      if (!edge || !edge.available || !edge.data) {
-        $("m-edge-node").textContent = "未接入，可选增强";
-        return;
-      }
-      const data = edge.data;
-      const age = edge.age_ms == null ? "未知" : `${Math.round(edge.age_ms)}ms`;
-      const node = data.node_id || "外部节点";
-      const sensor = data.sensor_type || "sensor";
-      const mode = data.policy && data.policy.mode ? data.policy.mode : "semantic_only";
-      $("m-edge-node").textContent = edge.fresh
-        ? `${node} / ${sensor} / ${mode} / ${age}`
-        : `${node} / 离线或摘要过期 / ${age}`;
-    }
-    function updateCollection(collection) {
-      const health = $("collection-health");
-      const message = $("collection-message");
-      if (!collection || !collection.available || !collection.data) {
-        health.textContent = "尚未开始";
-        health.className = "pill";
-        message.textContent = (collection && collection.message_zh) || "等待采集任务";
-        return;
-      }
-      const data = collection.data || {};
-      const sensors = data.sensors || {};
-      const severity = data.severity || "info";
-      const labels = {
-        front_camera: "collection-front-camera",
-        pointcloud: "collection-pointcloud",
-        imu: "collection-imu",
-        odometry: "collection-odometry",
-        attitude: "collection-attitude"
-      };
-      for (const [role, elementId] of Object.entries(labels)) {
-        const sensor = sensors[role] || {};
-        const topic = sensor.topic ? ` / ${sensor.topic}` : "";
-        $(elementId).textContent = `${sensor.status_zh || "未检查"}${topic}`;
-      }
-      message.textContent = data.message_zh || "采集状态已更新";
-      $("collection-output").textContent = data.output || "暂无";
-      if (severity === "ok") {
-        health.textContent = data.phase === "completed" ? "采集完成" : "采集正常";
-        health.className = "pill ok";
-      } else if (severity === "warning") {
-        health.textContent = "降级采集";
-        health.className = "pill warn";
-      } else if (severity === "error") {
-        health.textContent = "当前无数据";
-        health.className = "pill danger";
-      } else {
-        health.textContent = "正在检查";
-        health.className = "pill";
+
+    async function switchPcd(mapName) {
+      if (!mapName) return;
+      if (!window.confirm(`确认切换到 ${mapName}？此操作会调用重定位流程。`)) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/switch-pcd", {
+          method: "POST",
+          body: JSON.stringify({ map_name: mapName, confirm: true })
+        });
+        if (result.accepted) {
+          alert(`PCD 切换成功：${mapName}`);
+          if (result.active_pcd) updateActivePcd(result.active_pcd);
+          refreshTopology();
+          refreshStatus(true);
+        } else {
+          alert(`PCD 切换失败：${result.error || "未知错误"}`);
+        }
+      } catch (err) {
+        alert(`PCD 切换异常：${String(err)}`);
+      } finally {
+        setBusy(false);
       }
     }
-    async function api(path, options = {}) {
-      const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      return res.json();
+
+    async function fetchActivePcd() {
+      try {
+        const result = await api("/api/active-pcd");
+        updateActivePcd(result.active_pcd);
+      } catch (err) { /* optional */ }
     }
+
+    async function fetchAvailableMaps() {
+      try {
+        const result = await api("/api/maps");
+        if (result.accepted !== false) updateAvailableMaps(result);
+      } catch (err) { /* optional */ }
+    }
+
     async function refreshStatus(force = false) {
       if (statusInFlight || (commandInFlight && !force)) return;
       statusInFlight = true;
@@ -736,14 +1021,14 @@
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
-        updateCapabilities(result.capabilities);
+        updateProcesses(result.process_status);
         updateLidar(result.lidar_summary);
         updateStereo(result.stereo_summary, result.stereo_diagnostic);
         updateSemantic(result.semantic_summary);
-        updateEdge(result.edge_summary);
-        updateCollection(result.collection_status);
+        updateObstacleAvoidance(result.obstacle_avoidance);
         setScreen(summary, result.semantic_summary, result.state && result.state.task_state);
         $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
+        fetchActivePcd();
       } catch (err) {
         $("conn").textContent = "UI 服务异常";
         $("conn").className = "pill danger";
@@ -756,6 +1041,7 @@
         statusInFlight = false;
       }
     }
+
     async function runCommand(line, confirmText = "", confirmed = false) {
       if (commandInFlight) return;
       if (confirmText && !window.confirm(confirmText)) return;
@@ -766,14 +1052,14 @@
         const summary = result.summary && Object.keys(result.summary).length ? result.summary : parseSummaryText(result.stdout);
         updateMetrics(summary);
         updateState(result.state);
-        updateCapabilities(result.capabilities);
+        updateProcesses(result.process_status);
         updateLidar(result.lidar_summary);
         updateStereo(result.stereo_summary, result.stereo_diagnostic);
         updateSemantic(result.semantic_summary);
-        updateEdge(result.edge_summary);
-        updateCollection(result.collection_status);
+        updateObstacleAvoidance(result.obstacle_avoidance);
         setScreen(summary, result.semantic_summary, result.state && result.state.task_state);
         $("output").textContent = `$ ${line}\n` + (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
+        fetchActivePcd();
       } catch (err) {
         $("output").textContent = String(err);
       } finally {
@@ -781,6 +1067,30 @@
         setBusy(false);
       }
     }
+
+    /* ── PTP ── */
+    async function startPtp() {
+      if (!window.confirm("确认启动 PTP 时间同步？需要 sudo 权限。")) return;
+      setBusy(true);
+      $("ptp-feedback").textContent = "启动中…";
+      try {
+        const result = await api("/api/ptp-start", { method: "POST", body: JSON.stringify({}) });
+        if (result.accepted) {
+          $("ptp-feedback").textContent = "✅ PTP 启动成功";
+          $("ptp-feedback").className = "muted";
+        } else {
+          $("ptp-feedback").textContent = "❌ 启动失败：" + (result.stderr || result.error || "未知");
+          $("ptp-feedback").className = "muted";
+        }
+        $("output").textContent = (result.stdout || "") + (result.stderr ? "\n[stderr]\n" + result.stderr : "");
+      } catch (err) {
+        $("ptp-feedback").textContent = "❌ 异常：" + String(err);
+        $("ptp-feedback").className = "muted";
+      } finally {
+        setBusy(false);
+      }
+    }
+
     function resetTimer() {
       if (timer) clearInterval(timer);
       const requestedMs = Number($("refresh-interval").value || 0);
@@ -789,13 +1099,29 @@
       if (ms > 0) timer = setInterval(() => refreshStatus(false), ms);
     }
 
+    /* ── Event bindings ── */
     $("refresh").onclick = () => refreshStatus(true);
+    $("stop-task").onclick = async () => {
+      if (!window.confirm("确认终止所有任务？（巡逻 + 底盘运动）")) return;
+      setBusy(true);
+      try {
+        const result = await api("/api/stop", { method: "POST", body: JSON.stringify({}) });
+        $("output").textContent = JSON.stringify(result, null, 2);
+        refreshStatus(true);
+      } catch (err) {
+        $("output").textContent = "终止失败：" + String(err);
+      } finally {
+        setBusy(false);
+      }
+    };
     $("start-slam").onclick = () => runCommand("/start-slam", "确认启动或检查 SLAM 与雷达驱动？", true);
     $("exec-toggle").onclick = () => appState.execute_enabled
       ? runCommand("/execute off")
       : runCommand("/execute on", "确认允许真实执行？机器人趴卧时请勿开启。", true);
     $("weak-toggle").onclick = () => appState.weak_link_mode ? runCommand("/weak off") : runCommand("/weak on");
     $("set-current").onclick = () => runCommand(`/current ${$("current-node").value.trim()}`);
+    $("ptp-start-btn").onclick = startPtp;
+
     $("relocate-anchor-btn").onclick = () => {
       const anchor = $("relocate-anchor").value.trim();
       if (!anchor) {
@@ -804,9 +1130,17 @@
       }
       runCommand(`/relocate ${anchor} confirm`, "确认按该锚点执行 SLAM 重定位？此操作不会移动底盘。", true);
     };
+
     $("mapping-start").onclick = () => runCommand("/mapping start confirm", "确认开始建图？这会改变 SLAM 状态。", true);
     $("mapping-end").onclick = () => runCommand(`/mapping end confirm ${$("map-path").value.trim()}`, "确认结束建图并保存地图？", true);
     $("rviz-start").onclick = () => runCommand("/rviz2 start confirm", "确认打开 RViz2 可视化？", true);
+
+    $("pcd-switch-btn").onclick = () => {
+      const mapName = $("pcd-selector").value.trim();
+      if (!mapName) { alert("请先选择一个 PCD 地图。"); return; }
+      switchPcd(mapName);
+    };
+
     $("topology-refresh").onclick = refreshTopology;
     $("topology-registry-add").onclick = async () => {
       const nodeId = $("topology-name").value.trim();
@@ -817,6 +1151,7 @@
         aliases: $("topology-aliases").value.trim()
       });
     };
+
     $("topology-list").onclick = async (event) => {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
@@ -833,25 +1168,31 @@
         return;
       }
       if (action === "restore") {
-        if (!window.confirm(`确认恢复 ${nodeId}？恢复后仍受 needs_calibration/standing verification 安全门约束。`)) return;
+        if (!window.confirm(`确认恢复 ${nodeId}？`)) return;
         await topologyAction("restore", nodeId);
         return;
       }
       if (action === "verify") {
         const prompt = nodeId === "initial_point"
           ? "确认校准初始点？系统只会在机器人位于旧初始点附近且定位正常时写回坐标。"
-          : `确认验证或更新 ${nodeId}？机器人必须已经站在该点附近，且定位和安全门正常。`;
+          : `确认验证或更新 ${nodeId}？机器人必须已经站在该点附近。`;
         if (!window.confirm(prompt)) return;
         await topologyAction("verify", nodeId);
       }
     };
+
     $("send-llm").onclick = () => {
       const line = $("llm-input").value.trim();
       if (!line) return;
       const confirmText = appState.execute_enabled ? "当前是真实执行模式，确认发送给机器人？" : "";
       runCommand(line, confirmText, Boolean(confirmText));
     };
+
     $("refresh-interval").onchange = resetTimer;
+
+    /* ── Init ── */
+    fetchActivePcd();
+    fetchAvailableMaps();
     refreshTopology();
     refreshStatus();
     resetTimer();
