@@ -1,282 +1,195 @@
-"""Waypoint-to-waypoint navigation using graph routing + sport_bridge.
+"""Waypoint-to-waypoint navigation on top of nav_core.NavigationSession.
 
-Usage:
-  python3 waypoint_nav.py <target_node_id> [speed_mps]
-
-Flow:
-  1. Get current SLAM pose via Gateway persistent session
-  2. BFS route from nearest waypoint to target
-  3. For each hop: rotate to face next → move forward → check arrival
+Dry-run mode only validates graph routing and never starts Gateway or
+sport_bridge. Live mode opens one persistent NavigationSession and sends each
+route hop to the closed-loop move_to_xy primitive.
 """
 
-import subprocess
-import json
-import time
-import threading
-import queue
+from __future__ import annotations
+
+import argparse
 import math
-import sys
 import os
+import sys
+from typing import Any, Dict, List, Optional, Tuple
 
-REPO = '/home/unitree/Go2W_SLAM_AI'
-CLIENT = os.path.join(REPO, 'robot/slam_gateway_refactor/build/slam_llm_command_client')
-BRIDGE = os.path.join(REPO, 'robot/slam_gateway_refactor/build/sport_bridge')
-GRAPH_PATH = os.path.join(REPO, 'artifacts', 'waypoint_graph.json')
 
-ARRIVE_THRESHOLD_M = 0.3  # consider arrived within 30cm
-MOVE_SPEED_MPS = 0.2
-ROTATE_SPEED = 0.5  # rad/s
-ROTATE_THRESHOLD_RAD = 0.1  # consider aligned within ~6°
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 
-# ── Graph ──
+import waypoint_graph
 
-def load_graph():
-    with open(GRAPH_PATH) as f:
-        return json.load(f)
 
-def build_adjacency(graph):
-    adj = {}
-    for e in graph['edges']:
-        a, b = e['a'], e['b']
-        adj.setdefault(a, []).append(b)
-        adj.setdefault(b, []).append(a)
-    return adj
+DEFAULT_SPEED_MPS = 0.20
+DEFAULT_ARRIVAL_RADIUS_M = 0.30
+DEFAULT_START_TOLERANCE_M = 3.00
+SEGMENT_TIMEOUT_MIN_S = 20.0
+SEGMENT_TIMEOUT_MARGIN_S = 12.0
 
-def bfs_route(graph, from_id, to_id):
-    if from_id == to_id:
-        return [from_id]
-    adj = build_adjacency(graph)
-    if from_id not in adj or to_id not in adj:
-        return None
-    from collections import deque
-    q = deque([[from_id]])
-    visited = {from_id}
-    while q:
-        path = q.popleft()
-        last = path[-1]
-        for nxt in adj.get(last, []):
-            if nxt == to_id:
-                return path + [nxt]
-            if nxt not in visited:
-                visited.add(nxt)
-                q.append(path + [nxt])
+
+def load_or_build_graph(args: argparse.Namespace) -> Dict[str, Any]:
+    graph = None if args.rebuild_graph else waypoint_graph.load_graph(args.graph)
+    if (
+        not graph
+        or graph.get("map_id") != args.map_id
+        or graph.get("registry_path") != args.registry
+    ):
+        graph = waypoint_graph.build_graph(
+            map_id=args.map_id,
+            registry_path=args.registry,
+            graph_path=args.graph,
+        )
+    return graph
+
+
+def node_distance_from_pose(graph: Dict[str, Any], node_id: str, pose: Tuple[float, float, float]) -> float:
+    node = graph["waypoints"][node_id]
+    return math.hypot(float(node["x"]) - pose[0], float(node["y"]) - pose[1])
+
+
+def resolve_dry_run_start(args: argparse.Namespace, graph: Dict[str, Any]) -> Optional[str]:
+    if args.from_node:
+        if args.from_node not in graph["waypoints"]:
+            print(f"Unknown start node: {args.from_node}")
+            return None
+        return args.from_node
+    if args.start_x is not None and args.start_y is not None:
+        node_id, dist = waypoint_graph.nearest_waypoint(graph, args.start_x, args.start_y)
+        if node_id:
+            print(f"Dry-run nearest start: {node_id} ({dist:.2f}m)")
+        return node_id
+    print("Dry-run requires --from-node or both --start-x/--start-y.")
     return None
 
-def nearest_waypoint(graph, x, y):
-    best_id, best_dist = None, float('inf')
-    for nid, info in graph['waypoints'].items():
-        d = math.hypot(info['x'] - x, info['y'] - y)
-        if d < best_dist:
-            best_dist = d
-            best_id = nid
-    return best_id, best_dist
 
-# ── SLAM Pose ──
+def resolve_live_start(
+    args: argparse.Namespace,
+    graph: Dict[str, Any],
+    pose: Tuple[float, float, float],
+) -> Optional[str]:
+    nearest_id, nearest_dist = waypoint_graph.nearest_waypoint(graph, pose[0], pose[1])
+    if not nearest_id:
+        print("No waypoint is available in the graph.")
+        return None
 
-def get_slam_pose():
-    """Get current (x, y, yaw) from SLAM via Gateway persistent session."""
-    p = subprocess.Popen(
-        [CLIENT, 'eth0', '--persistent-world-state-session'],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1
+    if not args.from_node:
+        print(f"Nearest live start: {nearest_id} ({nearest_dist:.2f}m)")
+        return nearest_id
+
+    if args.from_node not in graph["waypoints"]:
+        print(f"Unknown start node: {args.from_node}")
+        return None
+    override_dist = node_distance_from_pose(graph, args.from_node, pose)
+    if override_dist > args.start_tolerance:
+        print(
+            f"Start override rejected: current pose is {override_dist:.2f}m from "
+            f"{args.from_node}, tolerance is {args.start_tolerance:.2f}m."
+        )
+        print(f"Falling back to nearest live start: {nearest_id} ({nearest_dist:.2f}m)")
+        return nearest_id
+    print(f"Using live start override: {args.from_node} ({override_dist:.2f}m)")
+    return args.from_node
+
+
+def print_route(graph: Dict[str, Any], route: List[str]) -> None:
+    print(
+        f"Route on {graph.get('map_id')} "
+        f"({graph.get('edge_source')}, {len(route) - 1} hops, "
+        f"{waypoint_graph.route_distance(graph, route):.2f}m):"
     )
-    q = queue.Queue()
-    def rdr():
-        for line in iter(p.stdout.readline, ''):
-            s = line.strip()
-            if s.startswith('{'):
-                try: q.put(json.loads(s))
-                except: pass
-    threading.Thread(target=rdr, daemon=True).start()
-    time.sleep(3)
+    for idx, node_id in enumerate(route):
+        node = graph["waypoints"][node_id]
+        label = "start" if idx == 0 else f"hop {idx}"
+        print(f"  {label}: {node_id} ({node['name']}) [{node['x']:.2f}, {node['y']:.2f}]")
 
-    p.stdin.write(json.dumps({"action": "get_world_state", "request_id": "pose1"}) + '\n')
-    p.stdin.flush()
 
-    pose = (0.0, 0.0, 0.0)
-    deadline = time.time() + 8
-    while time.time() < deadline:
-        try:
-            d = q.get(timeout=0.5)
-            if 'world_state' in d:
-                cp = d['world_state'].get('current_pose', {})
-                pp = cp.get('pose', {})
-                x = pp.get('x', 0)
-                y = pp.get('y', 0)
-                yaw = pp.get('yaw', 0)
-                if x is not None and y is not None:
-                    pose = (x, y, yaw)
-                break
-        except queue.Empty:
-            pass
-
-    p.stdin.close()
-    p.terminate()
-    return pose
-
-# ── Motion ──
-
-def send_sport(cmd_dict, timeout_s=3):
-    """Send a command to sport_bridge, return response."""
-    p = subprocess.Popen(
-        [BRIDGE, 'eth0'],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True
-    )
-    out, _ = p.communicate(input=json.dumps(cmd_dict) + '\n', timeout=timeout_s)
-    try:
-        resp = json.loads(out.strip())
-        return resp
-    except:
-        return {"error": "parse_failed", "raw": out}
-
-def stop_robot():
-    send_sport({"stop": True})
-
-def rotate_to_yaw(target_yaw, current_yaw):
-    """Rotate in place to target yaw using sport_bridge."""
-    # Compute shortest rotation
-    diff = target_yaw - current_yaw
-    diff = math.atan2(math.sin(diff), math.cos(diff))  # normalize to [-pi, pi]
-
-    if abs(diff) < ROTATE_THRESHOLD_RAD:
-        return True  # Already aligned
-
-    direction = 1.0 if diff > 0 else -1.0
-    duration = int(abs(diff) / ROTATE_SPEED * 1000)
-    duration = max(300, min(3000, duration))  # clamp
-
-    print(f'  Rotating {math.degrees(diff):.0f}° ({duration}ms)...')
-    resp = send_sport({
-        "vx": 0.0, "vy": 0.0, "vyaw": direction * ROTATE_SPEED,
-        "duration_ms": duration
-    })
-    return resp.get('ok') == 'true'
-
-def move_forward(distance_m):
-    """Move forward by distance_m meters."""
-    duration = int(distance_m / MOVE_SPEED_MPS * 1000)
-    duration = max(300, min(5000, duration))
-
-    print(f'  Moving {distance_m:.2f}m ({duration}ms)...')
-    resp = send_sport({
-        "vx": MOVE_SPEED_MPS, "vy": 0.0, "vyaw": 0.0,
-        "duration_ms": duration
-    })
-    return resp.get('ok') == 'true'
-
-# ── Main ──
-
-def main():
-    if len(sys.argv) < 2:
-        print('Usage: python3 waypoint_nav.py <target_node_id> [speed_mps]')
-        sys.exit(1)
-
-    target_node = sys.argv[1]
-    global MOVE_SPEED_MPS
-    if len(sys.argv) > 2:
-        MOVE_SPEED_MPS = float(sys.argv[2])
-
-    graph = load_graph()
-    if target_node not in graph['waypoints']:
-        print(f'Unknown node: {target_node}')
-        print('Available:', list(graph['waypoints'].keys()))
-        sys.exit(1)
-
-    # Get current pose
-    print('Getting SLAM pose...')
-    x, y, yaw = get_slam_pose()
-    print(f'Current: x={x:.2f} y={y:.2f} yaw={math.degrees(yaw):.0f}°')
-
-    # Find nearest waypoint
-    nearest_id, nearest_dist = nearest_waypoint(graph, x, y)
-    print(f'Nearest: {nearest_id} ({nearest_dist:.2f}m)')
-
-    # Route
-    route = bfs_route(graph, nearest_id, target_node)
+def plan_route(args: argparse.Namespace, graph: Dict[str, Any], start_node: str) -> Optional[List[str]]:
+    if args.target_node not in graph["waypoints"]:
+        print(f"Unknown target node: {args.target_node}")
+        print("Available:", ", ".join(sorted(graph["waypoints"])))
+        return None
+    route = waypoint_graph.bfs_route(graph, start_node, args.target_node)
     if not route:
-        print(f'No route from {nearest_id} to {target_node}')
-        sys.exit(1)
+        print(f"No route from {start_node} to {args.target_node}")
+        return None
+    return route
 
-    # Skip first waypoint if we're already at it
-    if nearest_dist < ARRIVE_THRESHOLD_M and route[0] == nearest_id:
-        pass  # keep it as we need it for direction
 
-    print(f'\nRoute ({len(route)-1} hops):')
-    for i, nid in enumerate(route):
-        info = graph['waypoints'][nid]
-        marker = '→' if i > 0 else '📍'
-        print('  %s %s (%s) [%.2f, %.2f]' % (marker, nid, info['name'], info['x'], info['y']))
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Route to a GO2W waypoint.")
+    parser.add_argument("target_node")
+    parser.add_argument("legacy_speed", nargs="?", type=float, help="Backward-compatible speed positional.")
+    parser.add_argument("--map-id", default="go2w_real_site")
+    parser.add_argument("--registry", default=waypoint_graph.REGISTRY_PATH)
+    parser.add_argument("--graph", default=waypoint_graph.GRAPH_PATH)
+    parser.add_argument("--rebuild-graph", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="Validate route only; do not start robot processes.")
+    parser.add_argument("--from-node", help="Start node for dry-run, or a live override within tolerance.")
+    parser.add_argument("--start-x", type=float)
+    parser.add_argument("--start-y", type=float)
+    parser.add_argument("--speed", type=float)
+    parser.add_argument("--arrival-radius", type=float, default=DEFAULT_ARRIVAL_RADIUS_M)
+    parser.add_argument("--start-tolerance", type=float, default=DEFAULT_START_TOLERANCE_M)
+    parser.add_argument("--segment-timeout-min", type=float, default=SEGMENT_TIMEOUT_MIN_S)
+    parser.add_argument("--segment-timeout-margin", type=float, default=SEGMENT_TIMEOUT_MARGIN_S)
+    args = parser.parse_args(argv)
 
-    try:
-        # Execute hops
-        current_x, current_y, current_yaw = x, y, yaw
+    graph = load_or_build_graph(args)
+    print(f"Graph: {len(graph['waypoints'])} waypoints, {len(graph['edges'])} edges, source={graph.get('edge_source')}")
 
-        for i, node_id in enumerate(route):
-            if i == 0:
-                continue  # Skip starting node
+    if args.dry_run:
+        start_node = resolve_dry_run_start(args, graph)
+        if not start_node:
+            return 2
+        route = plan_route(args, graph, start_node)
+        if not route:
+            return 2
+        print_route(graph, route)
+        print("Dry-run complete: no Gateway or sport_bridge process was started.")
+        return 0
 
-            target = graph['waypoints'][node_id]
-            tx, ty = target['x'], target['y']
+    from nav_core import NavigationSession
 
-            print('\n── Hop %d: → %s (%s) ──' % (i, node_id, target['name']))
+    # Start the session before route planning in live mode so the route seed is
+    # based on the current SLAM pose, not on a stale command-line assumption.
+    speed = args.speed if args.speed is not None else args.legacy_speed or DEFAULT_SPEED_MPS
+    print(f"Starting live NavigationSession, speed cap {speed:.2f} m/s")
+    with NavigationSession() as nav:
+        pose = nav.pose
+        print(f"Current pose: x={pose[0]:.2f} y={pose[1]:.2f} yaw={math.degrees(pose[2]):.1f}deg")
+        start_node = resolve_live_start(args, graph, pose)
+        if not start_node:
+            return 2
+        route = plan_route(args, graph, start_node)
+        if not route:
+            return 2
+        print_route(graph, route)
 
-            for attempt in range(3):
-                # Get fresh pose
-                current_x, current_y, current_yaw = get_slam_pose()
+        for index, node_id in enumerate(route[1:], start=1):
+            target = graph["waypoints"][node_id]
+            previous = graph["waypoints"][route[index - 1]]
+            segment_dist = math.hypot(float(target["x"]) - float(previous["x"]), float(target["y"]) - float(previous["y"]))
+            max_time = max(
+                args.segment_timeout_min,
+                segment_dist / max(speed, 0.05) + args.segment_timeout_margin,
+            )
+            print(
+                f"Hop {index}/{len(route) - 1}: {node_id} ({target['name']}) "
+                f"dist={segment_dist:.2f}m timeout={max_time:.1f}s"
+            )
+            result = nav.move_to_xy(
+                float(target["x"]),
+                float(target["y"]),
+                goal_tol=args.arrival_radius,
+                max_speed=speed,
+                max_time=max_time,
+            )
+            print(f"  result={result}")
+            if result != "ARRIVED":
+                return 2
+        return 0
 
-                dx = tx - current_x
-                dy = ty - current_y
-                dist = math.hypot(dx, dy)
 
-                if dist < ARRIVE_THRESHOLD_M:
-                    print(f'  ✅ Arrived ({dist:.2f}m)')
-                    break
-
-                target_bearing = math.atan2(dy, dx)
-                print(f'  Dist: {dist:.2f}m  Bearing: {math.degrees(target_bearing):.0f}°')
-
-                # Rotate to face target
-                rotate_to_yaw(target_bearing, current_yaw)
-
-                # Wait for rotation to settle
-                time.sleep(0.5)
-
-                # Get pose after rotation
-                _, _, current_yaw = get_slam_pose()
-                dx = tx - current_x
-                dy = ty - current_y
-                dist = math.hypot(dx, dy)
-
-                if dist < ARRIVE_THRESHOLD_M:
-                    print(f'  ✅ Arrived ({dist:.2f}m)')
-                    break
-
-                # Move forward
-                move_forward(min(dist, 1.0))  # max 1m per hop segment
-
-                # Check arrival
-                time.sleep(0.5)
-                current_x, current_y, current_yaw = get_slam_pose()
-                dx = tx - current_x
-                dy = ty - current_y
-                dist = math.hypot(dx, dy)
-
-                if dist < ARRIVE_THRESHOLD_M:
-                    print(f'  ✅ Arrived ({dist:.2f}m)')
-                    break
-
-                print(f'  Remaining: {dist:.2f}m (attempt {attempt+1})')
-            else:
-                print(f'  ⚠️ Failed to reach {node_id} after 3 attempts')
-
-        print(f'\n🎯 Navigation complete!')
-
-    except KeyboardInterrupt:
-        print('\nInterrupted.')
-    finally:
-        stop_robot()
-        print('Stopped.')
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -291,6 +291,7 @@ def build_planner_context(
     user_command: str,
     map_id: str | None = None,
     perception_context: dict[str, Any] | None = None,
+    active_pcd: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     profile = registry.get_map(map_id or snapshot.get("expected_map_id") or registry.default_map_id)
     pose = _pose_dict_from_snapshot(snapshot)
@@ -339,6 +340,17 @@ def build_planner_context(
         perception_context,
         current_time_ms=int(time.time() * 1000),
     )
+
+    # Build active_pcd info for the context
+    active_pcd_info: dict[str, Any] | None = None
+    if active_pcd:
+        active_pcd_info = {
+            "active_map_id": active_pcd.get("active_map_id", profile.map_id),
+            "pcd_path": active_pcd.get("pcd_path", profile.pcd_path),
+            "switched_at": active_pcd.get("switched_at"),
+            "anchor_id": active_pcd.get("anchor_id"),
+        }
+
     return {
         "schema_version": 1,
         "timestamp_ms": timestamp_ms,
@@ -350,6 +362,7 @@ def build_planner_context(
                 "name": profile.name,
                 "pcd_path": profile.pcd_path,
                 "frame_id": profile.frame_id,
+                "active_pcd": active_pcd_info,
             },
             "robot": {
                 "pose": pose,

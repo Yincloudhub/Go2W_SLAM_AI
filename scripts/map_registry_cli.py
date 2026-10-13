@@ -138,6 +138,23 @@ def command_export_topology(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_active(args: argparse.Namespace) -> int:
+    """Show current active PCD status from active_pcd.json."""
+    try:
+        from scripts.nav_relocate import get_active_pcd
+        active = get_active_pcd()
+    except Exception:
+        active = {
+            'active_map_id': 'map_701',
+            'pcd_path': '/home/unitree/maps/staging/map_701.pcd',
+            'switched_at': None,
+            'switched_from': None,
+            'anchor_id': 'mapping_origin_701',
+        }
+    print_json(active, pretty=args.pretty)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="GO2W map registry and topology command helper.")
     parser.add_argument("--registry", default=str(DEFAULT_REGISTRY), help="Path to map registry JSON.")
@@ -168,6 +185,10 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--map-id", required=True)
     export_parser.add_argument("--output", help="Optional output path. Stdout is used if omitted.")
     export_parser.set_defaults(func=command_export_topology)
+
+    active_parser = subparsers.add_parser("active", help="Show current active PCD status from active_pcd.json.")
+    active_parser.add_argument("--pretty", action="store_true")
+    active_parser.set_defaults(func=command_active)
     return parser
 
 

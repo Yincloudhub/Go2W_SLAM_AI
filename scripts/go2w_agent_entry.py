@@ -38,10 +38,32 @@ from edge_autonomy.execution_report import summarize_agent_output, write_executi
 
 DEFAULT_GATEWAY_CLIENT = str(REPO_ROOT / "robot" / "slam_gateway_refactor" / "build" / "slam_llm_command_client")
 DEFAULT_START_SLAM = str(REPO_ROOT / "scripts" / "start_go2w_slam_stack.sh")
-DEFAULT_MAP_PATH = "/home/unitree/test.pcd"
+_FALLBACK_MAP_PATH = "/home/unitree/maps/staging/map_701.pcd"
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
 DEFAULT_MAP_ID = "go2w_real_site"
 DEFAULT_LOG_DIR = REPO_ROOT / "artifacts" / "robot_runs"
+
+
+def _load_active_pcd() -> dict[str, Any] | None:
+    """Load active PCD info from artifacts/active_pcd.json. Returns None if unavailable."""
+    path = REPO_ROOT / "artifacts" / "active_pcd.json"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data: dict[str, Any] = json.load(f)
+            return data if isinstance(data, dict) else None
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _resolve_default_map_path() -> str:
+    """Resolve DEFAULT_MAP_PATH from active_pcd.json, falling back to hardcoded value."""
+    active = _load_active_pcd()
+    if active and active.get("pcd_path"):
+        return str(active["pcd_path"])
+    return _FALLBACK_MAP_PATH
+
+
+DEFAULT_MAP_PATH = _resolve_default_map_path()
 
 
 def decode_command(args: argparse.Namespace) -> str:
@@ -800,6 +822,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # Print active PCD status at startup
+    active = _load_active_pcd()
+    if active:
+        print(
+            f"[active_pcd] map_id={active.get('active_map_id', '?')} "
+            f"pcd={active.get('pcd_path', '?')} "
+            f"anchor={active.get('anchor_id', '?')} "
+            f"switched={active.get('switched_at', '?')}",
+            file=sys.stderr,
+            flush=True,
+        )
+    else:
+        print(
+            "[active_pcd] no active_pcd.json found — using hardcoded fallbacks",
+            file=sys.stderr,
+            flush=True,
+        )
     if args.execute and args.skip_gateway_check:
         print_json(
             {

@@ -49,9 +49,9 @@ STALE_THRESHOLD_S = 1.0         # pose/clearance older than this → stale
 GOAL_TOLERANCE_M = 0.25         # considered arrived within 25cm
 YAW_TOLERANCE_RAD = 0.1         # ~6 degrees
 LARGE_YAW_THRESHOLD = 0.7       # >~40 degrees: rotate in place only
-MAX_SPEED_MPS = 0.20            # maximum forward speed
+MAX_SPEED_MPS = 0.40            # maximum forward speed (bridge clamps to 0.50)
 MIN_SPEED_MPS = 0.15            # minimum observed start speed for GO2W on site
-REDUCED_SPEED_FACTOR = 0.5      # speed multiplier when front clearance is moderate
+REDUCED_SPEED_FACTOR = 0.7      # speed multiplier when front clearance is moderate (was 0.5)
 CLEARANCE_SAFE_M = 0.50         # above this: full speed (normal tracking)
 ROTATE_SPEED_RADPS = 0.30       # rotation speed (also used as vyaw clamp)
 K_YAW = 0.5                     # yaw correction proportional gain
@@ -65,8 +65,14 @@ DIAGONAL_EVADE_VX_MPS = 0.03   # optional forward creep when front is not danger
 VY_LEFT_SIGN = +1.0
 VY_RIGHT_SIGN = -1.0
 
-LATERAL_CLEARANCE_SAFE_M = 0.50   # side clearance must exceed this for safe lateral move
-LATERAL_CLEARANCE_DANGER_M = 0.30 # below this: side blocked, don't evade that way
+# ── Side clearance — split by use case ──
+# Rotation-in-place tolerates much closer side obstacles than lateral movement.
+# Go2W body width ≈0.35m; rotation circle needs ≈0.40m diameter → 0.20m radius.
+# With a 0.10m safety margin for sensor noise/leg self-occlusion during rotation.
+ROTATION_SIDE_MIN_M = 0.10      # below this: side too close even for in-place rotation
+ROTATION_SIDE_CONSERVATIVE_M = 0.18  # rotation at non-rotation_point waypoints
+LATERAL_CLEARANCE_SAFE_M = 0.25 # side clearance for safe lateral move (was 0.50 — too strict)
+LATERAL_CLEARANCE_DANGER_M = 0.20 # below this: side blocked for lateral movement
 
 EVADE_TARGET_SHIFT_M = 0.30      # exit evasion once lateral progress reaches this
 EVADE_MIN_PROGRESS_M = 0.08      # minimum lateral progress in EVADE_SWITCH_TIME_S
@@ -79,6 +85,21 @@ EVADE_YAW_HOLD_MAX_RADPS = 0.18  # max vyaw during lateral evade
 FRONT_EVADE_TRIGGER_M = 0.35     # below this: enter lateral evasion
 FRONT_HARD_STOP_M = 0.12         # below this AND no side escape → BLOCKED
 FRONT_RESUME_M = 0.50            # above this: exit evasion, resume normal tracking
+
+# ── Probe behaviour (instead of instant BLOCKED) ──
+PROBE_ROTATION_DEG = 12.0        # rotate this many degrees per probe increment
+PROBE_ROTATION_SPEED = 0.15      # rad/s for probe rotation (slower than normal 0.30)
+PROBE_SETTLE_S = 0.5             # seconds to wait for sensors after each probe step
+PROBE_MAX_ATTEMPTS = 3           # max probe increments per direction before giving up
+PROBE_LATERAL_VY = 0.08          # vy for lateral probing
+PROBE_LATERAL_DURATION_S = 1.5   # seconds per lateral probe
+PROBE_BACKUP_DIST_M = 0.30       # backup distance when rotation probe fails
+PROBE_TIMEOUT_EXTEND_S = 20.0    # extra time when timeout fires but robot is close/progressing
+
+# ── Sensor temporal filter ──
+CLEARANCE_FILTER_WINDOW = 3      # median-filter over this many recent readings
+SELF_OCCLUSION_SIDE_ROTATING_M = 0.18  # raised self-occlusion during rotation (legs visible)
+
 GATEWAY_POLL_INTERVAL = 0.20    # seconds between get_world_state requests (5 Hz)
 DDS_SETTLE_S = 3.0              # seconds to wait for Gateway DDS subscription
 STUCK_TIME_S = 5.0              # seconds of no progress -> STUCK
@@ -120,6 +141,10 @@ class NavigationSession:
             'front': 2.0, 'left': 2.0, 'right': 2.0, 'rear': 2.0
         }
         self._clearance_ts: float = 0.0
+        # ── Sensor temporal filter (median over recent readings) ──
+        self._clearance_history: Dict[str, list] = {
+            'front': [], 'left': [], 'right': [], 'rear': []
+        }
         self._loc_status: str = 'unknown'
         self._safety_allows_navigation: bool = False
         self._safety_reason: str = 'not_initialized'
@@ -377,11 +402,26 @@ class NavigationSession:
                         def _apply_self_occ(val, thresh):
                             return 2.0 if val < thresh else val
 
+                        raw_front = _apply_self_occ(front_final, SELF_OCCLUSION_FRONT_M)
+                        raw_left  = _apply_self_occ(xt16_left,  SELF_OCCLUSION_SIDE_M)
+                        raw_right = _apply_self_occ(xt16_right, SELF_OCCLUSION_SIDE_M)
+                        raw_rear  = _apply_self_occ(xt16_rear,  SELF_OCCLUSION_REAR_M)
+
+                        # ── Temporal median filter: reject single-frame XT16 spikes ──
+                        def _median_filter(key, new_val):
+                            hist = self._clearance_history[key]
+                            hist.append(new_val)
+                            if len(hist) > CLEARANCE_FILTER_WINDOW:
+                                hist.pop(0)
+                            if len(hist) < CLEARANCE_FILTER_WINDOW:
+                                return new_val  # not enough history yet
+                            return sorted(hist)[len(hist) // 2]
+
                         self._clearance = {
-                            'front': _apply_self_occ(front_final, SELF_OCCLUSION_FRONT_M),
-                            'left':  _apply_self_occ(xt16_left,  SELF_OCCLUSION_SIDE_M),
-                            'right': _apply_self_occ(xt16_right, SELF_OCCLUSION_SIDE_M),
-                            'rear':  _apply_self_occ(xt16_rear,  SELF_OCCLUSION_REAR_M),
+                            'front': _median_filter('front', raw_front),
+                            'left':  _median_filter('left',  raw_left),
+                            'right': _median_filter('right', raw_right),
+                            'rear':  _median_filter('rear',  raw_rear),
                         }
                         self._clearance_ts = now
 
@@ -582,8 +622,8 @@ class NavigationSession:
                 clearance.get('right', 2.0),
                 clearance.get('rear', 2.0),
             )
-            if min_side < LATERAL_CLEARANCE_DANGER_M:
-                print(f'[rotate_to] min side clearance {min_side:.2f}m < {LATERAL_CLEARANCE_DANGER_M}m, blocking rotation')
+            if min_side < ROTATION_SIDE_MIN_M:
+                print(f'[rotate_to] min side clearance {min_side:.2f}m < {ROTATION_SIDE_MIN_M}m, blocking rotation')
                 self._send_bridge({'stop': True})
                 return False
 
@@ -653,6 +693,16 @@ class NavigationSession:
         self._evade_last_progress = 0.0
         self._evade_switch_count = 0
 
+        # ── Probe state (instead of instant BLOCKED) ──
+        self._probe_mode = None         # None | 'rotate' | 'lateral'
+        self._probe_t0 = 0.0            # when current probe phase started
+        self._probe_dir = 0             # +1 CCW, -1 CW for rotation; +1 left, -1 right for lateral
+        self._probe_attempt = 0         # attempt count in current direction
+        self._probe_phase = None        # 'rotating' | 'settling'
+        self._probe_tried_flip = False  # already tried opposite direction?
+        self._probe_backup_done = False # already tried backup?
+        self._timeout_extended = False  # timeout already extended once?
+
         # Stuck detection state
         stuck_t0 = time.monotonic()
         stuck_dist_at_t0 = float('inf')
@@ -714,11 +764,22 @@ class NavigationSession:
                 left_safe = left >= LATERAL_CLEARANCE_DANGER_M
                 right_safe = right >= LATERAL_CLEARANCE_DANGER_M
                 if not left_safe and not right_safe:
-                    self._send_bridge({'stop': True})
-                    print(f'[move_to_xy] BLOCKED: front={front:.2f}m < {FRONT_HARD_STOP_M}m, no side escape')
-                    return 'BLOCKED'
-                # Front is critical but at least one side is clear — will evade below
-                print(f'[move_to_xy] front={front:.2f}m critical but side escape available (L={left:.2f} R={right:.2f})')
+                    # Both sides tight — enter lateral probe instead of instant BLOCKED.
+                    # The probe will try tiny lateral movements to find an opening.
+                    if self._evade_mode != 'lateral':
+                        self._evade_mode = 'lateral'
+                        self._evade_t0 = now
+                        self._evade_attempt_t0 = now
+                        self._evade_start_pose = (x, y, yaw)
+                        self._evade_start_yaw = yaw
+                        self._evade_last_progress = 0.0
+                        self._evade_switch_count = 0
+                        self._evade_dir = 0  # will trigger probe lateral branch below
+                        print(f'[move_to_xy] front={front:.2f}m < {FRONT_HARD_STOP_M}m, no side escape → probing laterally')
+                    # Fall through to lateral probe branch (elif in_evasion and _evade_dir==0)
+                else:
+                    # Front is critical but at least one side is clear — will evade below
+                    print(f'[move_to_xy] front={front:.2f}m critical but side escape available (L={left:.2f} R={right:.2f})')
 
             # ── Lateral evasion ──
             in_evasion = (self._evade_mode == 'lateral')
@@ -849,25 +910,171 @@ class NavigationSession:
                     stuck_t0 = now  # pure lateral: don't false-trigger forward stuck
 
             elif in_evasion and self._evade_dir == 0:
-                # No side escape available and no body_corridor → cannot safely creep.
-                # Blind forward creep without body corridor validation risks collision.
-                # Phase 1: return BLOCKED. Phase 2: restore conditional creep via body_corridor.passable.
-                self._send_bridge({'stop': True})
-                print(f'[move_to_xy] BLOCKED: front={front:.2f}m, no side escape, no body_corridor (L={left:.2f} R={right:.2f})')
-                return 'BLOCKED'
+                # ── No safe side for full evasion → try lateral probe ──
+                if self._probe_mode != 'lateral':
+                    # Enter lateral probe: try tiny vy to each side, see if one opens up
+                    self._probe_mode = 'lateral'
+                    self._probe_t0 = now
+                    self._probe_attempt = 0
+                    self._probe_tried_flip = False
+                    # Start probing toward the side with slightly more clearance
+                    self._probe_dir = +1 if left >= right else -1
+                    self._probe_phase = 'rotating'
+                    print(f'[move_to_xy] PROBE LATERAL: L={left:.2f} R={right:.2f}, trying {"left" if self._probe_dir > 0 else "right"}')
+
+                # ── Lateral probe state machine ──
+                # Default to stopped for all internal probe transitions.
+                vx = 0.0
+                vy = 0.0
+                vyaw = 0.0
+
+                elapsed = now - self._probe_t0
+                if self._probe_phase == 'settling':
+                    if elapsed > PROBE_SETTLE_S:
+                        # Re-check: did clearance open up?
+                        side_now = left if self._probe_dir > 0 else right
+                        other_now = right if self._probe_dir > 0 else left
+                        if side_now >= LATERAL_CLEARANCE_SAFE_M:
+                            # Side opened — use it!
+                            self._probe_mode = None
+                            self._evade_dir = self._probe_dir
+                            self._evade_attempt_t0 = now  # reset timer for fresh evasion start
+                            in_evasion = True
+                            print(f'[move_to_xy] PROBE LATERAL OK: {"left" if self._probe_dir>0 else "right"} opened to {side_now:.2f}m')
+                            # Fall through to heartbeat with vx=vy=vyaw=0; next iteration enters evasion branch
+                        elif not self._probe_tried_flip and other_now >= LATERAL_CLEARANCE_SAFE_M:
+                            # Other side is clear — switch
+                            self._probe_dir = -self._probe_dir
+                            self._probe_tried_flip = True
+                            self._probe_t0 = now
+                            self._probe_phase = 'rotating'
+                            print(f'[move_to_xy] PROBE LATERAL: other side clear ({other_now:.2f}m), switching')
+                        elif self._probe_attempt >= PROBE_MAX_ATTEMPTS:
+                            # Exhausted — both sides probed, neither opened
+                            self._send_bridge({'stop': True})
+                            print(f'[move_to_xy] BLOCKED: lateral probe exhausted (L={left:.2f} R={right:.2f})')
+                            return 'BLOCKED'
+                        else:
+                            # No side opened yet — try other direction (no count increment here,
+                            # the increment happens at rotating→settling transition below)
+                            self._probe_dir = -self._probe_dir
+                            self._probe_tried_flip = True
+                            self._probe_t0 = now
+                            self._probe_phase = 'rotating'
+                            print(f'[move_to_xy] PROBE LATERAL: no opening, reversing direction')
+                    # else: still settling — use default vx=vy=vyaw=0 set above
+                else:
+                    # 'rotating' phase: apply probe lateral motion
+                    if elapsed < PROBE_LATERAL_DURATION_S:
+                        vy = self._probe_dir * PROBE_LATERAL_VY
+                    else:
+                        # Stop and enter settling
+                        self._probe_phase = 'settling'
+                        self._probe_t0 = now
+                        self._probe_attempt += 1
+                        print(f'[move_to_xy] PROBE LATERAL settling {PROBE_SETTLE_S}s... (attempt {self._probe_attempt}/{PROBE_MAX_ATTEMPTS})')
+
+            elif self._probe_mode == 'rotate':
+                # ── Rotation probe state machine ──
+                # Small rotation increments with stop+re-check between each.
+                # Entered from normal tracking when yaw_error is large but side clearance too low.
+                # Default to stopped for all internal probe transitions.
+                vx = 0.0
+                vy = 0.0
+                vyaw = 0.0
+
+                elapsed = now - self._probe_t0
+                if self._probe_phase == 'backing':
+                    # ── Backup mini-state: drive backward to gain clearance ──
+                    backup_dur = PROBE_BACKUP_DIST_M / 0.12
+                    if elapsed < backup_dur:
+                        vyaw = 0.0
+                        vx = -0.12
+                    else:
+                        # Backup complete — reset and restart probe rotation
+                        self._probe_backup_done = True
+                        self._probe_attempt = 0
+                        self._probe_tried_flip = False
+                        self._probe_dir = +1  # restart CCW
+                        self._probe_t0 = now
+                        self._probe_phase = 'rotating'
+                        print(f'[move_to_xy] PROBE ROTATE: backup done, restarting probe')
+
+                elif self._probe_phase == 'settling':
+                    if elapsed > PROBE_SETTLE_S:
+                        # Re-read clearance after settle
+                        c2 = self.clearance
+                        min_side2 = min(c2.get('left', 2.0), c2.get('right', 2.0), c2.get('rear', 2.0))
+                        if min_side2 >= ROTATION_SIDE_MIN_M:
+                            # Clearance improved — exit probe, continue normal rotation
+                            self._probe_mode = None
+                            print(f'[move_to_xy] PROBE ROTATE OK: min_side={min_side2:.2f}m >= {ROTATION_SIDE_MIN_M}m')
+                            # Fall through to normal tracking below
+                        elif self._probe_attempt >= PROBE_MAX_ATTEMPTS:
+                            if not self._probe_tried_flip:
+                                # Try opposite rotation direction
+                                self._probe_dir = -self._probe_dir
+                                self._probe_tried_flip = True
+                                self._probe_attempt = 0
+                                self._probe_t0 = now
+                                self._probe_phase = 'rotating'
+                                print(f'[move_to_xy] PROBE ROTATE: flipping direction')
+                            elif not self._probe_backup_done:
+                                # Try backup to gain clearance — enter backing mini-state
+                                rear_now = c2.get('rear', 2.0)
+                                if rear_now >= 0.40:
+                                    self._probe_phase = 'backing'
+                                    self._probe_t0 = now
+                                    print(f'[move_to_xy] PROBE ROTATE: backing up {PROBE_BACKUP_DIST_M}m (rear={rear_now:.2f}m)')
+                                else:
+                                    self._send_bridge({'stop': True})
+                                    print(f'[move_to_xy] BLOCKED: rotation probe exhausted, cannot backup (rear={rear_now:.2f}m)')
+                                    return 'BLOCKED'
+                            else:
+                                self._send_bridge({'stop': True})
+                                print(f'[move_to_xy] BLOCKED: rotation probe exhausted after backup')
+                                return 'BLOCKED'
+                        else:
+                            # Try another increment in same direction
+                            self._probe_attempt += 1
+                            self._probe_t0 = now
+                            self._probe_phase = 'rotating'
+                    # else: still settling — use default vx=vy=vyaw=0
+
+                else:
+                    # 'rotating' phase: apply probe rotation for ~PROBE_ROTATION_DEG degrees
+                    probe_dur = math.radians(PROBE_ROTATION_DEG) / PROBE_ROTATION_SPEED
+                    if elapsed < probe_dur:
+                        vyaw = self._probe_dir * PROBE_ROTATION_SPEED
+                    else:
+                        # Stop and settle
+                        self._probe_phase = 'settling'
+                        self._probe_t0 = now
+                        print(f'[move_to_xy] PROBE ROTATE settling {PROBE_SETTLE_S}s... (attempt {self._probe_attempt}/{PROBE_MAX_ATTEMPTS})')
 
             else:
                 # ── Normal tracking: forward motion + yaw correction ──
                 vy = 0.0
                 if abs(yaw_error) > LARGE_YAW_THRESHOLD:
                     vx = 0.0
-                    vyaw = ROTATE_SPEED_RADPS if yaw_error > 0 else -ROTATE_SPEED_RADPS
-                    # Side clearance check for rotation
+                    # Side clearance check for rotation — use rotation-specific threshold
                     min_side = min(left, right, clearance.get('rear', 2.0))
-                    if min_side < LATERAL_CLEARANCE_DANGER_M:
+                    if min_side < ROTATION_SIDE_MIN_M:
+                        # Too close to rotate — enter probe instead of instant BLOCKED
                         self._send_bridge({'stop': True})
-                        print(f'[move_to_xy] BLOCKED: min side clearance {min_side:.2f}m, cannot rotate')
-                        return 'BLOCKED'
+                        self._probe_mode = 'rotate'
+                        self._probe_t0 = now
+                        self._probe_dir = +1 if yaw_error > 0 else -1  # CCW if target is left
+                        self._probe_attempt = 0
+                        self._probe_phase = 'rotating'
+                        self._probe_tried_flip = False
+                        self._probe_backup_done = False
+                        print(f'[move_to_xy] PROBE ROTATE entry: min_side={min_side:.2f}m < {ROTATION_SIDE_MIN_M}m, yaw_err={math.degrees(yaw_error):.0f}deg')
+                        vx = 0.0
+                        vy = 0.0
+                        vyaw = 0.0
+                    else:
+                        vyaw = ROTATE_SPEED_RADPS if yaw_error > 0 else -ROTATE_SPEED_RADPS
                 else:
                     speed_factor = 1.0 if front >= CLEARANCE_SAFE_M else REDUCED_SPEED_FACTOR
                     vx = min(max_speed * speed_factor, dist * 0.5)
@@ -875,16 +1082,17 @@ class NavigationSession:
                     vyaw = max(-ROTATE_SPEED_RADPS, min(ROTATE_SPEED_RADPS, K_YAW * yaw_error))
 
                 # ── Stuck detection (forward mode) ──
-                if dist < stuck_dist_at_t0 - STUCK_DIST_THRESHOLD_M:
-                    stuck_t0 = now
-                    stuck_dist_at_t0 = dist
-                elif now - stuck_t0 > STUCK_TIME_S and vx > 0:
-                    self._send_bridge({'stop': True})
-                    print(f'[move_to_xy] STUCK: dist={dist:.2f}m unchanged for {now - stuck_t0:.1f}s')
-                    return 'STUCK'
-                elif vx == 0:
-                    stuck_t0 = now
-                    stuck_dist_at_t0 = dist
+                if self._probe_mode is None:  # only in REAL normal tracking, not probe exit
+                    if dist < stuck_dist_at_t0 - STUCK_DIST_THRESHOLD_M:
+                        stuck_t0 = now
+                        stuck_dist_at_t0 = dist
+                    elif now - stuck_t0 > STUCK_TIME_S and vx > 0:
+                        self._send_bridge({'stop': True})
+                        print(f'[move_to_xy] STUCK: dist={dist:.2f}m unchanged for {now - stuck_t0:.1f}s')
+                        return 'STUCK'
+                    elif vx == 0:
+                        stuck_t0 = now
+                        stuck_dist_at_t0 = dist
 
             # ── Heartbeat ──
             if now - last_heartbeat >= HEARTBEAT_INTERVAL:
@@ -897,9 +1105,26 @@ class NavigationSession:
 
             time.sleep(LOOP_SLEEP)
 
+            # ── Pre-timeout extension check ──
+            # If we're about to run out of time but we're close or making progress, extend once.
+            remaining_s = max_time - (now - start_t)
+            if not self._timeout_extended and remaining_s < 10.0:
+                try:
+                    _r = dist
+                except NameError:
+                    _r = float('inf')
+                if _r < 1.0 or (stuck_dist_at_t0 < 999.0 and _r < stuck_dist_at_t0 - STUCK_DIST_THRESHOLD_M):
+                    max_time += PROBE_TIMEOUT_EXTEND_S
+                    self._timeout_extended = True
+                    print(f'[move_to_xy] TIMEOUT extended by {PROBE_TIMEOUT_EXTEND_S:.0f}s (remaining={_r:.2f}m)')
+
         # Timeout
         self._send_bridge({'stop': True})
-        print(f'[move_to_xy] TIMEOUT after {max_time:.0f}s, dist remaining={dist:.2f}m')
+        try:
+            _remaining = dist
+        except NameError:
+            _remaining = float('inf')
+        print(f'[move_to_xy] TIMEOUT after {max_time:.0f}s, dist remaining={_remaining:.2f}m')
         return 'TIMEOUT'
 
 

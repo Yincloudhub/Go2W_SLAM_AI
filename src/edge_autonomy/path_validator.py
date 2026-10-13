@@ -27,7 +27,24 @@ DEFAULT_REGISTRY = str(
 )
 
 # Cache: pcd_path -> list of (x,y) points
+DEFAULT_PCD_PATH = "/home/unitree/maps/staging/map_701.pcd"
+
 _pcd_cache: Dict[str, List[Tuple[float, float]]] = {}
+
+
+def _registry_pcd_path(
+    registry_path: str, map_id: Optional[str], fallback: str
+) -> str:
+    if fallback != DEFAULT_PCD_PATH or not map_id:
+        return fallback
+    try:
+        reg = load_multi_registry(registry_path)
+    except (OSError, json.JSONDecodeError):
+        return fallback
+    for m in reg.get("maps", []):
+        if m.get("map_id") == map_id and m.get("pcd_path"):
+            return str(m["pcd_path"])
+    return fallback
 
 
 def _load_pcd(pcd_path: str) -> List[Tuple[float, float]]:
@@ -75,7 +92,7 @@ def check_path(
     to_x: float,
     to_y: float,
     *,
-    pcd_path: str = "/home/unitree/test.pcd",
+    pcd_path: str = DEFAULT_PCD_PATH,
     num_samples: int = 20,
     density_threshold: int = 15,
     radius_m: float = 0.25,
@@ -339,7 +356,7 @@ def build_multi_pcd_reachability_graph(
 
 def build_coarse_map(
     *,
-    pcd_path: str = "/home/unitree/test.pcd",
+    pcd_path: str = DEFAULT_PCD_PATH,
     grid_size: int = 30,
     x_range: Tuple[float, float] = (-5.0, 5.0),
     y_range: Tuple[float, float] = (-7.0, 2.0),
@@ -354,6 +371,7 @@ def build_coarse_map(
         registry_path: Path to registry for topology node overlay.
         map_id: If set, only show nodes from this map.
     """
+    pcd_path = _registry_pcd_path(registry_path, map_id, pcd_path)
     pts = _load_pcd(pcd_path)
     x_min, x_max = x_range
     y_min, y_max = y_range
@@ -415,7 +433,7 @@ def build_coarse_map(
 
 def build_adaptive_coarse_map(
     *,
-    pcd_path: str = "/home/unitree/test.pcd",
+    pcd_path: str = DEFAULT_PCD_PATH,
     grid_size: int = 40,
     margin_m: float = 3.0,
     registry_path: str = DEFAULT_REGISTRY,
@@ -423,6 +441,7 @@ def build_adaptive_coarse_map(
 ) -> Dict[str, Any]:
     """Build coarse map with range auto-fitted to topology nodes + margin."""
     reg = load_multi_registry(registry_path)
+    pcd_path = _registry_pcd_path(registry_path, map_id, pcd_path)
     xs, ys = [], []
 
     for m in reg.get("maps", []):
@@ -512,7 +531,7 @@ if __name__ == "__main__":
 
     elif len(sys.argv) >= 5 and sys.argv[1] == "check":
         fx, fy, tx, ty = map(float, sys.argv[2:6])
-        pcd = sys.argv[6] if len(sys.argv) > 6 else "/home/unitree/test.pcd"
+        pcd = sys.argv[6] if len(sys.argv) > 6 else DEFAULT_PCD_PATH
         result = check_path(fx, fy, tx, ty, pcd_path=pcd)
         print(json.dumps(result, indent=2))
 
@@ -537,7 +556,7 @@ if __name__ == "__main__":
 
     elif len(sys.argv) >= 2 and sys.argv[1] == "map":
         size = int(sys.argv[2]) if len(sys.argv) > 2 else 30
-        pcd = sys.argv[3] if len(sys.argv) > 3 else "/home/unitree/test.pcd"
+        pcd = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_PCD_PATH
         map_id = sys.argv[4] if len(sys.argv) > 4 else None
         result = build_coarse_map(
             pcd_path=pcd, grid_size=size, map_id=map_id,
