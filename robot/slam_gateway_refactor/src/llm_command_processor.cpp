@@ -173,7 +173,7 @@ nlohmann::json LlmCommandProcessor::process(const nlohmann::json& cmd)
 
     if (action == "end_mapping") {
         if (!hasOperatorAck(cmd)) return reject("operator_ack_required_for_end_mapping");
-        const std::string map_path = cmd.value("map_path", "/home/unitree/test.pcd");
+        const std::string map_path = cmd.value("map_path", "/home/unitree/maps/staging/map_701.pcd");
         return ok(action, gateway_.endMapping(map_path));
     }
 

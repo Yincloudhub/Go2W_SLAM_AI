@@ -894,7 +894,7 @@ CommandResult OperatorPanel::endMapping(const std::string& map_path, bool confir
         return result;
     }
 
-    const std::string target_path = map_path.empty() ? "/home/unitree/test.pcd" : map_path;
+    const std::string target_path = map_path.empty() ? "/home/unitree/maps/staging/map_701.pcd" : map_path;
     const auto response = sendGatewayCommand({
         {"action", "end_mapping"},
         {"map_path", target_path},

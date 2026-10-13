@@ -35,7 +35,7 @@ public:
     SemanticRoute planText(const std::string& text, double speed_mps, int mode) const;
     nlohmann::json buildNavigateCommand(const std::string& node_id, double speed_mps, int mode) const;
     const nlohmann::json* findNode(const std::string& node_id) const;
-    std::string mapPath(const std::string& fallback = "/home/unitree/test.pcd") const;
+    std::string mapPath(const std::string& fallback = "/home/unitree/maps/staging/map_701.pcd") const;
 
 private:
     const nlohmann::json* findMap() const;

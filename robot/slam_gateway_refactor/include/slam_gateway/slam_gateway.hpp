@@ -46,8 +46,8 @@ public:
     void initApis();
 
     ServiceResult startMapping(const std::string& slam_type = "indoor");
-    ServiceResult endMapping(const std::string& map_path = "/home/unitree/test.pcd");
-    ServiceResult startRelocation(const std::string& map_path = "/home/unitree/test.pcd",
+    ServiceResult endMapping(const std::string& map_path = "/home/unitree/maps/staging/map_701.pcd");
+    ServiceResult startRelocation(const std::string& map_path = "/home/unitree/maps/staging/map_701.pcd",
                                   const PoseData& init_pose = PoseData{});
     ServiceResult submitNavigationGoal(const PoseData& goal);
     ServiceResult pauseNavigation();

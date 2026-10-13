@@ -66,10 +66,10 @@ int main(int argc, const char** argv)
             gateway.startMapping("indoor");
             break;
         case 'w':
-            gateway.endMapping("/home/unitree/test.pcd");
+            gateway.endMapping("/home/unitree/maps/staging/map_701.pcd");
             break;
         case 'a':
-            gateway.startRelocation("/home/unitree/test.pcd");
+            gateway.startRelocation("/home/unitree/maps/staging/map_701.pcd");
             break;
         case 's':
             gateway.addCurrentPoseAsWaypoint();
