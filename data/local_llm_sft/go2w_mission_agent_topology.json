@@ -1,0 +1,653 @@
+{
+  "schema": "go2w_curated_topology_v1",
+  "source": {
+    "robot_snapshot": "artifacts/robot_topology_snapshots/robot_topology_snapshot_20260618_215215.json",
+    "notes": "artifacts/robot_topology_snapshots/route_topology_notes_20260618.md"
+  },
+  "maps": [
+    {
+      "map_id": "map_701",
+      "name": "701中心区域",
+      "pcd_path": "/home/unitree/maps/staging/map_701.pcd",
+      "mapping_origin_anchor_id": "mapping_origin_701",
+      "topology_nodes": [
+        {
+          "map_id": "map_701",
+          "node_id": "mapping_origin_701",
+          "name": "701原点",
+          "aliases": [
+            "701原点",
+            "mapping_origin_701",
+            "701建图原点",
+            "原点",
+            "start"
+          ],
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "mapping_origin"
+          ],
+          "role": "mapping_origin",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "wp_60497f",
+          "name": "尹思园工位",
+          "aliases": [
+            "尹思园工位",
+            "wp_60497f",
+            "尹思园"
+          ],
+          "pose": {
+            "x": 0.342794,
+            "y": 0.241859,
+            "z": 0.063776,
+            "yaw": 0.055345,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "role": "topology_node",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "wp_b738c7",
+          "name": "701中心过道端点",
+          "aliases": [
+            "701中心过道端点",
+            "wp_b738c7",
+            "701中心过道",
+            "中心过道端点"
+          ],
+          "pose": {
+            "x": 1.924472,
+            "y": -0.285415,
+            "z": 0.073413,
+            "yaw": -0.060296,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "role": "corridor_endpoint",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "wp_bbcb4c",
+          "name": "赵博办公室门口",
+          "aliases": [
+            "赵博办公室门口",
+            "wp_bbcb4c",
+            "赵博",
+            "赵博门口"
+          ],
+          "pose": {
+            "x": 1.806374,
+            "y": -5.454979,
+            "z": -0.054606,
+            "yaw": -1.600328,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "role": "topology_node",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "wp_a684c6",
+          "name": "杨书洋工位",
+          "aliases": [
+            "杨书洋工位",
+            "wp_a684c6",
+            "杨书洋"
+          ],
+          "pose": {
+            "x": -1.315379,
+            "y": -4.942294,
+            "z": -0.076254,
+            "yaw": 3.083066,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "role": "topology_node",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "wp_2ae043",
+          "name": "701右侧过道末端节点",
+          "aliases": [
+            "701右侧过道末端节点",
+            "wp_2ae043",
+            "701右侧过道末端",
+            "701右侧末端"
+          ],
+          "pose": {
+            "x": -2.309777,
+            "y": -5.278553,
+            "z": -0.068352,
+            "yaw": 0.251404,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "role": "corridor_endpoint",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "wp_e643bc",
+          "name": "701门外走廊中心点",
+          "aliases": [
+            "701门外走廊中心点",
+            "wp_e643bc",
+            "门外走廊中心",
+            "走廊中心"
+          ],
+          "pose": {
+            "x": -5.528209,
+            "y": 0.131338,
+            "z": 0.212329,
+            "yaw": 3.120553,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified"
+          ],
+          "role": "corridor_endpoint",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "transition_701_to_701_left",
+          "name": "701到701左侧过渡点",
+          "aliases": [
+            "701到701左侧过渡点",
+            "transition_701_to_701_left",
+            "701左侧过渡",
+            "map_701_left",
+            "mapping_origin_701_left"
+          ],
+          "pose": {
+            "x": 2.518555,
+            "y": 3.688645,
+            "z": 0.0,
+            "yaw": 1.611399,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "role": "transition_anchor",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "node_id": "transition_701_to_terrace",
+          "name": "701到露台过渡点",
+          "aliases": [
+            "701到露台过渡点",
+            "transition_701_to_terrace",
+            "701露台过渡",
+            "map_terrace_wc",
+            "mapping_origin_terrace"
+          ],
+          "pose": {
+            "x": -5.80668,
+            "y": -7.653001,
+            "z": 0.0,
+            "yaw": -1.526293,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "transition_anchor"
+          ],
+          "role": "transition_anchor",
+          "executable": true,
+          "notes": ""
+        }
+      ],
+      "topology_edges": [
+        {
+          "map_id": "map_701",
+          "from": "transition_701_to_terrace",
+          "to": "wp_e643bc",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "wp_e643bc",
+          "to": "mapping_origin_701",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "wp_e643bc",
+          "to": "wp_60497f",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "mapping_origin_701",
+          "to": "wp_b738c7",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "wp_60497f",
+          "to": "wp_b738c7",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "wp_b738c7",
+          "to": "transition_701_to_701_left",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "wp_b738c7",
+          "to": "wp_bbcb4c",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "wp_bbcb4c",
+          "to": "wp_a684c6",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701",
+          "from": "wp_a684c6",
+          "to": "wp_2ae043",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "map_id": "map_701_left",
+      "name": "701左侧区域",
+      "pcd_path": "/home/unitree/maps/staging/map_701_left.pcd",
+      "mapping_origin_anchor_id": "mapping_origin_701_left",
+      "topology_nodes": [
+        {
+          "map_id": "map_701_left",
+          "node_id": "mapping_origin_701_left",
+          "name": "701左侧原点",
+          "aliases": [
+            "701左侧原点",
+            "mapping_origin_701_left",
+            "701左侧过渡落点",
+            "transition_701_to_701_left"
+          ],
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "mapping_origin",
+            "transition_landing"
+          ],
+          "role": "mapping_origin",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701_left",
+          "node_id": "wp_c80190",
+          "name": "701左侧中心过道端点",
+          "aliases": [
+            "701左侧中心过道端点",
+            "wp_c80190",
+            "701左侧中心过道",
+            "左侧中心过道端点"
+          ],
+          "pose": {
+            "x": 4.26892,
+            "y": -0.264724,
+            "z": -0.0465,
+            "yaw": -0.026349,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "role": "corridor_endpoint",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701_left",
+          "node_id": "wp_94d819",
+          "name": "赵国森工位",
+          "aliases": [
+            "赵国森工位",
+            "wp_94d819",
+            "赵国森"
+          ],
+          "pose": {
+            "x": 8.874256,
+            "y": -0.770013,
+            "z": -0.092704,
+            "yaw": -0.049148,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "role": "topology_node",
+          "executable": true,
+          "notes": ""
+        }
+      ],
+      "topology_edges": [
+        {
+          "map_id": "map_701_left",
+          "from": "mapping_origin_701_left",
+          "to": "wp_c80190",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_701_left",
+          "from": "wp_c80190",
+          "to": "wp_94d819",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "map_id": "map_terrace_wc",
+      "name": "7楼露台与厕所走廊",
+      "pcd_path": "/home/unitree/maps/staging/map_terrace_wc.pcd",
+      "mapping_origin_anchor_id": "mapping_origin_terrace",
+      "topology_nodes": [
+        {
+          "map_id": "map_terrace_wc",
+          "node_id": "mapping_origin_terrace",
+          "name": "露台原点",
+          "aliases": [
+            "露台原点",
+            "mapping_origin_terrace",
+            "701露台过渡落点",
+            "transition_701_to_terrace"
+          ],
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "live_verified",
+            "mapping_origin",
+            "transition_landing"
+          ],
+          "role": "mapping_origin",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "node_id": "wp_48cd1f",
+          "name": "701门外走廊末端节点",
+          "aliases": [
+            "701门外走廊末端节点",
+            "wp_48cd1f",
+            "走廊末端节点",
+            "门外走廊末端"
+          ],
+          "pose": {
+            "x": 13.826352,
+            "y": -0.568655,
+            "z": -0.107493,
+            "yaw": -0.092269,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "role": "corridor_endpoint",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "node_id": "wp_4ff584",
+          "name": "露台门口",
+          "aliases": [
+            "露台门口",
+            "wp_4ff584",
+            "露台",
+            "露台门"
+          ],
+          "pose": {
+            "x": 15.264312,
+            "y": -3.673903,
+            "z": -0.135213,
+            "yaw": -1.141352,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "role": "topology_node",
+          "executable": true,
+          "notes": ""
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "node_id": "wp_832687",
+          "name": "露台水池",
+          "aliases": [
+            "露台水池",
+            "wp_832687",
+            "水池",
+            "露台池子"
+          ],
+          "pose": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "yaw": 0.0,
+            "valid": false
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated",
+            "needs_pose_repair"
+          ],
+          "role": "topology_node",
+          "executable": false,
+          "notes": "pose capture failed and is temporarily stored as the PCD origin"
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "node_id": "wp_a98f89",
+          "name": "电梯口",
+          "aliases": [
+            "电梯口",
+            "wp_a98f89",
+            "电梯",
+            "电梯门口"
+          ],
+          "pose": {
+            "x": 16.23877,
+            "y": 1.410311,
+            "z": -0.117793,
+            "yaw": 1.481913,
+            "valid": true
+          },
+          "tags": [
+            "real_site",
+            "live_calibrated"
+          ],
+          "role": "topology_node",
+          "executable": true,
+          "notes": ""
+        }
+      ],
+      "topology_edges": [
+        {
+          "map_id": "map_terrace_wc",
+          "from": "mapping_origin_terrace",
+          "to": "wp_48cd1f",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "from": "wp_48cd1f",
+          "to": "wp_4ff584",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "from": "wp_48cd1f",
+          "to": "wp_832687",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": "target pose needs repair"
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "from": "wp_48cd1f",
+          "to": "wp_a98f89",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "from": "wp_4ff584",
+          "to": "wp_832687",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": "target pose needs repair"
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "from": "wp_4ff584",
+          "to": "wp_a98f89",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": ""
+        },
+        {
+          "map_id": "map_terrace_wc",
+          "from": "wp_832687",
+          "to": "wp_a98f89",
+          "bidirectional": true,
+          "distance_verified": false,
+          "notes": "target pose needs repair"
+        }
+      ]
+    }
+  ],
+  "cross_map_transitions": [
+    {
+      "from_map": "map_701",
+      "from_node": "transition_701_to_701_left",
+      "to_map": "map_701_left",
+      "to_node": "mapping_origin_701_left",
+      "reverse_transition": "transition_701_left_to_701",
+      "description": "same physical spot; 701 PCD coordinate lands at the left PCD origin"
+    },
+    {
+      "from_map": "map_701",
+      "from_node": "transition_701_to_terrace",
+      "to_map": "map_terrace_wc",
+      "to_node": "mapping_origin_terrace",
+      "reverse_transition": "transition_terrace_to_701",
+      "description": "same physical spot; 701 PCD coordinate lands at the terrace PCD origin"
+    }
+  ],
+  "execution_policy": {
+    "execution_enabled": false,
+    "motion_authority": "robot_side_nav_core_and_safety_gate",
+    "llm_direct_motion": false,
+    "non_executable_nodes": [
+      "map_terrace_wc:wp_832687"
+    ]
+  }
+}
