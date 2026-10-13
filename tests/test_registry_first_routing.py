@@ -96,6 +96,31 @@ class RegistryFirstRoutingTests(unittest.TestCase):
             "/tmp/manual.pcd",
         )
 
+    def test_planner_context_survives_unavailable_gateway(self) -> None:
+        """Cloud LLM context must remain usable (map + connectivity) when the
+        C++ Gateway binary is missing/rebooting — e.g. local dev machines or
+        tunnel-only deployments without the robot runtime."""
+        gateway_server = load_gateway_server()
+        context = gateway_server.get_planner_context(
+            user_command="test",
+            map_id="go2w_real_site",
+            registry_path=str(REAL_REGISTRY),
+            map_path="",
+        )
+
+        self.assertNotIn("error", context)
+        connectivity = context.get("waypoint_connectivity", {})
+        self.assertEqual(len(connectivity.get("nodes", [])), 12)
+        self.assertEqual(connectivity.get("edge_source"), "registry")
+        self.assertIsInstance(context.get("coarse_map"), str)
+        status = context.get("status")
+        self.assertIsInstance(status, dict)
+        # Gateway may be real (accepted=True) or unavailable (graceful fallback).
+        self.assertTrue(
+            status.get("reason") == "gateway_unavailable"
+            or status.get("accepted") is True
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -160,12 +160,21 @@ class CloudLlmHandler(BaseHTTPRequestHandler):
             )
             map_id = params.get("map_id", self.server.default_map_id)  # type: ignore[attr-defined]
             gateway_server = _load_gateway_module(repo)
-            context = gateway_server.get_planner_context(
-                user_command=params.get("cmd", ""),
-                map_id=map_id,
-                registry_path=registry,
-                map_path=params.get("map_path", ""),
-            )
+            try:
+                context = gateway_server.get_planner_context(
+                    user_command=params.get("cmd", ""),
+                    map_id=map_id,
+                    registry_path=registry,
+                    map_path=params.get("map_path", ""),
+                )
+            except Exception as exc:
+                import traceback
+
+                context = {
+                    "error": str(exc),
+                    "error_kind": type(exc).__name__,
+                    "traceback": traceback.format_exc(limit=6),
+                }
             # Inject active PCD information
             active_pcd = _load_active_pcd(repo)
             candidate_maps: list[dict[str, Any]] = []

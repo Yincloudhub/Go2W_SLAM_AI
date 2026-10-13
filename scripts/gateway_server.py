@@ -172,12 +172,21 @@ def get_planner_context(
             pcd_path=map_path or None,
         )
 
-        # Current state from Gateway
-        status = get_status(
-            map_id=map_id,
-            map_path=map_path,
-        )
-        current_pose = status.get("pose")
+        # Current state from Gateway (best-effort: context stays useful if the
+        # Gateway binary is missing, rebooting, or unreachable — cloud LLM can
+        # still plan from coarse_map + connectivity alone)
+        try:
+            status = get_status(
+                map_id=map_id,
+                map_path=map_path,
+            )
+        except Exception:
+            status = {
+                "accepted": False,
+                "reason": "gateway_unavailable",
+                "error": "Gateway status unavailable; planning context is map-only",
+            }
+        current_pose = status.get("pose") if isinstance(status, dict) else None
 
         return {
             "coarse_map": coarse_map,
@@ -205,7 +214,13 @@ def get_planner_context(
             ),
         }
     except Exception as e:
-        return {"error": str(e)}
+        import traceback
+
+        return {
+            "error": str(e),
+            "error_kind": type(e).__name__,
+            "traceback": traceback.format_exc(limit=8),
+        }
 
 
 def handle_cloud_plan(body: dict) -> dict:
