@@ -12,9 +12,20 @@ from typing import Any
 
 REAL_SITE_REGISTRY = Path("configs/maps/go2w_real_site_map_registry.json")
 EXPECTED_MAP_ID = "go2w_real_site"
-EXPECTED_PCD_PATH = "/home/unitree/test.pcd"
-EXPECTED_TOPOLOGY_PATH = "/home/unitree/topology_points.json"
-EXPECTED_MAPPING_ORIGIN_ANCHOR = "mapping_origin"
+EXPECTED_PCD_PATH = "/home/unitree/maps/staging/map_701.pcd"
+EXPECTED_TOPOLOGY_PATH = "/home/unitree/maps/staging/map_701_topology.json"
+EXPECTED_MAPPING_ORIGIN_ANCHORS = {"mapping_origin", "mapping_origin_701"}
+EXPECTED_LIVE_TOPOLOGY_NODES = {
+    "wp_60497f",
+    "wp_b738c7",
+    "wp_bbcb4c",
+    "wp_a684c6",
+    "wp_2ae043",
+    "wp_e643bc",
+    "transition_701_to_701_left",
+    "transition_701_to_terrace",
+}
+EXPECTED_TOPOLOGY_EDGES = 7
 
 
 def sha256(path: Path) -> str:
@@ -51,6 +62,11 @@ def describe_registry(path: Path) -> dict[str, Any]:
         "is_symlink": path.is_symlink(),
         "sha256": sha256(path),
         "default_map_id": registry.get("default_map_id"),
+        "registry_map_ids": [
+            item.get("map_id")
+            for item in registry.get("maps", [])
+            if isinstance(item, dict)
+        ],
         "gateway_client": robot.get("slam_gateway_client"),
         "map_id": map_profile.get("map_id"),
         "status": map_profile.get("status"),
@@ -63,6 +79,7 @@ def describe_registry(path: Path) -> dict[str, Any]:
             for item in map_profile.get("topology_nodes", [])
             if isinstance(item, dict)
         ],
+        "topology_edges": len(map_profile.get("topology_edges", [])),
         "relocalization_anchors": len(map_profile.get("relocalization_anchors", [])),
         "relocalization_anchor_ids": [
             item.get("anchor_id")
@@ -130,7 +147,8 @@ def main(argv: list[str] | None = None) -> int:
         errors.append(f"active pcd_path is {active['pcd_path']!r}")
     if active["topology_path"] != EXPECTED_TOPOLOGY_PATH:
         errors.append(f"active topology_path is {active['topology_path']!r}")
-    if active["mapping_origin_anchor_id"] != EXPECTED_MAPPING_ORIGIN_ANCHOR:
+    active_is_multi_registry = "map_701" in active["registry_map_ids"]
+    if active["mapping_origin_anchor_id"] not in EXPECTED_MAPPING_ORIGIN_ANCHORS:
         errors.append(
             "mapping_origin_anchor_id must identify the unique build-map origin: "
             f"{active['mapping_origin_anchor_id']!r}"
@@ -153,10 +171,23 @@ def main(argv: list[str] | None = None) -> int:
         )
     if "initial_point" in active_anchor_ids:
         errors.append("initial_point must not be an active relocalization anchor")
-    if "initial_point" not in archived_anchor_ids:
-        errors.append("historical initial_point relocation record must remain archived")
-    if "initial_point" not in active["topology_node_ids"]:
-        errors.append("navigation topology node initial_point is missing")
+    missing_live_nodes = sorted(
+        EXPECTED_LIVE_TOPOLOGY_NODES - set(active["topology_node_ids"])
+    )
+    if missing_live_nodes:
+        errors.append(f"map_701 live topology nodes missing: {missing_live_nodes!r}")
+    if active["topology_edges"] != EXPECTED_TOPOLOGY_EDGES:
+        errors.append(
+            f"map_701 live topology edge count is {active['topology_edges']!r}, "
+            f"expected {EXPECTED_TOPOLOGY_EDGES}"
+        )
+    if "initial_point" in active["topology_node_ids"]:
+        errors.append("historical initial_point must not be part of map_701 live topology")
+    if not active_is_multi_registry:
+        if "initial_point" not in archived_anchor_ids:
+            errors.append("historical initial_point relocation record must remain archived")
+        if "yin_siyuan_station" not in archived_anchor_ids:
+            errors.append("historical yin_siyuan_station relocation record must remain archived")
 
     legacy: dict[str, Any] | None = None
     if legacy_repo.exists():

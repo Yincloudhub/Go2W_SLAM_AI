@@ -34,6 +34,8 @@ class Xt16GeometryConfig:
     footprint_half_width_m: float = 0.30
     footprint_filter_margin_m: float = 0.05
     footprint_lateral_filter_margin_m: float = 0.0
+    rear_self_mask_distance_m: float = 0.0
+    rear_self_mask_half_width_m: float = 0.45
     min_z_m: float = -0.25
     body_min_z_m: float = -0.10
     max_z_m: float = 1.20
@@ -266,6 +268,12 @@ def build_xt16_geometry_summary(
         0.0,
         float(cfg.footprint_lateral_filter_margin_m),
     )
+    rear_self_mask_distance_m = max(0.0, float(cfg.rear_self_mask_distance_m))
+    rear_self_mask_half_width_m = max(0.0, float(cfg.rear_self_mask_half_width_m))
+    rear_self_mask_enabled = (
+        rear_self_mask_distance_m > 0.0 and rear_self_mask_half_width_m > 0.0
+    )
+    self_mask_filtered_points = 0
 
     for point in points:
         total_points += 1
@@ -277,6 +285,15 @@ def build_xt16_geometry_summary(
         if vertical < cfg.min_z_m or vertical > cfg.max_z_m:
             continue
         height_filtered_points += 1
+        if (
+            rear_self_mask_enabled
+            and -(cfg.footprint_rear_m + rear_self_mask_distance_m)
+            <= forward
+            <= -cfg.footprint_rear_m
+            and abs(lateral) <= rear_self_mask_half_width_m
+        ):
+            self_mask_filtered_points += 1
+            continue
         height_values = body_values if vertical >= body_min_z_m else low_hazard_values
         if height_values is body_values:
             body_height_points += 1
@@ -490,6 +507,7 @@ def build_xt16_geometry_summary(
             "points_in_body_height_band": body_height_points,
             "points_in_low_hazard_band": low_hazard_height_points,
             "points_excluded_footprint": footprint_filtered_points,
+            "points_excluded_self_mask": self_mask_filtered_points,
             "cloud_supports_no_return": cloud_supports_no_return,
             "body_no_return_directions": body_no_return_directions,
             "body_far_support_counts": {
@@ -563,6 +581,13 @@ def build_xt16_geometry_summary(
                 "longitudinal_filter_margin": footprint_filter_margin_m,
                 "lateral_filter_margin": footprint_lateral_filter_margin_m,
                 "filter_margin_applies_to": "body_height_only_per_axis",
+            },
+            "self_mask_m": {
+                "rear": {
+                    "enabled": rear_self_mask_enabled,
+                    "distance": rear_self_mask_distance_m,
+                    "half_width": rear_self_mask_half_width_m,
+                },
             },
         },
     }

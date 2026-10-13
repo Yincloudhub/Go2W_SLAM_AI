@@ -67,6 +67,8 @@ def config_from_args(args: argparse.Namespace) -> Xt16GeometryConfig:
         footprint_half_width_m=args.footprint_half_width_m,
         footprint_filter_margin_m=args.footprint_filter_margin_m,
         footprint_lateral_filter_margin_m=args.footprint_lateral_filter_margin_m,
+        rear_self_mask_distance_m=args.rear_self_mask_distance_m,
+        rear_self_mask_half_width_m=args.rear_self_mask_half_width_m,
         min_z_m=args.min_z_m,
         body_min_z_m=args.body_min_z_m,
         max_z_m=args.max_z_m,
@@ -229,6 +231,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--footprint-lateral-filter-margin-m",
         type=float,
         default=0.0,
+    )
+    parser.add_argument(
+        "--rear-self-mask-distance-m",
+        type=float,
+        default=0.0,
+        help="Ignore returns directly behind the rear footprint edge out to this distance. Default disables the mask.",
+    )
+    parser.add_argument(
+        "--rear-self-mask-half-width-m",
+        type=float,
+        default=0.45,
+        help="Half-width for the rear self-return mask when --rear-self-mask-distance-m is enabled.",
     )
     parser.add_argument("--min-z-m", type=float, default=-0.25)
     parser.add_argument("--body-min-z-m", type=float, default=-0.10)

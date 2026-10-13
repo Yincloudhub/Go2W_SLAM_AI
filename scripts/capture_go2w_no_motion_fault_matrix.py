@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Capture fail-closed GO2W checks without sending chassis motion commands."
     )
-    parser.add_argument("--target", default="initial_point")
+    parser.add_argument("--target", default="wp_60497f")
     parser.add_argument("--panel-bin", default=str(DEFAULT_PANEL))
     parser.add_argument("--gateway-client", default="")
     parser.add_argument("--output", default="")
