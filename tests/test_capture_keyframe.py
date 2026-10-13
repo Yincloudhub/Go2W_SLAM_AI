@@ -135,8 +135,12 @@ class CaptureKeyframeScriptTests(unittest.TestCase):
     def test_explicit_external_command_overrides_default_latest_image(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            # Use the current interpreter instead of hardcoded "python3" so the
+            # test also runs on Windows dev machines (where python3 resolves to
+            # the Windows Store stub and exits 49). POSIX slashes keep bash happy.
+            interpreter = str(sys.executable).replace("\\", "/")
             command = (
-                "python3 -c 'import os; "
+                f"{interpreter} -c 'import os; "
                 "open(os.environ[\"GO2W_OUTPUT_IMAGE\"], \"wb\").write(b\"command-jpeg\")'"
             )
             code, payload = self.run_script(

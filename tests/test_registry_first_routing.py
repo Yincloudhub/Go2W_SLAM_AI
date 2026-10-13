@@ -13,12 +13,10 @@ from scripts import waypoint_graph, waypoint_nav
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REAL_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
+# Registry at HEAD: 12 waypoints, 11 edges (includes transition anchors +
+# wp_832687 cluster). Direct edge wp_60497f <-> wp_e643bc exists.
 EXPECTED_ROUTE = [
     "wp_e643bc",
-    "wp_2ae043",
-    "wp_a684c6",
-    "wp_bbcb4c",
-    "wp_b738c7",
     "wp_60497f",
 ]
 
@@ -43,8 +41,8 @@ class RegistryFirstRoutingTests(unittest.TestCase):
             )
 
         self.assertEqual(graph["edge_source"], "registry")
-        self.assertEqual(len(graph["waypoints"]), 8)
-        self.assertEqual(len(graph["edges"]), 7)
+        self.assertEqual(len(graph["waypoints"]), 12)
+        self.assertEqual(len(graph["edges"]), 11)
         self.assertEqual(
             waypoint_graph.bfs_route(graph, "wp_e643bc", "wp_60497f"),
             EXPECTED_ROUTE,

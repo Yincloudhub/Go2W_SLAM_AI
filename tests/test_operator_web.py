@@ -106,23 +106,23 @@ class OperatorWebTests(unittest.TestCase):
         self.assertIn("GO2W 多模态自主机器狗", web.INDEX_HTML)
         self.assertIn("智能巡检交互屏", web.INDEX_HTML)
         self.assertIn("机器狗回复", web.INDEX_HTML)
-        self.assertIn("自适应：任务 2 秒 / 待机 5 秒", web.INDEX_HTML)
+        self.assertIn("自适应：任务 2s / 待机 5s", web.INDEX_HTML)
         self.assertIn('requestedMs === -1 ? (active.has(latestPhase) ? 2000 : 5000)', web.INDEX_HTML)
         self.assertIn("statusInFlight", web.INDEX_HTML)
         self.assertIn("commandInFlight", web.INDEX_HTML)
-        self.assertIn("语义视觉未启动或离线，不参与运动决策", web.INDEX_HTML)
-        self.assertIn("近场运动许可仍由实时深度摘要与 SLAM 安全门决定", web.INDEX_HTML)
-        self.assertIn("前视深度诊断", web.INDEX_HTML)
+        self.assertIn("视觉理解", web.INDEX_HTML)
+        self.assertIn("安全策略", web.INDEX_HTML)
+        self.assertIn("双目距离", web.INDEX_HTML)
         self.assertIn("XT16 四向净空", web.INDEX_HTML)
         self.assertIn("真实执行开关", web.INDEX_HTML)
         self.assertIn("安全导航许可", web.INDEX_HTML)
         self.assertIn("底盘运动状态", web.INDEX_HTML)
         self.assertIn("规划来源", web.INDEX_HTML)
         self.assertIn("当前步骤", web.INDEX_HTML)
-        self.assertIn("任务已被安全逻辑阻断", web.INDEX_HTML)
-        self.assertIn("外部边缘节点", web.INDEX_HTML)
-        self.assertIn('id="m-capture"', web.INDEX_HTML)
-        self.assertIn('id="m-notwired"', web.INDEX_HTML)
+        self.assertIn("任务被安全逻辑阻断", web.INDEX_HTML)
+        self.assertIn("视觉场景", web.INDEX_HTML)
+        self.assertIn('id="m-semantic-scene"', web.INDEX_HTML)
+        self.assertIn('id="m-oa-front"', web.INDEX_HTML)
         self.assertNotIn("鏈繛鎺", web.INDEX_HTML)
 
     def test_operator_ui_busy_state_does_not_lock_text_inputs(self):
@@ -141,12 +141,12 @@ class OperatorWebTests(unittest.TestCase):
         self.assertNotIn('id="exec-on"', web.INDEX_HTML)
         self.assertNotIn('id="weak-on"', web.INDEX_HTML)
         self.assertNotIn('data-action="current"', web.INDEX_HTML)
-        self.assertIn("保存导航拓扑点", web.INDEX_HTML)
+        self.assertIn("登记当前位置", web.INDEX_HTML)
         self.assertIn('select id="relocate-anchor"', web.INDEX_HTML)
         self.assertIn("active_relocalization_anchors", web.INDEX_HTML)
         self.assertNotIn('id="relocate-anchor" value="mapping_origin"', web.INDEX_HTML)
         self.assertNotIn('|| "mapping_origin"', web.INDEX_HTML)
-        self.assertIn("请选择与实际位置匹配的重定位锚点", web.INDEX_HTML)
+        self.assertIn("请先选择与机器狗当前真实位置匹配的重定位锚点", web.INDEX_HTML)
         self.assertIn("校准初始点", web.INDEX_HTML)
         self.assertIn("更新坐标", web.INDEX_HTML)
 
@@ -219,7 +219,7 @@ class OperatorWebTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -250,7 +250,7 @@ class OperatorWebTests(unittest.TestCase):
                 encoding="utf-8",
             )
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -276,7 +276,7 @@ class OperatorWebTests(unittest.TestCase):
                 encoding="utf-8",
             )
             app = web.OperatorWebApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -303,7 +303,7 @@ class OperatorWebTests(unittest.TestCase):
                 encoding="utf-8",
             )
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -349,7 +349,7 @@ class OperatorWebTests(unittest.TestCase):
                 encoding="utf-8",
             )
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -399,7 +399,7 @@ class OperatorWebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -414,7 +414,7 @@ class OperatorWebTests(unittest.TestCase):
     def test_execute_on_does_not_depend_on_stereo_diagnostic(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -480,7 +480,7 @@ class OperatorWebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -502,7 +502,7 @@ class OperatorWebTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -526,7 +526,7 @@ class OperatorWebTests(unittest.TestCase):
             root = Path(tmp)
             registry_path = self.write_relocation_registry(root)
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -552,7 +552,7 @@ class OperatorWebTests(unittest.TestCase):
             root = Path(tmp)
             registry_path = self.write_relocation_registry(root)
             app = FakeApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -633,7 +633,7 @@ class OperatorWebTests(unittest.TestCase):
                     )
                 ],
             )
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -668,7 +668,7 @@ class OperatorWebTests(unittest.TestCase):
                     )
                 ],
             )
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -699,7 +699,7 @@ class OperatorWebTests(unittest.TestCase):
             envelope["status_reasons"] = ["uncalibrated_xt16_geometry"]
             self.write_perception_context(root, [envelope])
             app = web.OperatorWebApp(
-                web.WebConfig(
+                web.WebConfig(map_id="go2w_real_site",
                     repo_root=root,
                     panel_bin=root / "missing",
                     gateway_client="missing",
@@ -730,7 +730,7 @@ class OperatorWebTests(unittest.TestCase):
                     )
                 ],
             )
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -754,7 +754,7 @@ class OperatorWebTests(unittest.TestCase):
                     )
                 ],
             )
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -780,7 +780,7 @@ class OperatorWebTests(unittest.TestCase):
                     )
                 ],
             )
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -816,7 +816,7 @@ class OperatorWebTests(unittest.TestCase):
                     )
                 ],
             )
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -851,7 +851,7 @@ class OperatorWebTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
@@ -887,7 +887,7 @@ class OperatorWebTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            config = web.WebConfig(
+            config = web.WebConfig(map_id="go2w_real_site",
                 repo_root=root,
                 panel_bin=root / "missing",
                 gateway_client="missing",
