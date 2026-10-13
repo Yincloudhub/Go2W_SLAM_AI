@@ -213,6 +213,45 @@ class Xt16GeometryTests(unittest.TestCase):
             0.0,
         )
 
+    def test_rear_self_mask_removes_ti_mount_near_return(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.0, 0.55, count=30, spread_m=0.03))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="rear-self-mask",
+                min_points_per_roi=5,
+                rear_self_mask_distance_m=0.35,
+                rear_self_mask_half_width_m=0.45,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertGreater(summary["rear_clearance_m"], 1.5)
+        self.assertGreaterEqual(summary["summary"]["points_excluded_self_mask"], 30)
+        self.assertTrue(summary["summary"]["self_mask_m"]["rear"]["enabled"])
+
+    def test_rear_self_mask_preserves_obstacle_beyond_mask(self) -> None:
+        points = clear_roi_points()
+        points.extend(repeated_point(0.0, 0.82, count=30, spread_m=0.03))
+
+        summary = build_xt16_geometry_summary(
+            points,
+            config=Xt16GeometryConfig(
+                calibrated=True,
+                calibration_id="rear-self-mask",
+                min_points_per_roi=5,
+                rear_self_mask_distance_m=0.35,
+                rear_self_mask_half_width_m=0.45,
+            ),
+            timestamp_ms=1,
+        )
+
+        self.assertLess(summary["rear_clearance_m"], 0.6)
+        self.assertEqual(summary["summary"]["points_excluded_self_mask"], 0)
+
     def test_uncalibrated_output_is_stale_even_with_good_roi(self) -> None:
         summary = build_xt16_geometry_summary(
             clear_roi_points(),

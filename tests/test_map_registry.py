@@ -7,12 +7,6 @@ from edge_autonomy.map_registry import MapProfile, MapRegistry, MapRegistryError
 
 REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_map_registry.example.json"
 REAL_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "configs" / "maps" / "go2w_real_site_map_registry.json"
-YIN_SIYUAN_CALIBRATION_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "artifacts"
-    / "real_site_pcd"
-    / "yin_siyuan_calibration_20260522.json"
-)
 
 
 class MapRegistryTests(unittest.TestCase):
@@ -79,35 +73,37 @@ class MapRegistryTests(unittest.TestCase):
         with self.assertRaises(MapRegistryError):
             registry.get_map("test_current_main").relocate_command("missing")
 
-    def test_real_registry_separates_relocation_anchor_history_from_topology(self) -> None:
+    def test_real_registry_separates_relocation_anchor_history_from_map701_topology(self) -> None:
         profile = MapRegistry.from_file(REAL_REGISTRY_PATH).get_map("go2w_real_site")
 
+        self.assertEqual(profile.pcd_path, "/home/unitree/maps/staging/map_701.pcd")
         self.assertEqual(
             [anchor.anchor_id for anchor in profile.relocalization_anchors],
             ["mapping_origin"],
         )
         self.assertEqual(profile.mapping_origin_anchor_id, "mapping_origin")
-        self.assertIn(
-            "initial_point",
-            [anchor.anchor_id for anchor in profile.archived_relocalization_anchors],
-        )
-        self.assertEqual(profile.get_node("initial_point").node_id, "initial_point")
+        archived_ids = [anchor.anchor_id for anchor in profile.archived_relocalization_anchors]
+        self.assertIn("initial_point", archived_ids)
+        self.assertIn("yin_siyuan_station", archived_ids)
+        self.assertEqual(profile.get_node("wp_60497f").node_id, "wp_60497f")
         with self.assertRaises(MapRegistryError):
             profile.relocate_command("initial_point")
 
-    def test_real_registry_keeps_confirmed_yin_siyuan_calibration(self) -> None:
+    def test_real_registry_keeps_measured_map701_yin_siyuan_pose(self) -> None:
         profile = MapRegistry.from_file(REAL_REGISTRY_PATH).get_map("go2w_real_site")
-        calibration = json.loads(YIN_SIYUAN_CALIBRATION_PATH.read_text(encoding="utf-8"))
-        expected = calibration["confirmed_pose"]
-        actual = profile.get_node("yin_siyuan_station").pose
+        actual = profile.get_node("wp_60497f").pose
 
-        self.assertAlmostEqual(actual.x, expected["x"])
-        self.assertAlmostEqual(actual.y, expected["y"])
-        self.assertAlmostEqual(actual.z, expected["z"])
-        self.assertAlmostEqual(actual.q_x, expected["q_x"])
-        self.assertAlmostEqual(actual.q_y, expected["q_y"])
-        self.assertAlmostEqual(actual.q_z, expected["q_z"])
-        self.assertAlmostEqual(actual.q_w, expected["q_w"])
+        self.assertAlmostEqual(actual.x, 0.3427942097187042)
+        self.assertAlmostEqual(actual.y, 0.2418585866689682)
+        self.assertAlmostEqual(actual.z, 0.0637761801481247)
+        self.assertAlmostEqual(actual.q_x, 0.02063470147550106)
+        self.assertAlmostEqual(actual.q_y, 0.002931780181825161)
+        self.assertAlmostEqual(actual.q_z, 0.02761412225663662)
+        self.assertAlmostEqual(actual.q_w, 0.999401330947876)
+
+        command = profile.navigate_to_node_command("wp_60497f", speed=0.2, mode=0)
+        self.assertEqual(command["map_path"], "/home/unitree/maps/staging/map_701.pcd")
+        self.assertEqual(command["target_node"], "wp_60497f")
 
     def test_unverified_active_anchor_cannot_emit_relocation_command(self) -> None:
         data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
