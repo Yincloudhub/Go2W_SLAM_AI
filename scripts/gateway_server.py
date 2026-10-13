@@ -2,11 +2,54 @@
 import json, subprocess, sys, os, time, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-REPO = "/home/unitree/Go2W_SLAM_AI"
-GATEWAY_CLIENT = f"{REPO}/robot/slam_gateway_refactor/build/slam_llm_command_client"
+REPO = os.environ.get("GO2W_REPO", "/home/unitree/Go2W_SLAM_AI")
+GATEWAY_CLIENT = os.environ.get(
+    "GO2W_GATEWAY_CLIENT",
+    f"{REPO}/robot/slam_gateway_refactor/build/slam_llm_command_client",
+)
+DEFAULT_MAP_ID = "go2w_real_site"
+DEFAULT_REGISTRY = f"{REPO}/configs/maps/go2w_real_site_map_registry.json"
+_HARDCODED_DEFAULT_MAP_PATH = "/home/unitree/maps/staging/map_701.pcd"
 INTERFACE = "eth0"
 TIMEOUT = 10
 _nav_lock = threading.Lock()
+
+
+def _resolve_default_map_path():
+    # type: () -> str
+    """Resolve the default PCD path from active_pcd.json, falling back to hardcoded value."""
+    try:
+        _scripts = os.path.join(REPO, "scripts")
+        if _scripts not in sys.path:
+            sys.path.insert(0, _scripts)
+        from nav_relocate import get_active_pcd
+        active = get_active_pcd()
+        return str(active.get("pcd_path", _HARDCODED_DEFAULT_MAP_PATH))
+    except Exception:
+        return _HARDCODED_DEFAULT_MAP_PATH
+
+
+DEFAULT_MAP_PATH = _resolve_default_map_path()
+
+
+def resolve_map_path(
+    registry_path: str = "",
+    map_id: str = DEFAULT_MAP_ID,
+    explicit_map_path: str = "",
+) -> str:
+    """Resolve the map PCD without touching Gateway or robot processes."""
+    if explicit_map_path:
+        return explicit_map_path
+    path = registry_path or DEFAULT_REGISTRY
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            registry = json.load(fh)
+        for item in registry.get("maps", []):
+            if item.get("map_id") == map_id and item.get("pcd_path"):
+                return str(item["pcd_path"])
+    except (OSError, json.JSONDecodeError):
+        pass
+    return DEFAULT_MAP_PATH
 
 
 def run_gateway(action: str, **kwargs) -> dict:
@@ -37,10 +80,11 @@ def run_gateway(action: str, **kwargs) -> dict:
     return {"accepted": False, "reason": "no valid gateway response"}
 
 
-def get_status() -> dict:
+def get_status(map_id: str = DEFAULT_MAP_ID,
+               map_path: str = DEFAULT_MAP_PATH) -> dict:
     result = run_gateway("get_world_state",
-                         map_id="go2w_real_site",
-                         map_path="/home/unitree/test.pcd")
+                         map_id=map_id,
+                         map_path=map_path)
     ws = result.get("world_state", {})
     summary = {
         "accepted": result.get("accepted"),
@@ -70,8 +114,13 @@ def get_status() -> dict:
 def get_coarse_map() -> dict:
     try:
         sys.path.insert(0, f"{REPO}/src")
-        from edge_autonomy.path_validator import build_coarse_map
-        m = build_coarse_map(grid_size=30)
+        from edge_autonomy.path_validator import build_adaptive_coarse_map
+        m = build_adaptive_coarse_map(
+            pcd_path=DEFAULT_MAP_PATH,
+            grid_size=30,
+            registry_path=DEFAULT_REGISTRY,
+            map_id=DEFAULT_MAP_ID,
+        )
         return {"grid": m["grid_string"], "nodes": m["nodes"]}
     except Exception as e:
         return {"error": str(e)}
@@ -79,8 +128,9 @@ def get_coarse_map() -> dict:
 
 def get_planner_context(
     user_command: str = "",
-    map_id: str = "go2w_real_site",
+    map_id: str = DEFAULT_MAP_ID,
     registry_path: str = "",
+    map_path: str = "",
 ) -> dict:
     """Build cloud LLM planner context: coarse_map + waypoint connectivity + current state.
 
@@ -95,11 +145,13 @@ def get_planner_context(
         from edge_autonomy.path_validator import build_adaptive_coarse_map
 
         if not registry_path:
-            registry_path = f"{REPO}/configs/maps/go2w_real_site_map_registry.json"
+            registry_path = DEFAULT_REGISTRY
+        map_path = resolve_map_path(registry_path, map_id, map_path)
 
         # Coarse map
         try:
             cm = build_adaptive_coarse_map(
+                pcd_path=map_path,
                 grid_size=40,
                 registry_path=registry_path,
                 map_id=map_id,
@@ -107,16 +159,24 @@ def get_planner_context(
             coarse_map = cm.get("grid_string", "")
             coarse_map_nodes = cm.get("nodes", {})
             coarse_map_grid_size = cm.get("grid_size", 0)
+            map_path = cm.get("pcd_path") or map_path
         except Exception:
             coarse_map = ""
             coarse_map_nodes = {}
             coarse_map_grid_size = 0
 
         # Waypoint connectivity (cached after first call)
-        connectivity = build_waypoint_connectivity(registry_path, map_id=map_id)
+        connectivity = build_waypoint_connectivity(
+            registry_path,
+            map_id=map_id,
+            pcd_path=map_path or None,
+        )
 
         # Current state from Gateway
-        status = get_status()
+        status = get_status(
+            map_id=map_id,
+            map_path=map_path,
+        )
         current_pose = status.get("pose")
 
         return {
@@ -127,6 +187,8 @@ def get_planner_context(
                 "nodes": connectivity.get("nodes", []),
                 "adjacency": connectivity.get("adjacency", {}),
                 "grid_positions": connectivity.get("grid_positions", {}),
+                "edge_source": connectivity.get("edge_source", "unknown"),
+                "pcd_path": connectivity.get("pcd_path"),
             },
             "current_pose": current_pose,
             "user_command": user_command,
@@ -156,15 +218,19 @@ def handle_cloud_plan(body: dict) -> dict:
         return {"accepted": False, "reason": "hops must be a list of at least 2 node IDs"}
 
     reason = str(body.get("reason", ""))
-    map_id = str(body.get("map_id", "go2w_real_site"))
-    registry_path = str(body.get("registry", "") or f"{REPO}/configs/maps/go2w_real_site_map_registry.json")
-    map_path = str(body.get("map_path", "/home/unitree/test.pcd"))
+    map_id = str(body.get("map_id", DEFAULT_MAP_ID))
+    registry_path = str(body.get("registry", "") or DEFAULT_REGISTRY)
+    map_path = resolve_map_path(registry_path, map_id, str(body.get("map_path", "")))
 
     try:
         sys.path.insert(0, f"{REPO}/src")
         from edge_autonomy.cloud_llm_planner import hops_to_plan, build_waypoint_connectivity
 
-        connectivity = build_waypoint_connectivity(registry_path, map_id=map_id)
+        connectivity = build_waypoint_connectivity(
+            registry_path,
+            map_id=map_id,
+            pcd_path=map_path or None,
+        )
         plan = hops_to_plan(hops, map_id, reason=reason, connectivity=connectivity)
 
         if plan.get("mode") in ("human_confirm", "safe_hold") and plan.get("confidence", 1.0) < 0.5:
@@ -237,18 +303,22 @@ class GatewayHandler(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(length))
 
     def do_GET(self):
-        if self.path == "/status":
-            self._json(get_status())
-        elif self.path == "/map":
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+        if parsed.path == "/status":
+            self._json(get_status(
+                map_id=params.get("map_id", DEFAULT_MAP_ID),
+                map_path=params.get("map_path", DEFAULT_MAP_PATH),
+            ))
+        elif parsed.path == "/map":
             self._json(get_coarse_map())
-        elif self.path == "/planner/context" or self.path.startswith("/planner/context?"):
-            from urllib.parse import urlparse, parse_qs
-            parsed = urlparse(self.path)
-            params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
+        elif parsed.path == "/planner/context":
             self._json(get_planner_context(
                 user_command=params.get("cmd", ""),
-                map_id=params.get("map_id", "go2w_real_site"),
+                map_id=params.get("map_id", DEFAULT_MAP_ID),
                 registry_path=params.get("registry", ""),
+                map_path=params.get("map_path", ""),
             ))
         else:
             self._json({"error": "not found"}, 404)
@@ -261,8 +331,10 @@ class GatewayHandler(BaseHTTPRequestHandler):
             self._json(run_gateway("pause_navigation"))
         elif self.path == "/relocate":
             anchor = body.get("anchor", "mapping_origin")
-            result = run_gateway("relocate", map_id=body.get("map_id", "go2w_real_site"),
-                                  map_path=body.get("map_path", "/home/unitree/test.pcd"),
+            map_id = body.get("map_id", DEFAULT_MAP_ID)
+            registry = body.get("registry", DEFAULT_REGISTRY)
+            result = run_gateway("relocate", map_id=map_id,
+                                  map_path=resolve_map_path(registry, map_id, body.get("map_path", "")),
                                   anchor_id=anchor, operator_ack=True)
             self._json(result)
         elif self.path == "/planner/plan":
@@ -283,9 +355,9 @@ class GatewayHandler(BaseHTTPRequestHandler):
 
         speed = body.get("speed", 0.2)
         registry = body.get("registry",
-                            f"{REPO}/configs/maps/go2w_real_site_map_registry.json")
-        map_id = body.get("map_id", "go2w_real_site")
-        map_path = body.get("map_path", "/home/unitree/test.pcd")
+                            DEFAULT_REGISTRY)
+        map_id = body.get("map_id", DEFAULT_MAP_ID)
+        map_path = resolve_map_path(registry, map_id, body.get("map_path", ""))
 
         cmd = [
             "python3", f"{REPO}/scripts/run_robot_closed_loop.py",

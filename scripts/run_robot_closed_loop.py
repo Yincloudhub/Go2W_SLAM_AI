@@ -66,8 +66,29 @@ PersistentNavigationSession = PersistentGatewaySession
 
 DEFAULT_REGISTRY = REPO_ROOT / "configs" / "maps" / "go2w_real_site_map_registry.json"
 DEFAULT_MAP_ID = "go2w_real_site"
-DEFAULT_MAP_PATH = "/home/unitree/maps/staging/map_701.pcd"
+_FALLBACK_MAP_PATH = "/home/unitree/maps/staging/map_701.pcd"
 SIMULATION_MAP_STATUSES = {"simulation", "simulated", "demo", "synthetic"}
+
+
+def _load_active_pcd() -> dict[str, Any] | None:
+    """Load active PCD info from artifacts/active_pcd.json. Returns None if unavailable."""
+    path = REPO_ROOT / "artifacts" / "active_pcd.json"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data: dict[str, Any] = json.load(f)
+            return data if isinstance(data, dict) else None
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _resolve_default_map_path() -> str:
+    active = _load_active_pcd()
+    if active and active.get("pcd_path"):
+        return str(active["pcd_path"])
+    return _FALLBACK_MAP_PATH
+
+
+DEFAULT_MAP_PATH = _resolve_default_map_path()
 DEFAULT_MODEL = "/home/unitree/models/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 DEFAULT_ASK_SCRIPT = "/home/unitree/llm_runtime/scripts/ask_qwen.sh"
 DEFAULT_COMMUNICATION_JOURNAL = (
@@ -1132,9 +1153,10 @@ def build_recovery_translation_analysis(
     SELF_OCCLUSION_RADIUS_M = 0.15  # robot body radius; closer = self-occlusion
     for direction in ("forward", "left", "right", "backward"):
         clearance = clearances[direction]
-        # Treat self-occlusion (XT16 seeing robot body) as no valid measurement
+        # Treat self-occlusion as no valid translation measurement. Unknown
+        # side clearance must not create a lateral recovery candidate.
         if clearance < SELF_OCCLUSION_RADIUS_M:
-            clearance = 2.0
+            continue
         distance_m = min(
             0.50,
             max(0.0, clearance - translation_reserve_m[direction]),
@@ -1198,11 +1220,12 @@ def build_recovery_translation_analysis(
                 'side clearance ' + str(round(best['side_clearance_m'], 2)) + 'm'
             )
     # End rotation fallback
-    if available and not selected.get("rotation"):
-        reason = (
-            f"bounded {selected['direction']} translation is available after "
-            "native planner stall"
-        )
+    if available:
+        if not selected.get("rotation"):
+            reason = (
+                f"bounded {selected['direction']} translation is available after "
+                "native planner stall"
+            )
     else:
         reason = "no direction has enough clearance for bounded reposition"
     return {
@@ -2039,6 +2062,9 @@ def main(argv: list[str] | None = None) -> int:
         current_time_ms=int(time.time() * 1000),
     )
 
+    # Load active PCD info for planner context
+    active_pcd_data = _load_active_pcd()
+
     if args.plan_file:
         # Cloud LLM / pre-built plan path: load plan from file, skip local LLM planner
         try:
@@ -2063,6 +2089,7 @@ def main(argv: list[str] | None = None) -> int:
             user_command=args.command,
             map_id=args.map_id,
             perception_context=perception_context,
+            active_pcd=active_pcd_data,
         )
         try:
             validate_local_llm_plan(plan)
@@ -2091,6 +2118,7 @@ def main(argv: list[str] | None = None) -> int:
             user_command=args.command,
             map_id=args.map_id,
             perception_context=perception_context,
+            active_pcd=active_pcd_data,
         )
 
         result = run_local_llm_planner(

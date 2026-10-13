@@ -31,7 +31,7 @@ from .local_llm_planner import (
 # Waypoint connectivity
 # ---------------------------------------------------------------------------
 
-_WAYPOINT_CONNECTIVITY_CACHE: Optional[Dict[str, Any]] = None
+_WAYPOINT_CONNECTIVITY_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
 def build_waypoint_connectivity(
@@ -52,28 +52,38 @@ def build_waypoint_connectivity(
         }
     """
     global _WAYPOINT_CONNECTIVITY_CACHE
-    if _WAYPOINT_CONNECTIVITY_CACHE is not None and not force_refresh:
-        return _WAYPOINT_CONNECTIVITY_CACHE
+    cache_key = f"{registry_path}|{map_id}|{pcd_path or ''}"
+    if cache_key in _WAYPOINT_CONNECTIVITY_CACHE and not force_refresh:
+        return _WAYPOINT_CONNECTIVITY_CACHE[cache_key]
 
-    # Load registry to get node list
+    # Load registry to get node list and declared topology edges.
     with open(registry_path, "r", encoding="utf-8") as fh:
         reg = json.load(fh)
 
     nodes: List[Dict[str, Any]] = []
+    selected_map: Optional[Dict[str, Any]] = None
     map_pcd: Optional[str] = pcd_path
     for m in reg.get("maps", []):
         if m.get("map_id") == map_id:
+            selected_map = m
             if map_pcd is None:
                 map_pcd = m.get("pcd_path")
             nodes = m.get("topology_nodes", [])
             break
 
     if not nodes:
-        result: Dict[str, Any] = {"nodes": [], "adjacency": {}, "grid_positions": {}, "computed_at_ms": int(time.time() * 1000)}
-        _WAYPOINT_CONNECTIVITY_CACHE = result
+        result: Dict[str, Any] = {
+            "nodes": [],
+            "adjacency": {},
+            "grid_positions": {},
+            "edge_source": "none",
+            "computed_at_ms": int(time.time() * 1000),
+        }
+        _WAYPOINT_CONNECTIVITY_CACHE[cache_key] = result
         return result
 
     node_ids = [str(n["node_id"]) for n in nodes]
+    node_by_id = {str(n["node_id"]): n for n in nodes}
 
     # Coarse map node positions (matching the grid overlay in path_validator)
     grid_positions: Dict[str, List[int]] = {}
@@ -84,32 +94,57 @@ def build_waypoint_connectivity(
                 if isinstance(pos, (list, tuple)) and len(pos) >= 2:
                     grid_positions[str(nid)] = [int(pos[0]), int(pos[1])]
 
-    # Build adjacency by checking each pair
+    # Build adjacency. Declared registry edges are authoritative for measured
+    # maps; PCD pair checks are only a fallback for older maps without edges.
     adjacency: Dict[str, List[str]] = {nid: [] for nid in node_ids}
-    try:
-        from .path_validator import check_path_between_nodes
+    edge_source = "none"
+    declared_edges = selected_map.get("topology_edges", []) if selected_map else []
+    if declared_edges:
+        edge_source = "registry"
+        known = set(node_ids)
+        for edge in declared_edges:
+            a = str(edge.get("from", ""))
+            b = str(edge.get("to", ""))
+            if not a or not b or a not in known or b not in known:
+                continue
+            adjacency.setdefault(a, []).append(b)
+            if edge.get("bidirectional", True):
+                adjacency.setdefault(b, []).append(a)
+    else:
+        try:
+            from .path_validator import check_path
 
-        for i, a in enumerate(node_ids):
-            for b in node_ids[i + 1 :]:
-                try:
-                    r = check_path_between_nodes(a, b, registry_path=registry_path)
-                    if r.get("passable"):
-                        adjacency[a].append(b)
-                        adjacency[b].append(a)
-                except Exception:
-                    # Pair not passable or error — skip edge
-                    pass
-    except ImportError:
-        # path_validator not available (e.g., dry-run without PCD)
-        pass
+            edge_source = "pcd_fallback"
+            for i, a in enumerate(node_ids):
+                pose_a = node_by_id[a].get("pose", {})
+                for b in node_ids[i + 1 :]:
+                    pose_b = node_by_id[b].get("pose", {})
+                    try:
+                        r = check_path(
+                            float(pose_a["x"]),
+                            float(pose_a["y"]),
+                            float(pose_b["x"]),
+                            float(pose_b["y"]),
+                            pcd_path=map_pcd or "",
+                        )
+                        if r.get("passable"):
+                            adjacency[a].append(b)
+                            adjacency[b].append(a)
+                    except Exception:
+                        # Pair not passable or error: skip edge.
+                        pass
+        except ImportError:
+            edge_source = "unavailable"
 
     result = {
         "nodes": node_ids,
         "adjacency": adjacency,
         "grid_positions": grid_positions,
+        "pcd_path": map_pcd,
+        "edge_source": edge_source,
         "computed_at_ms": int(time.time() * 1000),
     }
-    _WAYPOINT_CONNECTIVITY_CACHE = result
+    _WAYPOINT_CONNECTIVITY_CACHE[cache_key] = result
     return result
 
 
@@ -126,6 +161,7 @@ def build_cloud_planner_context(
     map_id: Optional[str] = None,
     perception_context: Optional[Dict[str, Any]] = None,
     registry_path: str = "configs/maps/go2w_real_site_map_registry.json",
+    active_pcd: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build a compact context for the cloud LLM.
 
@@ -140,6 +176,7 @@ def build_cloud_planner_context(
         user_command=user_command,
         map_id=map_id,
         perception_context=perception_context,
+        active_pcd=active_pcd,
     )
     light_context = build_lightweight_planner_context(full_context)
 
@@ -170,6 +207,7 @@ def build_cloud_planner_context(
         "schema_version": 1,
         "user_command": user_command,
         "map_id": actual_map_id,
+        "active_pcd": active_pcd,
         "current_pose": current_pose,
         "current_node": current_node,
         "requested_target": requested_target,
@@ -182,6 +220,8 @@ def build_cloud_planner_context(
             "nodes": connectivity.get("nodes", []),
             "adjacency": connectivity.get("adjacency", {}),
             "grid_positions": connectivity.get("grid_positions", {}),
+            "edge_source": connectivity.get("edge_source", "unknown"),
+            "pcd_path": connectivity.get("pcd_path"),
         },
         "navigation_hint": (
             "Multi-hop routing: examine the coarse_map. "
