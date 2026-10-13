@@ -49,3 +49,6 @@ topology_points.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Model checkpoints / training artifacts
+saves/
