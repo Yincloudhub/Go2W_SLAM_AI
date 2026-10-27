@@ -1,10 +1,14 @@
-<img width="981" height="496" alt="2d52fb74da9d51479ae2473c66818b59" src="https://github.com/user-attachments/assets/6449789a-2034-4796-8b41-f93c2489b937" />
-<img width="981" height="496" alt="2d52fb74da9d51479ae2473c66818b59" src="https://github.com/user-attachments/assets/93df9ba4-5bae-4e1d-bca0-c6b387bcba33" /># Go2W_SLAM_AI
+
+
+
+# Go2W_SLAM_AI
 
 本项目的目标是开发一个由 AI 调用机器狗 SLAM 服务的导航系统。
 
 系统将自然语言任务转换为结构化导航计划，再通过 C++ SLAM gateway 调用 Unitree GO2W 的官方 SLAM / LiDAR / 导航能力，实现“AI 下达任务，机器狗执行 SLAM 导航”的闭环。
+<img width="981" height="496" alt="2d52fb74da9d51479ae2473c66818b59" src="https://github.com/user-attachments/assets/93df9ba4-5bae-4e1d-bca0-c6b387bcba33" />
 
+<img width="1025" height="512" alt="b55b575c6c82e2b790f883e31e802978" src="https://github.com/user-attachments/assets/fd565835-272c-4c0c-8926-9353ba8d4bd9" />
 ## 项目目标
 
 ```text
