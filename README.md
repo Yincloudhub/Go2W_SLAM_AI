@@ -1,6 +1,4 @@
 
-
-
 # Go2W_SLAM_AI
 
 本项目的目标是开发一个由 AI 调用机器狗 SLAM 服务的导航系统。
@@ -9,6 +7,10 @@
 <img width="981" height="496" alt="2d52fb74da9d51479ae2473c66818b59" src="https://github.com/user-attachments/assets/93df9ba4-5bae-4e1d-bca0-c6b387bcba33" />
 
 <img width="1025" height="512" alt="b55b575c6c82e2b790f883e31e802978" src="https://github.com/user-attachments/assets/fd565835-272c-4c0c-8926-9353ba8d4bd9" />
+
+<img width="320" height="565" alt="机器狗_动态GIF_压缩至10MB以内" src="https://github.com/user-attachments/assets/38e34a09-d5fe-4ff3-b595-d904dd1afe55" />
+
+
 
 ## 项目目标
 
