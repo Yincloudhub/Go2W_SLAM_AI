@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="340" viewBox="0 0 960 340" role="img" aria-labelledby="title desc">
+  <title id="title">Two-stage FFT latency on Orin NX</title>
+  <desc id="desc">Before optimization: 290.33 milliseconds per frame. After CUDA optimization: 81.23 milliseconds per frame. Approximately 3.57 times faster. These are FFT stage timings supplied by the project maintainer, not end-to-end latency.</desc>
+  <rect x="1" y="1" width="958" height="338" rx="12" fill="#f8fafc" stroke="#dce5eb"/>
+  <g font-family="'Segoe UI',Arial,sans-serif">
+    <text x="36" y="49" fill="#172b3b" font-size="27" font-weight="650">Two-stage FFT latency</text>
+    <text x="37" y="77" fill="#61788a" font-size="15">Orin NX · milliseconds per frame · lower is better</text>
+    <text x="920" y="51" text-anchor="end" fill="#087f72" font-size="28" font-weight="700">3.57×</text>
+    <text x="920" y="76" text-anchor="end" fill="#61788a" font-size="14">FFT speedup</text>
+    <g stroke="#e0e8ee" stroke-width="1">
+      <path d="M 220 102 V 240 M 401.25 102 V 240 M 582.5 102 V 240 M 763.75 102 V 240"/>
+    </g>
+    <text x="37" y="142" fill="#3c5365" font-size="18">Before optimization</text>
+    <rect x="220" y="114" width="526.223" height="44" rx="4" fill="#718797"/>
+    <text x="760" y="142" fill="#334d60" font-size="21" font-weight="650">290.33</text>
+    <text x="37" y="213" fill="#087f72" font-size="18" font-weight="600">CUDA optimized</text>
+    <rect x="220" y="185" width="147.229" height="44" rx="4" fill="#0d9488"/>
+    <text x="381" y="213" fill="#087f72" font-size="21" font-weight="700">81.23</text>
+    <g fill="#61788a" font-size="13" text-anchor="middle">
+      <text x="220" y="260">0</text><text x="401.25" y="260">100</text><text x="582.5" y="260">200</text><text x="763.75" y="260">300 ms</text>
+    </g>
+    <path d="M 36 282 H 924" stroke="#dce5eb"/>
+    <text x="37" y="311" fill="#61788a" font-size="14">Maintainer-reported FFT timings. Remapping, rendering, transport and disk writes excluded.</text>
+  </g>
+</svg>

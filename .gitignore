@@ -48,3 +48,13 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Radar recordings and local imaging output
+radar/**/outputs/
+radar/**/fft_live_metrics/
+radar/**/*.bin
+radar/**/*.raw
+radar/**/*.mat
+radar/**/*.avi
+radar/**/*.mp4
+*.mcap
+

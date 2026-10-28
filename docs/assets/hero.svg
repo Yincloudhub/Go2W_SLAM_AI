@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-labelledby="title desc">
+  <title id="title">Go2-W Perception and Localization</title>
+  <desc id="desc">A project cover for a wheeled quadruped perception system, using two Orin NX devices, ROS2 and millimeter-wave radar. The map graphic is a schematic.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#101f31"/><stop offset="1" stop-color="#071320"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#35d3bd" stop-opacity=".12"/><stop offset="1" stop-color="#35d3bd" stop-opacity="0"/></radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 H 0 V 32" fill="none" stroke="#284253" stroke-width=".7" opacity=".5"/></pattern>
+  </defs>
+  <rect width="1200" height="400" rx="14" fill="url(#bg)"/>
+  <rect x="762" y="0" width="438" height="400" fill="url(#grid)"/>
+  <circle cx="1010" cy="230" r="220" fill="url(#glow)"/>
+  <path d="M 52 48 H 90" stroke="#56e2c6" stroke-width="4"/>
+  <g font-family="'Segoe UI',Arial,sans-serif">
+    <text x="104" y="54" fill="#9bb1c2" font-size="15" letter-spacing="2.5">EMBODIED PERCEPTION / EDGE COMPUTING</text>
+    <text x="52" y="164" fill="#f3f7fb" font-size="86" font-weight="700" letter-spacing="-3">Go2-W</text>
+    <text x="54" y="222" fill="#72e7d0" font-size="39" font-weight="500" letter-spacing="-.7">Perception &amp; Localization</text>
+    <text x="55" y="269" fill="#a5b7c8" font-size="19">Millimeter-wave radar meets LiDAR SLAM</text>
+    <path d="M 54 306 H 700" stroke="#2c4051"/>
+    <text x="55" y="347" fill="#d6e1eb" font-size="17" letter-spacing="1">DUAL ORIN NX</text>
+    <text x="245" y="347" fill="#56e2c6" font-size="17">/</text>
+    <text x="273" y="347" fill="#d6e1eb" font-size="17" letter-spacing="1">ROS2</text>
+    <text x="360" y="347" fill="#56e2c6" font-size="17">/</text>
+    <text x="388" y="347" fill="#d6e1eb" font-size="17" letter-spacing="1">C++ &amp; PYTHON</text>
+    <text x="1116" y="53" text-anchor="end" fill="#7c96a9" font-size="12" letter-spacing="2">SYSTEM VIEW</text>
+  </g>
+  <g fill="none" stroke="#456476" stroke-width="1">
+    <circle cx="1010" cy="226" r="62"/>
+    <circle cx="1010" cy="226" r="114"/>
+    <circle cx="1010" cy="226" r="168"/>
+    <path d="M 824 226 H 1186 M 1010 58 V 394" opacity=".55"/>
+  </g>
+  <path d="M 1010 226 L 905 96 A 168 168 0 0 1 1125 104 Z" fill="#45d9bb" opacity=".10"/>
+  <path d="M 852 310 L 911 310 L 911 273 L 966 273 L 966 226 L 1010 226 L 1066 177 L 1111 177" fill="none" stroke="#72e7d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#101f31" stroke="#72e7d0" stroke-width="2">
+    <circle cx="852" cy="310" r="5"/><circle cx="911" cy="273" r="5"/><circle cx="966" cy="226" r="5"/><circle cx="1111" cy="177" r="5"/>
+  </g>
+  <circle cx="1010" cy="226" r="8" fill="#72e7d0"/>
+  <circle cx="1010" cy="226" r="16" fill="none" stroke="#72e7d0" opacity=".6"/>
+  <g fill="#7894a7"><circle cx="881" cy="187" r="3"/><circle cx="940" cy="132" r="3"/><circle cx="1087" cy="288" r="3"/><circle cx="1149" cy="247" r="3"/></g>
+</svg>

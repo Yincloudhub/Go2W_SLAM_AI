@@ -1,0 +1,11 @@
+{
+  "example_description": "Synthetic state for offline planner preview; not a hardware measurement.",
+  "host": "offline-example",
+  "expected_map_id": "test_current_main",
+  "health_status": "ok",
+  "localization_status": "localized_or_tracking",
+  "processes": {"unitree_slam": true, "xt16_driver": true},
+  "relocation_odom": {"alive": true, "x": 0.0, "y": 0.0, "z": 0.0, "yaw": 0.0},
+  "lidar_state": {"alive": true},
+  "live_pointcloud": {"alive": true, "topic": "/unitree/slam_lidar/points"}
+}
