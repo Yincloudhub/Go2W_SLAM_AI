@@ -46,7 +46,7 @@ See the [architecture document](docs/architecture.md) for the full data flow.
 
 ## Reported measurements
 
-These figures were supplied by the project maintainer for Orin NX system testing. FFT latency covers the **two FFT stages**, excluding remapping, rendering, transport and disk writes.
+The project has been tested on **Orin NX hardware**. The following measurements were supplied by the project maintainer. FFT latency covers the **two FFT stages**, excluding remapping, rendering, transport and disk writes.
 
 | Metric | Result |
 | --- | ---: |
